@@ -1,0 +1,13 @@
+# Node
+node_modules/
+dist/
+build/
+.env
+
+# Vite
+*.local
+.vscode/
+
+# System
+.DS_Store
+Thumbs.db
