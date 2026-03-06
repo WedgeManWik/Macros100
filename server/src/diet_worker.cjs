@@ -147,22 +147,43 @@ let islands = Array.from({ length: islandsPerWorker }, () =>
 
 islands.forEach(isl => isl.forEach(p => p.res = evaluate(p.genome)));
 
+const incomingGenomes = [];
+parentPort.on('message', (msg) => {
+    if (msg.type === 'import') {
+        incomingGenomes.push(...msg.genomes);
+    }
+});
+
 async function run() {
     let currentGen = 0;
     while (currentGen < maxGens) {
         currentGen++;
         if (currentGen % 10 === 0) await new Promise(r => setTimeout(r, 0));
 
+        // Process incoming migrations
+        if (incomingGenomes.length > 0) {
+            islands.forEach(island => {
+                incomingGenomes.forEach(genome => {
+                    const worstIdx = island.length - 1; // Replace worst
+                    island[worstIdx] = { genome: { ...genome }, team: 'explorer', res: evaluate(genome) };
+                    island.sort((a, b) => (b.res ? b.res.score : -Infinity) - (a.res ? a.res.score : -Infinity));
+                });
+            });
+            incomingGenomes.length = 0;
+        }
+
         islands = islands.map(island => {
             const scored = island.sort((a, b) => (b.res ? b.res.score : -Infinity) - (a.res ? a.res.score : -Infinity));
             const bestOfIsland = scored[0];
             const nextPop = [];
             
-            for(let e=0; e<8; e++) nextPop.push({ genome: { ...bestOfIsland.genome }, team: 'elitists', res: bestOfIsland.res }); 
+            // Reduced elitism for better diversity
+            for(let e=0; e<4; e++) nextPop.push({ genome: { ...bestOfIsland.genome }, team: 'elitists', res: bestOfIsland.res }); 
 
             while (nextPop.length < 50) {
-                const parentA = scored[Math.floor(Math.random() * 5)];
-                const parentB = scored[Math.floor(Math.random() * 15)];
+                // Broader parent selection for diversity
+                const parentA = scored[Math.floor(Math.random() * 10)];
+                const parentB = scored[Math.floor(Math.random() * 25)];
                 const childGenome = {};
                 likedFoods.forEach((f) => {
                     childGenome[f.name] = Math.random() < 0.6 ? parentA.genome[f.name] : parentB.genome[f.name];
@@ -218,6 +239,12 @@ async function run() {
                     islands: islands.map(isl => isl.slice(0, 10).map(p => p.res ? p.res.accuracy : 0))
                 }
             });
+
+            // Send migration bests every 40 generations
+            if (currentGen % 40 === 0) {
+                const bests = islands.map(isl => isl[0].genome);
+                parentPort.postMessage({ type: 'migration', bests });
+            }
         }
     }
     
