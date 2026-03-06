@@ -10,9 +10,6 @@ const {
 const foodMap = new Map<string, Food>();
 FOOD_DATABASE.forEach((f: Food) => foodMap.set(f.name, f));
 
-// Removed evalCache to save memory - GA with continuous values has low hit rate anyway
-// Removed getCacheKey - string concatenation and sorting is expensive
-
 const evaluate = (ingredients: Record<string, number>) => {
     const totals: Record<string, number> = {};
     Object.keys(nutrientConfig).forEach(k => totals[k] = 0);
@@ -158,7 +155,6 @@ async function run() {
     let currentGen = 0;
     while (currentGen < maxGens) {
         currentGen++;
-        // Breath more often for GC (every 10 gens instead of 50)
         if (currentGen % 10 === 0) await new Promise(r => setTimeout(r, 0));
 
         islands = islands.map(island => {
