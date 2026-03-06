@@ -115,7 +115,7 @@ const evaluate = (ingredients: Map<string, number>, gen: number) => {
     });
 
     const res = { 
-        score: (nutrientScore - macroPenalty - amountPenalty - varietyPenalty) || -999999, 
+        score: (nutrientScore - macroPenalty - amountPenalty - varietyPenalty - ratioPenalty) || -999999, 
         totals, 
         accuracy: Math.round((metCount/essentialKeys.length)*1000)/10, 
         worst, metCount,

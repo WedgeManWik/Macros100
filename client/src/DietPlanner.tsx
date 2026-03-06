@@ -665,7 +665,7 @@ const DietPlanner = () => {
                             {visibleKeys.map(name => {
                               const data = diet.micronutrients[name];
                               if (!data) return null;
-                              const pct = Math.min(100, Math.round(data.total || 0));
+                              const pct = Math.round(data.total || 0);
                               return (
                                 <Col md={6} xl={4} key={name}>
                                   <div className="mb-1 d-flex justify-content-between align-items-center">
