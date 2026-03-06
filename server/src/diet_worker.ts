@@ -1,5 +1,5 @@
 import { parentPort, workerData } from 'worker_threads';
-import { Food, DietDetails } from './types.js';
+import { Food } from './types.js';
 
 const { 
   FOOD_DATABASE, details, islandsPerWorker, maxGens, 
@@ -10,28 +10,20 @@ const {
 const foodMap = new Map<string, Food>();
 FOOD_DATABASE.forEach((f: Food) => foodMap.set(f.name, f));
 
-const evalCache = new Map<string, any>();
-const getCacheKey = (ingredients: Map<string, number>) => {
-    const active: string[] = [];
-    ingredients.forEach((amt, name) => {
-        if (amt > 0) active.push(`${name}:${amt}`);
-    });
-    return active.sort().join('|');
-};
+// Removed evalCache to save memory - GA with continuous values has low hit rate anyway
+// Removed getCacheKey - string concatenation and sorting is expensive
 
-const evaluate = (ingredients: Map<string, number>, gen: number) => {
-    const cacheKey = getCacheKey(ingredients);
-    if (evalCache.has(cacheKey)) return evalCache.get(cacheKey);
-
+const evaluate = (ingredients: Record<string, number>) => {
     const totals: Record<string, number> = {};
     Object.keys(nutrientConfig).forEach(k => totals[k] = 0);
     const macroKeys = ['energy', 'protein', 'carbs', 'fat'];
 
     const sectionCounts: Record<string, number> = { "Proteins": 0, "Carbs": 0, "Fruits": 0, "Fiber and Vegetables": 0 };
 
-    ingredients.forEach((amount, name) => {
+    for (const name in ingredients) {
+        const amount = ingredients[name];
         const food = foodMap.get(name);
-        if (!food || amount <= 0) return;
+        if (!food || amount <= 0) continue;
         
         if (sectionCounts[food.section] !== undefined) sectionCounts[food.section]++;
 
@@ -49,7 +41,7 @@ const evaluate = (ingredients: Map<string, number>, gen: number) => {
                 }
             }
         }
-    });
+    }
 
     let nutrientScore = 0;
     let metCount = 0;
@@ -109,9 +101,10 @@ const evaluate = (ingredients: Map<string, number>, gen: number) => {
     ) * 0.1 * macroWeight;
 
     let amountPenalty = 0;
-    ingredients.forEach((amt, name) => {
+    for (const name in ingredients) {
+        const amt = ingredients[name];
         const food = foodMap.get(name);
-        if (!food) return;
+        if (!food) continue;
         
         const mustHave = details.mustHaveFoods?.find((m: any) => m.name === name);
         if (mustHave) {
@@ -124,37 +117,31 @@ const evaluate = (ingredients: Map<string, number>, gen: number) => {
             if (amt > max) amountPenalty += (amt - max) * 1000;
             if (amt > 0 && amt < (food.minAmount || 20)) amountPenalty += 200000;
         }
-    });
+    }
 
-    const res = { 
+    return { 
         score: (nutrientScore - macroPenalty - amountPenalty - varietyPenalty - ratioPenalty) || -999999, 
         totals, 
         accuracy: Math.round((metCount/essentialKeys.length)*1000)/10, 
         worst, metCount,
         worstMacro: (calDiff > 50) ? 'energy' : (fatDiff > 5) ? 'fat' : 'protein'
     };
-    
-    // Memory Safety: Prevent cache from growing too large
-    if (evalCache.size > 5000) evalCache.clear();
-    
-    evalCache.set(cacheKey, res);
-    return res;
 };
 
 const likedFoods = FOOD_DATABASE.filter((f: Food) => (details.likedFoods && details.likedFoods.includes(f.name)) || (details.mustHaveFoods && details.mustHaveFoods.some((m: any) => m.name === f.name)));
 
 let islands = Array.from({ length: islandsPerWorker }, () => 
     Array.from({ length: 50 }, (_, i) => {
-        const genome = new Map<string, number>();
+        const genome: Record<string, number> = {};
         likedFoods.forEach((f: Food) => {
             const mustHave = details.mustHaveFoods?.find((m: any) => m.name === f.name);
             if (mustHave) {
-                genome.set(f.name, Math.round((mustHave.min || 0) + Math.random() * ((mustHave.max || 150) - (mustHave.min || 0))));
+                genome[f.name] = Math.round((mustHave.min || 0) + Math.random() * ((mustHave.max || 150) - (mustHave.min || 0)));
             } else {
                 let val = Math.random() < 0.15 ? 50 + Math.random() * 150 : 0;
                 const max = (details.customMaxAmounts && details.customMaxAmounts[f.name] !== undefined) ? details.customMaxAmounts[f.name] : f.maxAmount;
                 if (val > max) val = max;
-                genome.set(f.name, Math.round(val));
+                genome[f.name] = Math.round(val);
             }
         });
         return { 
@@ -165,27 +152,28 @@ let islands = Array.from({ length: islandsPerWorker }, () =>
     })
 );
 
-islands.forEach(isl => isl.forEach(p => p.res = evaluate(p.genome, 0)));
+islands.forEach(isl => isl.forEach(p => p.res = evaluate(p.genome)));
 
 async function run() {
     let currentGen = 0;
     while (currentGen < maxGens) {
         currentGen++;
-        if (currentGen % 50 === 0) await new Promise(r => setTimeout(r, 1));
+        // Breath more often for GC (every 10 gens instead of 50)
+        if (currentGen % 10 === 0) await new Promise(r => setTimeout(r, 0));
 
         islands = islands.map(island => {
             const scored = island.sort((a, b) => (b.res?.score || -Infinity) - (a.res?.score || -Infinity));
             const bestOfIsland = scored[0];
             const nextPop: any[] = [];
             
-            for(let e=0; e<8; e++) nextPop.push({ genome: new Map(bestOfIsland.genome), team: 'elitists', res: bestOfIsland.res }); 
+            for(let e=0; e<8; e++) nextPop.push({ genome: { ...bestOfIsland.genome }, team: 'elitists', res: bestOfIsland.res }); 
 
             while (nextPop.length < 50) {
                 const parentA = scored[Math.floor(Math.random() * 5)];
                 const parentB = scored[Math.floor(Math.random() * 15)];
-                const childGenome = new Map<string, number>();
+                const childGenome: Record<string, number> = {};
                 likedFoods.forEach((f: Food) => {
-                    childGenome.set(f.name, Math.random() < 0.6 ? parentA.genome.get(f.name)! : parentB.genome.get(f.name)!);
+                    childGenome[f.name] = Math.random() < 0.6 ? parentA.genome[f.name] : parentB.genome[f.name];
                 });
 
                 const team = island[nextPop.length]?.team || 'explorers';
@@ -193,7 +181,7 @@ async function run() {
 
                 likedFoods.forEach((f: Food) => {
                     const mustHave = details.mustHaveFoods?.find((m: any) => m.name === f.name);
-                    let val = childGenome.get(f.name) || 0;
+                    let val = childGenome[f.name] || 0;
                     
                     if (Math.random() < 0.15) {
                         if (mustHave) {
@@ -213,10 +201,10 @@ async function run() {
 
                     const max = (details.customMaxAmounts && details.customMaxAmounts[f.name] !== undefined) ? details.customMaxAmounts[f.name] : f.maxAmount;
                     val = Math.max(mustHave ? (mustHave.min || 0) : 0, Math.min(max, Math.round(val)));
-                    childGenome.set(f.name, val);
+                    childGenome[f.name] = val;
                 });
                 
-                nextPop.push({ genome: childGenome, team, res: evaluate(childGenome, currentGen) });
+                nextPop.push({ genome: childGenome, team, res: evaluate(childGenome) });
             }
             return nextPop;
         });
@@ -243,7 +231,8 @@ async function run() {
     
     const finalBest = islands[0][0];
     const sectionedIngredients: any = {};
-    finalBest.genome.forEach((amount, name) => {
+    for (const name in finalBest.genome) {
+        const amount = finalBest.genome[name];
         if (amount > 0) {
             const food = foodMap.get(name)!;
             if (!sectionedIngredients[food.section]) sectionedIngredients[food.section] = [];
@@ -251,7 +240,7 @@ async function run() {
                 name, icon: food.icon, amount, calories: Math.round((amount/100) * food.calories)
             });
         }
-    });
+    }
 
     const micronutrients: any = {};
     Object.keys(nutrientConfig).forEach(k => {
@@ -268,6 +257,8 @@ async function run() {
     parentPort?.postMessage({ 
         type: 'result', 
         result: {
+            genome: finalBest.genome,
+            score: finalBest.res.score,
             targetCalories,
             actualCalories: Math.round(finalBest.res.totals.energy),
             accuracy: finalBest.res.accuracy,

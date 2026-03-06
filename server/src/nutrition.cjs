@@ -166,20 +166,19 @@ async function generateDietAsync(details, onProgress) {
 
     worker.on('message', (msg) => {
       if (msg.type === 'progress') {
-        workerStates[i] = { gen: msg.gen, islands: msg.islandAccuracies };
-        if (!globalBest || msg.best.res.score > globalBest.score) {
-          globalBest = { genome: msg.best.genome, score: msg.best.res.score, res: msg.best.res };
-        }
+        workerStates[i] = { gen: msg.gen, islands: msg.islands };
         const now = Date.now();
         if (now - lastProgressUpdate > 150) { 
             const maxGen = Math.max(...workerStates.map(s => s.gen));
-            const allIslands = workerStates.flatMap(s => s.islands);
-            onProgress({ done: false, generation: maxGen, accuracy: globalBest.res.accuracy, telemetry: { calories: Math.round(globalBest.res.totals.energy), fat: Math.round(globalBest.res.totals.fat), worstNutrient: globalBest.res.worst.name, worstPct: Math.round(globalBest.res.worst.pct * 100), metCount: globalBest.res.metCount, totalEssential: essentialKeys.length, score: Math.round(globalBest.res.score), islands: allIslands } });
+            const allIslands = workerStates.flatMap(s => s.islands || []);
+            onProgress({ done: false, generation: maxGen, accuracy: msg.accuracy, telemetry: msg.telemetry });
             lastProgressUpdate = now;
         }
-      } else if (msg.type === 'done') {
+      } else if (msg.type === 'result') {
         completedWorkers++;
-        if (!globalBest || msg.best.res.score > globalBest.score) globalBest = { genome: msg.best.genome, score: msg.best.res.score, res: msg.best.res };
+        if (!globalBest || msg.result.accuracy > globalBest.res.accuracy) {
+            globalBest = { genome: msg.result.genome || {}, score: msg.result.score || 0, res: msg.result };
+        }
         if (completedWorkers === workerCount) finish(globalBest.genome, globalBest.res);
       } else if (msg.type === 'migration') {
           workers.forEach((w, idx) => { if (idx !== i) w.postMessage({ type: 'import', genomes: msg.bests }); });
