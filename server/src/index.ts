@@ -62,7 +62,7 @@ console.log(`Checking for static files at: ${buildPath}`);
 app.use(express.static(buildPath));
 
 // Catch-all: serve index.html for any other requests (SPA fallback)
-app.get('*', (req, res) => {
+app.get('*path', (req, res) => {
   const indexPath = path.join(buildPath, 'index.html');
   res.sendFile(indexPath, (err) => {
     if (err) {
