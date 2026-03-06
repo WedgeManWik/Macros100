@@ -605,9 +605,30 @@ const DietPlanner = () => {
                 </Col>
               </Row>
 
-              <div className="d-flex align-items-center justify-content-between mb-4 pt-2">
+              <div className="d-flex align-items-center justify-content-between mb-4 pt-2 gap-2">
                 <h3 className="h4 fw-bold mb-0 d-flex align-items-center"><Utensils className="me-2 text-primary" size={24} /> Daily Meal Components</h3>
-                <Button variant="outline-primary" size="sm" className="fw-bold px-3" onClick={() => { const text = Object.values(diet.sectionedIngredients).flat().map(i => `${i.amount}g ${i.name}`).join('\n'); navigator.clipboard.writeText(text); alert('Copied to clipboard!'); }}>Export for Cronometer</Button>
+                <div className="d-flex gap-2">
+                  <Button variant="outline-info" size="sm" className="fw-bold px-3" onClick={() => {
+                    let report = `DIET ANALYSIS REPORT\n`;
+                    report += `Target Calories: ${diet.targetCalories} kcal\n`;
+                    report += `Actual Calories: ${diet.actualCalories} kcal\n`;
+                    report += `Accuracy Score: ${diet.accuracy}%\n\n`;
+                    report += `MACROS:\n`;
+                    report += `Protein: ${diet.macros.protein}g\n`;
+                    report += `Carbs: ${diet.macros.carbs}g\n`;
+                    report += `Fat: ${diet.macros.fat}g\n\n`;
+                    report += `NUTRIENT BREAKDOWN:\n`;
+                    
+                    Object.entries(diet.micronutrients).forEach(([key, data]) => {
+                      const name = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                      report += `${name}: ${data.amount.toFixed(1)}${data.unit} (${Math.round(data.total)}% of target)\n`;
+                    });
+                    
+                    navigator.clipboard.writeText(report);
+                    alert('Detailed analysis copied to clipboard!');
+                  }}>Export Analysis</Button>
+                  <Button variant="outline-primary" size="sm" className="fw-bold px-3" onClick={() => { const text = Object.values(diet.sectionedIngredients).flat().map(i => `${i.amount}g ${i.name}`).join('\n'); navigator.clipboard.writeText(text); alert('Copied to clipboard!'); }}>Export for Cronometer</Button>
+                </div>
               </div>
               
               <div className="mb-5">
