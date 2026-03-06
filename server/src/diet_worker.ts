@@ -144,7 +144,7 @@ const evaluate = (ingredients: Map<string, number>, gen: number) => {
 const likedFoods = FOOD_DATABASE.filter((f: Food) => (details.likedFoods && details.likedFoods.includes(f.name)) || (details.mustHaveFoods && details.mustHaveFoods.some((m: any) => m.name === f.name)));
 
 let islands = Array.from({ length: islandsPerWorker }, () => 
-    Array.from({ length: 100 }, (_, i) => {
+    Array.from({ length: 50 }, (_, i) => {
         const genome = new Map<string, number>();
         likedFoods.forEach((f: Food) => {
             const mustHave = details.mustHaveFoods?.find((m: any) => m.name === f.name);
@@ -159,7 +159,7 @@ let islands = Array.from({ length: islandsPerWorker }, () =>
         });
         return { 
             genome, 
-            team: i < 40 ? 'snipers' : i < 60 ? 'macro-snipers' : i < 80 ? 'sculptors' : i < 95 ? 'explorers' : 'elitists',
+            team: i < 20 ? 'snipers' : i < 30 ? 'macro-snipers' : i < 40 ? 'sculptors' : i < 47 ? 'explorers' : 'elitists',
             res: null as any
         };
     })
@@ -178,11 +178,11 @@ async function run() {
             const bestOfIsland = scored[0];
             const nextPop: any[] = [];
             
-            for(let e=0; e<15; e++) nextPop.push({ genome: new Map(bestOfIsland.genome), team: 'elitists', res: bestOfIsland.res }); 
+            for(let e=0; e<8; e++) nextPop.push({ genome: new Map(bestOfIsland.genome), team: 'elitists', res: bestOfIsland.res }); 
 
-            while (nextPop.length < 100) {
-                const parentA = scored[Math.floor(Math.random() * 10)];
-                const parentB = scored[Math.floor(Math.random() * 30)];
+            while (nextPop.length < 50) {
+                const parentA = scored[Math.floor(Math.random() * 5)];
+                const parentB = scored[Math.floor(Math.random() * 15)];
                 const childGenome = new Map<string, number>();
                 likedFoods.forEach((f: Food) => {
                     childGenome.set(f.name, Math.random() < 0.6 ? parentA.genome.get(f.name)! : parentB.genome.get(f.name)!);
