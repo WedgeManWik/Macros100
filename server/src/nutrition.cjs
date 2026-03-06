@@ -94,8 +94,8 @@ async function generateDietAsync(details, onProgress) {
 
   const essentialKeys = Object.keys(nutrientConfig).filter(k => nutrientConfig[k].essential);
   const maxGens = 4000;
-  const workerCount = 4; 
-  const islandsPerWorker = 8; 
+  const workerCount = 2; 
+  const islandsPerWorker = 4; 
 
   let globalBest = null;
   let completedWorkers = 0;

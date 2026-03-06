@@ -121,6 +121,10 @@ const evaluate = (ingredients: Map<string, number>, gen: number) => {
         worst, metCount,
         worstMacro: (calDiff > 50) ? 'energy' : (fatDiff > 5) ? 'fat' : 'protein'
     };
+    
+    // Memory Safety: Prevent cache from growing too large
+    if (evalCache.size > 5000) evalCache.clear();
+    
     evalCache.set(cacheKey, res);
     return res;
 };
