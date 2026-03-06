@@ -1,9 +1,12 @@
 {
   "name": "macros100-root",
   "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "scripts": {
-    "install:all": "npm install --prefix client && npm install --prefix server",
-    "build": "npm run build --prefix client && npm run build --prefix server",
-    "start": "npm start --prefix server"
+    "build": "npm run build -w client && npm run build -w server",
+    "start": "npm start -w server"
   }
 }
