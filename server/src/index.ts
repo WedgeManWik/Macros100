@@ -57,11 +57,19 @@ app.get('/api/status/:id', (req, res) => {
 
 // Serve static files from React build
 const buildPath = path.join(__dirname, '../../client/dist');
+console.log(`Checking for static files at: ${buildPath}`);
+
 app.use(express.static(buildPath));
 
 // Catch-all: serve index.html for any other requests (SPA fallback)
-app.use((req, res) => {
-  res.sendFile(path.join(buildPath, 'index.html'));
+app.get('*', (req, res) => {
+  const indexPath = path.join(buildPath, 'index.html');
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      console.error(`Error sending index.html: ${err.message} at ${indexPath}`);
+      res.status(404).send('Frontend build not found. Please check deployment logs.');
+    }
+  });
 });
 
 app.listen(port, () => {
