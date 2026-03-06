@@ -72,6 +72,18 @@ const evaluate = (ingredients: Map<string, number>, gen: number) => {
         if (boundedPct < worst.pct) worst = { name: nutrientNames[k] || k, pct: boundedPct, key: k };
     });
 
+    // Omega Ratio Penalty (O3:O6 between 1:1 and 1:4)
+    let ratioPenalty = 0;
+    const o3 = totals.omega3 || 0;
+    const o6 = totals.omega6 || 0;
+    if (o3 > 0) {
+        const ratio = o6 / o3;
+        if (ratio < 1) ratioPenalty += (1 - ratio) * 10000;
+        if (ratio > 4) ratioPenalty += (ratio - 4) * 10000;
+    } else if (o6 > 0) {
+        ratioPenalty += 50000;
+    }
+
     // VARIETY PENALTIES
     let varietyPenalty = 0;
     for (const section in sectionCounts) {
