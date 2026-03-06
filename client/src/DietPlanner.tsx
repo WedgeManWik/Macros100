@@ -48,7 +48,7 @@ const DietPlanner = () => {
     mustHaveFoods: [] as Array<{ name: string, min?: number, max?: number, amount?: number }>,
     macros: {
       protein: { mode: 'g/kg', value: 2.2 },
-      fat: { mode: '%', value: 20 },
+      fat: { mode: '%', value: 35 },
       carbs: { mode: 'remainder', value: 0 }
     },
     maintenanceCalories: 2111,
