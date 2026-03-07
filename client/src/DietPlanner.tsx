@@ -577,15 +577,15 @@ const DietPlanner = () => {
                               <div className="ms-3 h3 mb-0 text-danger fw-bold">{progress.telemetry.worstPct}%</div>
                           </div>
                         </div>
-                        <div className="text-muted small mb-3 text-uppercase fw-bold letter-spacing-1">Distributed Evolution Islands (8 Nodes, 30 Candidates Each)</div>
-                        <Row className="g-3">
+                        <div className="text-muted small mb-3 text-uppercase fw-bold letter-spacing-1">Distributed Evolution Islands</div>
+                        <Row className="g-2">
                             {progress.telemetry.islands.map((island, idx) => (
-                                <Col xs={12} key={idx}>
+                                <Col xs={6} key={idx}>
                                     <div className="p-2 rounded-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                        <div className="small text-muted mb-2 d-flex justify-content-between px-1"><span>Node {idx + 1}</span><span className="text-info fw-bold">{Math.round(island.reduce((a,b)=>a+b,0)/island.length)}% Avg Accuracy</span></div>
+                                        <div className="small text-muted mb-2 d-flex justify-content-between px-1"><span>Node {idx + 1}</span><span className="text-info fw-bold">{Math.round(island.reduce((a,b)=>a+b,0)/island.length)}%</span></div>
                                         <div className="d-flex flex-wrap gap-1">
                                             {island.map((acc, i) => (
-                                                <div key={i} style={{ width: '18px', height: '14px', fontSize: '0.45rem', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '2px', backgroundColor: acc > 95 ? '#10b981' : acc > 85 ? '#3b82f6' : acc > 70 ? '#f59e0b' : '#334155' }} className="fw-bold text-white" title={`Candidate ${i+1}: ${acc}%`}>{Math.floor(acc)}</div>
+                                                <div key={i} style={{ width: '16px', height: '12px', fontSize: '0.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '2px', backgroundColor: acc > 95 ? '#10b981' : acc > 85 ? '#3b82f6' : acc > 70 ? '#f59e0b' : '#334155' }} className="fw-bold text-white">{Math.floor(acc)}</div>
                                             ))}
                                         </div>
                                     </div>
