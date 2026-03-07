@@ -130,7 +130,6 @@ const createRandomGenome = () => {
         if (mustHave) {
             genome[f.name] = Math.round((mustHave.min || 0) + Math.random() * ((mustHave.max || 150) - (mustHave.min || 0)));
         } else {
-            // Start with only 2-4 items per section for cleaner initial diets
             let val = Math.random() < 0.1 ? 50 + Math.random() * 100 : 0;
             const max = (details.customMaxAmounts && details.customMaxAmounts[f.name] !== undefined) ? details.customMaxAmounts[f.name] : f.maxAmount;
             if (val > max) val = max;
@@ -140,12 +139,12 @@ const createRandomGenome = () => {
     return genome;
 };
 
-let islands = Array.from({ length: 6 }, () => 
-    Array.from({ length: 20 }, (_, i) => {
+let islands = Array.from({ length: 8 }, () => 
+    Array.from({ length: 30 }, (_, i) => {
         const genome = createRandomGenome();
         return { 
             genome, 
-            team: i < 5 ? 'snipers' : i < 10 ? 'macro-snipers' : i < 15 ? 'sculptors' : 'elitists',
+            team: i < 8 ? 'snipers' : i < 16 ? 'macro-snipers' : i < 24 ? 'sculptors' : 'elitists',
             res: null
         };
     })
@@ -166,7 +165,6 @@ async function run() {
         currentGen++;
         if (currentGen % 20 === 0) await new Promise(r => setTimeout(r, 0));
 
-        // Process incoming migrations
         if (incomingGenomes.length > 0) {
             islands.forEach(island => {
                 incomingGenomes.forEach(genome => {
@@ -183,12 +181,11 @@ async function run() {
             const bestOfIsland = scored[0];
             const nextPop = [];
             
-            // Keep top 2 elitists
-            for(let e=0; e<2; e++) nextPop.push({ genome: { ...scored[e].genome }, team: 'elitists', res: scored[e].res }); 
+            for(let e=0; e<3; e++) nextPop.push({ genome: { ...scored[e].genome }, team: 'elitists', res: scored[e].res }); 
 
-            while (nextPop.length < 20) {
-                const parentA = scored[Math.floor(Math.random() * 4)];
-                const parentB = scored[Math.floor(Math.random() * 8)];
+            while (nextPop.length < 30) {
+                const parentA = scored[Math.floor(Math.random() * 6)];
+                const parentB = scored[Math.floor(Math.random() * 12)];
                 const childGenome = {};
                 likedFoods.forEach((f) => {
                     childGenome[f.name] = Math.random() < 0.7 ? parentA.genome[f.name] : parentB.genome[f.name];
@@ -201,17 +198,16 @@ async function run() {
                     const mustHave = (details.mustHaveFoods || []).find((m) => m.name === f.name);
                     let val = childGenome[f.name] || 0;
                     
-                    if (Math.random() < 0.25) { // Increased mutation frequency
+                    if (Math.random() < 0.25) {
                         if (mustHave) {
                             val += (Math.random() * 30 - 15);
                         } else if (team === 'snipers') {
                             const wk = bestOfIsland.res.worst.key;
-                            // Aggressively boost foods that solve the bottleneck
                             if (wk && f.nutrients[wk] > 0) {
                                 if (val === 0) val = 40 + Math.random() * 40;
                                 else val += scale * 5;
                             } else if (Math.random() < 0.05) {
-                                val = 0; // Cut non-contributing foods
+                                val = 0;
                             }
                         } else if (team === 'macro-snipers') {
                             const mk = bestOfIsland.res.worstMacro;
@@ -220,7 +216,7 @@ async function run() {
                             } else {
                                 if (f[mk] > 5) val -= scale * 5;
                             }
-                        } else if (Math.random() < 0.05) { // Occasional shuffle
+                        } else if (Math.random() < 0.05) {
                             val = Math.random() < 0.1 ? 50 + Math.random() * 100 : 0;
                         } else {
                             val += (Math.random() * 2 - 1) * scale;
@@ -264,7 +260,6 @@ async function run() {
     
     const finalBest = islands[0][0];
 
-    // AUTOMATIC WATER FILLING
     const waterTarget = nutrientConfig.water ? nutrientConfig.water.target : 0;
     const currentWater = finalBest.res.totals.water || 0;
     if (currentWater < waterTarget) {
@@ -272,7 +267,6 @@ async function run() {
         const mineralWater = foodMap.get('Mineral Water');
         if (mineralWater) {
             finalBest.genome['Mineral Water'] = (finalBest.genome['Mineral Water'] || 0) + Math.round(needed);
-            // Re-calculate totals for the final output
             finalBest.res = evaluate(finalBest.genome);
         }
     }
