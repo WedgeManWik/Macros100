@@ -139,7 +139,7 @@ const createRandomGenome = () => {
     return genome;
 };
 
-let islands = Array.from({ length: 8 }, () => 
+let islands = Array.from({ length: islandsPerWorker || 8 }, () => 
     Array.from({ length: 30 }, (_, i) => {
         const genome = createRandomGenome();
         return { 
@@ -203,7 +203,9 @@ async function run() {
                             val += (Math.random() * 30 - 15);
                         } else if (team === 'snipers') {
                             const wk = bestOfIsland.res.worst.key;
-                            if (wk && f.nutrients[wk] > 0) {
+                            const foodNutrientVal = (wk === 'energy' ? f.calories : (wk === 'protein' ? f.protein : (wk === 'fat' ? f.fat : (wk === 'carbs' ? f.carbs : (f.nutrients[wk] || 0)))));
+                            
+                            if (wk && foodNutrientVal > 0) {
                                 if (val === 0) val = 40 + Math.random() * 40;
                                 else val += scale * 5;
                             } else if (Math.random() < 0.05) {
@@ -211,10 +213,13 @@ async function run() {
                             }
                         } else if (team === 'macro-snipers') {
                             const mk = bestOfIsland.res.worstMacro;
-                            if (bestOfIsland.res.totals[mk] < (mk === 'energy' ? targetCalories : (mk === 'fat' ? fatTarget : proteinTarget))) {
-                                if (f[mk] > 5) val += scale * 5;
+                            const targetVal = (mk === 'energy' ? targetCalories : (mk === 'fat' ? fatTarget : (mk === 'protein' ? proteinTarget : carbTarget)));
+                            const foodMacroVal = (mk === 'energy' ? f.calories : f[mk]);
+
+                            if (bestOfIsland.res.totals[mk] < targetVal) {
+                                if (foodMacroVal > 5) val += scale * 5;
                             } else {
-                                if (f[mk] > 5) val -= scale * 5;
+                                if (foodMacroVal > 5) val -= scale * 5;
                             }
                         } else if (Math.random() < 0.05) {
                             val = Math.random() < 0.1 ? 50 + Math.random() * 100 : 0;
