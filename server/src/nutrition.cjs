@@ -46,7 +46,7 @@ async function generateDietAsync(details, onProgress) {
 
   const nutrientConfig = {
     energy: { target: targetCalories },
-    water: { target: 2500 * rdaScale, essential: true },
+    water: { target: 2500 * rdaScale },
     protein: { target: proteinTarget, essential: true },
     carbs: { target: carbTarget },
     fat: { target: fatTarget },

@@ -263,6 +263,20 @@ async function run() {
     }
     
     const finalBest = islands[0][0];
+
+    // AUTOMATIC WATER FILLING
+    const waterTarget = nutrientConfig.water ? nutrientConfig.water.target : 0;
+    const currentWater = finalBest.res.totals.water || 0;
+    if (currentWater < waterTarget) {
+        const needed = waterTarget - currentWater;
+        const mineralWater = foodMap.get('Mineral Water');
+        if (mineralWater) {
+            finalBest.genome['Mineral Water'] = (finalBest.genome['Mineral Water'] || 0) + Math.round(needed);
+            // Re-calculate totals for the final output
+            finalBest.res = evaluate(finalBest.genome);
+        }
+    }
+
     const sectionedIngredients = {};
     for (const name in finalBest.genome) {
         const amount = finalBest.genome[name];
