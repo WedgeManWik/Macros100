@@ -176,7 +176,7 @@ async function generateDietAsync(details, onProgress) {
         }
       } else if (msg.type === 'result') {
         completedWorkers++;
-        if (!globalBest || msg.result.accuracy > globalBest.res.accuracy) {
+        if (!globalBest || msg.result.score > globalBest.score) {
             globalBest = { genome: msg.result.genome || {}, score: msg.result.score || 0, res: msg.result };
         }
         if (completedWorkers === workerCount) finish(globalBest.genome, globalBest.res);
