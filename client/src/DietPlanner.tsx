@@ -51,6 +51,7 @@ const DietPlanner = () => {
       fat: { mode: '%', value: 35 },
       carbs: { mode: 'remainder', value: 0 }
     },
+    customMacros: false,
     maintenanceCalories: 2111,
     calorieOffset: 0,
     customMaxAmounts: {} as Record<string, number>
@@ -78,6 +79,40 @@ const DietPlanner = () => {
         return prev;
     });
   }, [formData.weight, formData.bodyFat, formData.activityLevel, formData.goal]);
+
+  // Handle Dynamic Macro Goals
+  useEffect(() => {
+    if (formData.customMacros) return;
+
+    const targetCals = formData.maintenanceCalories + formData.calorieOffset;
+    const isLowCal = targetCals < 1500;
+    const isGain = formData.goal.includes('gain');
+    const isLoss = formData.goal.includes('lose');
+
+    setFormData(prev => {
+        const newMacros = { ...prev.macros };
+        
+        if (isLowCal) {
+            newMacros.protein = { mode: '%', value: 30 };
+            newMacros.fat = { mode: '%', value: 25 };
+        } else if (isGain) {
+            newMacros.protein = { mode: 'g/kg', value: 2.2 };
+            newMacros.fat = { mode: '%', value: 30 };
+        } else if (isLoss) {
+            newMacros.protein = { mode: 'g/kg', value: 1.8 };
+            newMacros.fat = { mode: '%', value: 25 };
+        } else {
+            // Maintenance
+            newMacros.protein = { mode: 'g/kg', value: 1.6 };
+            newMacros.fat = { mode: '%', value: 30 };
+        }
+        newMacros.carbs = { mode: 'remainder', value: 0 };
+
+        // Check if actually changed to avoid infinite loop
+        if (JSON.stringify(prev.macros) === JSON.stringify(newMacros)) return prev;
+        return { ...prev, macros: newMacros };
+    });
+  }, [formData.goal, formData.maintenanceCalories, formData.calorieOffset, formData.customMacros, formData.weight]);
 
   const addMustHave = (name: string) => {
     if (formData.mustHaveFoods.find(f => f.name === name)) return;
@@ -429,25 +464,34 @@ const DietPlanner = () => {
 
                   <hr className="my-4" />
 
-                  <h3 className="h5 mb-3 d-flex align-items-center fw-bold">
-                    <Activity className="me-2 text-macro" size={20} /> Macronutrient Goals
+                  <h3 className="h5 mb-3 d-flex align-items-center justify-content-between fw-bold">
+                    <span className="d-flex align-items-center"><Activity className="me-2 text-macro" size={20} /> Macronutrient Goals</span>
+                    <Form.Check 
+                      type="switch"
+                      id="custom-macros-switch"
+                      label={<small className="text-muted" style={{ fontSize: '0.7rem' }}>Custom Settings</small>}
+                      checked={formData.customMacros}
+                      onChange={(e) => setFormData(prev => ({ ...prev, customMacros: e.target.checked }))}
+                    />
                   </h3>
-                  {['protein', 'fat', 'carbs'].map(macro => (
-                    <Row key={macro} className="mb-3 align-items-center">
-                      <Col xs={3} className="text-capitalize fw-bold small text-muted">{macro}</Col>
-                      <Col xs={4}>
-                        <Form.Control size="sm" type="number" step="any" disabled={(formData.macros as any)[macro].mode === 'remainder'} value={(formData.macros as any)[macro].value} onChange={(e) => handleMacroChange(macro as any, 'value', e.target.value)} />
-                      </Col>
-                      <Col xs={5}>
-                        <Form.Select size="sm" value={(formData.macros as any)[macro].mode} onChange={(e) => handleMacroChange(macro as any, 'mode', e.target.value)}>
-                          <option value="g/kg">g/kg</option>
-                          <option value="%">%</option>
-                          <option value="g">g</option>
-                          <option value="remainder">Remainder</option>
-                        </Form.Select>
-                      </Col>
-                    </Row>
-                  ))}
+                  <div style={{ opacity: formData.customMacros ? 1 : 0.5, pointerEvents: formData.customMacros ? 'all' : 'none', transition: 'opacity 0.2s' }}>
+                    {['protein', 'fat', 'carbs'].map(macro => (
+                      <Row key={macro} className="mb-3 align-items-center">
+                        <Col xs={3} className="text-capitalize fw-bold small text-muted">{macro}</Col>
+                        <Col xs={4}>
+                          <Form.Control size="sm" type="number" step="any" disabled={(formData.macros as any)[macro].mode === 'remainder'} value={(formData.macros as any)[macro].value} onChange={(e) => handleMacroChange(macro as any, 'value', e.target.value)} />
+                        </Col>
+                        <Col xs={5}>
+                          <Form.Select size="sm" value={(formData.macros as any)[macro].mode} onChange={(e) => handleMacroChange(macro as any, 'mode', e.target.value)}>
+                            <option value="g/kg">g/kg</option>
+                            <option value="%">%</option>
+                            <option value="g">g</option>
+                            <option value="remainder">Remainder</option>
+                          </Form.Select>
+                        </Col>
+                      </Row>
+                    ))}
+                  </div>
 
                   <hr className="my-4" />
 

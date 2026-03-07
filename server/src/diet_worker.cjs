@@ -268,7 +268,7 @@ async function run() {
         micronutrients[k] = {
             amount: val,
             total: target > 0 ? (val / target) * 100 : 100,
-            unit: k === 'energy' ? 'kcal' : (k === 'water' ? 'g' : (['a', 'folate', 'k'].includes(k) ? 'µg' : 'mg')),
+            unit: k === 'energy' ? 'kcal' : (['water', 'protein', 'carbs', 'fat', 'fiber', 'sugars', 'omega3', 'omega6', 'fatSat', 'fatPoly', 'fatMono'].includes(k) ? 'g' : (['a', 'folate', 'k'].includes(k) ? 'µg' : 'mg')),
             sources: []
         };
     });
