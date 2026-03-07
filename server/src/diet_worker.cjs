@@ -123,23 +123,29 @@ const evaluate = (ingredients) => {
 
 const likedFoods = FOOD_DATABASE.filter((f) => (details.likedFoods && details.likedFoods.includes(f.name)) || (details.mustHaveFoods && details.mustHaveFoods.some((m) => m.name === f.name)));
 
-let islands = Array.from({ length: islandsPerWorker }, () => 
-    Array.from({ length: 50 }, (_, i) => {
-        const genome = {};
-        likedFoods.forEach((f) => {
-            const mustHave = (details.mustHaveFoods || []).find((m) => m.name === f.name);
-            if (mustHave) {
-                genome[f.name] = Math.round((mustHave.min || 0) + Math.random() * ((mustHave.max || 150) - (mustHave.min || 0)));
-            } else {
-                let val = Math.random() < 0.15 ? 50 + Math.random() * 150 : 0;
-                const max = (details.customMaxAmounts && details.customMaxAmounts[f.name] !== undefined) ? details.customMaxAmounts[f.name] : f.maxAmount;
-                if (val > max) val = max;
-                genome[f.name] = Math.round(val);
-            }
-        });
+const createRandomGenome = () => {
+    const genome = {};
+    likedFoods.forEach((f) => {
+        const mustHave = (details.mustHaveFoods || []).find((m) => m.name === f.name);
+        if (mustHave) {
+            genome[f.name] = Math.round((mustHave.min || 0) + Math.random() * ((mustHave.max || 150) - (mustHave.min || 0)));
+        } else {
+            // Start with only 2-4 items per section for cleaner initial diets
+            let val = Math.random() < 0.1 ? 50 + Math.random() * 100 : 0;
+            const max = (details.customMaxAmounts && details.customMaxAmounts[f.name] !== undefined) ? details.customMaxAmounts[f.name] : f.maxAmount;
+            if (val > max) val = max;
+            genome[f.name] = Math.round(val);
+        }
+    });
+    return genome;
+};
+
+let islands = Array.from({ length: 6 }, () => 
+    Array.from({ length: 20 }, (_, i) => {
+        const genome = createRandomGenome();
         return { 
             genome, 
-            team: i < 20 ? 'snipers' : i < 30 ? 'macro-snipers' : i < 40 ? 'sculptors' : i < 47 ? 'explorers' : 'elitists',
+            team: i < 5 ? 'snipers' : i < 10 ? 'macro-snipers' : i < 15 ? 'sculptors' : 'elitists',
             res: null
         };
     })
@@ -158,18 +164,18 @@ async function run() {
     let currentGen = 0;
     while (currentGen < maxGens) {
         currentGen++;
-        if (currentGen % 10 === 0) await new Promise(r => setTimeout(r, 0));
+        if (currentGen % 20 === 0) await new Promise(r => setTimeout(r, 0));
 
         // Process incoming migrations
         if (incomingGenomes.length > 0) {
             islands.forEach(island => {
                 incomingGenomes.forEach(genome => {
-                    const worstIdx = island.length - 1; // Replace worst
-                    island[worstIdx] = { genome: { ...genome }, team: 'explorer', res: evaluate(genome) };
-                    island.sort((a, b) => (b.res ? b.res.score : -Infinity) - (a.res ? a.res.score : -Infinity));
+                    const worstIdx = island.length - 1;
+                    island[worstIdx] = { genome: { ...genome }, team: 'snipers', res: evaluate(genome) };
                 });
             });
             incomingGenomes.length = 0;
+            islands.forEach(isl => isl.sort((a, b) => (b.res ? b.res.score : -Infinity) - (a.res ? a.res.score : -Infinity)));
         }
 
         islands = islands.map(island => {
@@ -177,39 +183,48 @@ async function run() {
             const bestOfIsland = scored[0];
             const nextPop = [];
             
-            // Reduced elitism for better diversity
-            for(let e=0; e<4; e++) nextPop.push({ genome: { ...bestOfIsland.genome }, team: 'elitists', res: bestOfIsland.res }); 
+            // Keep top 2 elitists
+            for(let e=0; e<2; e++) nextPop.push({ genome: { ...scored[e].genome }, team: 'elitists', res: scored[e].res }); 
 
-            while (nextPop.length < 50) {
-                // Broader parent selection for diversity
-                const parentA = scored[Math.floor(Math.random() * 10)];
-                const parentB = scored[Math.floor(Math.random() * 25)];
+            while (nextPop.length < 20) {
+                const parentA = scored[Math.floor(Math.random() * 4)];
+                const parentB = scored[Math.floor(Math.random() * 8)];
                 const childGenome = {};
                 likedFoods.forEach((f) => {
-                    childGenome[f.name] = Math.random() < 0.6 ? parentA.genome[f.name] : parentB.genome[f.name];
+                    childGenome[f.name] = Math.random() < 0.7 ? parentA.genome[f.name] : parentB.genome[f.name];
                 });
 
-                const team = island[nextPop.length] ? island[nextPop.length].team : 'explorers';
-                const scale = currentGen < 1000 ? 50 : 10;
+                const team = island[nextPop.length] ? island[nextPop.length].team : 'snipers';
+                const scale = currentGen < 1000 ? 60 : 20;
 
                 likedFoods.forEach((f) => {
                     const mustHave = (details.mustHaveFoods || []).find((m) => m.name === f.name);
                     let val = childGenome[f.name] || 0;
                     
-                    if (Math.random() < 0.15) {
+                    if (Math.random() < 0.25) { // Increased mutation frequency
                         if (mustHave) {
-                            val += (Math.random() * 20 - 10);
+                            val += (Math.random() * 30 - 15);
                         } else if (team === 'snipers') {
                             const wk = bestOfIsland.res.worst.key;
-                            if (wk && f.nutrients[wk] > 0) val += scale * 10;
+                            // Aggressively boost foods that solve the bottleneck
+                            if (wk && f.nutrients[wk] > 0) {
+                                if (val === 0) val = 40 + Math.random() * 40;
+                                else val += scale * 5;
+                            } else if (Math.random() < 0.05) {
+                                val = 0; // Cut non-contributing foods
+                            }
                         } else if (team === 'macro-snipers') {
                             const mk = bestOfIsland.res.worstMacro;
-                            if (bestOfIsland.res.totals[mk] < (mk === 'energy' ? targetCalories : fatTarget)) val += scale * 8;
-                            else val -= scale * 8;
-                        } else if (team === 'explorers') {
-                            val += (Math.random() * 2 - 1) * scale * 20;
+                            if (bestOfIsland.res.totals[mk] < (mk === 'energy' ? targetCalories : (mk === 'fat' ? fatTarget : proteinTarget))) {
+                                if (f[mk] > 5) val += scale * 5;
+                            } else {
+                                if (f[mk] > 5) val -= scale * 5;
+                            }
+                        } else if (Math.random() < 0.05) { // Occasional shuffle
+                            val = Math.random() < 0.1 ? 50 + Math.random() * 100 : 0;
+                        } else {
+                            val += (Math.random() * 2 - 1) * scale;
                         }
-                        if (!mustHave && Math.random() < 0.02) val = val === 0 ? (f.minAmount || 20) : 0;
                     }
 
                     const max = (details.customMaxAmounts && details.customMaxAmounts[f.name] !== undefined) ? details.customMaxAmounts[f.name] : f.maxAmount;
@@ -240,8 +255,7 @@ async function run() {
                 }
             });
 
-            // Send migration bests every 40 generations
-            if (currentGen % 40 === 0) {
+            if (currentGen % 50 === 0) {
                 const bests = islands.map(isl => isl[0].genome);
                 parentPort.postMessage({ type: 'migration', bests });
             }
