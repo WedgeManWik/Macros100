@@ -251,6 +251,7 @@ const DietPlanner = () => {
         totalEssential: 0,
         score: 0,
         avgAccuracy: 0,
+        trialInfo: '',
         islands: [] as number[][]
     }
   });
@@ -264,7 +265,7 @@ const DietPlanner = () => {
         generation: 0, 
         accuracy: 0, 
         time: 0,
-        telemetry: { calories: 0, fat: 0, worstNutrient: '', worstPct: 0, metCount: 0, totalEssential: 0, score: 0, avgAccuracy: 0, islands: [] }
+        telemetry: { calories: 0, fat: 0, worstNutrient: '', worstPct: 0, metCount: 0, totalEssential: 0, score: 0, avgAccuracy: 0, trialInfo: '', islands: [] }
     });
 
     try {
@@ -558,10 +559,11 @@ const DietPlanner = () => {
             <div className="text-center py-5 fade-in">
               <Spinner animation="border" variant="primary" className="mb-4" style={{ width: '3.5rem', height: '3.5rem', borderWidth: '0.25rem' }} />
               <h3 className="h2 fw-bold mb-2">Simulating Biological System</h3>
-              <p className="text-muted mb-5">Phase: <span className="text-primary fw-bold">{progress.generation < 500 ? 'Nutrient Saturation' : progress.generation < 3000 ? 'Budget Pruning' : 'Surgical Polish'}</span></p>
+              <p className="text-muted mb-2">Phase: <span className="text-primary fw-bold">{progress.generation < 500 ? 'Nutrient Saturation' : progress.generation % 4000 < 3000 ? 'Budget Pruning' : 'Surgical Polish'}</span></p>
+              <p className="text-info fw-bold mb-5" style={{ letterSpacing: '0.1em' }}>{progress.telemetry.trialInfo || 'Trial 1/5'}</p>
               <div className="mx-auto my-4" style={{ maxWidth: '650px' }}>
-                <div className="d-flex justify-content-between text-muted small mb-2 fw-bold"><span>GENETIC OPTIMIZATION</span><span>{Math.round((progress.generation / 4000) * 100)}% COMPLETE</span></div>
-                <ProgressBar animated now={(progress.generation / 4000) * 100} className="mb-5 shadow-sm" style={{ height: '10px' }} />
+                <div className="d-flex justify-content-between text-muted small mb-2 fw-bold"><span>GENETIC OPTIMIZATION</span><span>{Math.round((progress.generation / 20000) * 100)}% COMPLETE</span></div>
+                <ProgressBar animated now={(progress.generation / 20000) * 100} className="mb-5 shadow-sm" style={{ height: '10px' }} />
                 <Card className="telemetry-card shadow-lg text-start font-monospace mb-4" style={{ background: '#121212', border: '1px solid rgba(255,255,255,0.1)' }}>
                     <Card.Header className="bg-transparent border-secondary border-opacity-25 small text-uppercase text-info fw-bold py-3 px-4"><div className="d-flex align-items-center"><Activity size={16} className="me-2" />Real-time AI Telemetry</div></Card.Header>
                     <Card.Body className="p-4">

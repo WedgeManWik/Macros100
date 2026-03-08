@@ -32,9 +32,8 @@ const evaluate = (ingredients: Record<string, number>) => {
         
         if (food.nutrients) {
             for (const n in food.nutrients) {
-                const key = n === 'fibre' ? 'fiber' : n;
-                if (totals[key] !== undefined && !macroKeys.includes(key)) {
-                    totals[key] += factor * (food.nutrients as any)[n]; 
+                if (totals[n] !== undefined && !macroKeys.includes(n)) {
+                    totals[n] += factor * (food.nutrients as any)[n]; 
                 }
             }
         }

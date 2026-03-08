@@ -94,16 +94,80 @@ async function generateDietAsync(details, onProgress) {
 
   const essentialKeys = Object.keys(nutrientConfig).filter(k => nutrientConfig[k].essential);
   const maxGens = 4000;
-  const workerCount = 2; 
-  const islandsPerWorker = 4; 
+  const numTrials = 5;
+  const workerCount = 4; 
+  const islandsPerWorker = 2; 
 
-  let globalBest = null;
-  let completedWorkers = 0;
-  const workers = [];
-  const workerStates = Array.from({ length: workerCount }, () => ({ gen: 0, islands: [[0], [0], [0], [0], [0], [0], [0], [0]] }));
+  let overallBest = null;
+  let activeWorkers = [];
+
   const stopAll = () => {
-    workers.forEach(w => w.terminate());
+    activeWorkers.forEach(w => w.terminate());
+    activeWorkers = [];
   };
+
+  for (let trial = 1; trial <= numTrials; trial++) {
+    const trialBest = await new Promise((resolve) => {
+      let currentTrialBest = null;
+      let completedWorkers = 0;
+      const trialWorkers = [];
+      const workerStates = Array.from({ length: workerCount }, () => ({ gen: 0, islands: [] }));
+      let lastProgressUpdate = 0;
+
+      for (let i = 0; i < workerCount; i++) {
+        const workerPath = path.join(__dirname, 'diet_worker.cjs');
+        const worker = new Worker(workerPath, {
+          workerData: {
+            FOOD_DATABASE,
+            details, islandCount: workerCount * islandsPerWorker, islandsPerWorker, maxGens, targetCalories, rdaScale,
+            proteinTarget, fatTarget, carbTarget, essentialKeys, nutrientNames, nutrientConfig
+          }
+        });
+        trialWorkers.push(worker);
+        activeWorkers.push(worker);
+
+        worker.on('message', (msg) => {
+          if (msg.type === 'progress') {
+            workerStates[i] = { gen: msg.gen, islands: msg.telemetry.islands };
+            if (!currentTrialBest || msg.telemetry.score > (currentTrialBest.score || -Infinity)) {
+                currentTrialBest = { score: msg.telemetry.score, accuracy: msg.accuracy, telemetry: msg.telemetry };
+            }
+
+            const now = Date.now();
+            if (now - lastProgressUpdate > 150) { 
+                const maxGen = Math.max(...workerStates.map(s => s.gen));
+                const allIslands = workerStates.flatMap(s => s.islands || []);
+                onProgress({ 
+                    done: false, 
+                    generation: ((trial - 1) * maxGens) + maxGen, 
+                    accuracy: currentTrialBest.accuracy, 
+                    telemetry: { ...currentTrialBest.telemetry, islands: allIslands, trialInfo: `Trial ${trial}/${numTrials}` } 
+                });
+                lastProgressUpdate = now;
+            }
+          } else if (msg.type === 'result') {
+            completedWorkers++;
+            if (!currentTrialBest || (msg.result.score > (currentTrialBest.score || -Infinity))) {
+                currentTrialBest = { genome: msg.result.genome || {}, score: msg.result.score || 0, res: msg.result };
+            }
+            if (completedWorkers === workerCount) {
+                trialWorkers.forEach(w => w.terminate());
+                // Remove these workers from activeWorkers
+                activeWorkers = activeWorkers.filter(w => !trialWorkers.includes(w));
+                resolve(currentTrialBest);
+            }
+          } else if (msg.type === 'migration') {
+              trialWorkers.forEach((w, idx) => { if (idx !== i) w.postMessage({ type: 'import', genomes: msg.bests }); });
+          }
+        });
+        worker.on('error', (err) => console.error(`Worker Trial ${trial} ${i} ERROR: ` + err.stack));
+      }
+    });
+
+    if (!overallBest || trialBest.score > overallBest.score) {
+      overallBest = trialBest;
+    }
+  }
 
   const finish = (bestPlan, bestResult) => {
     try {
@@ -114,14 +178,14 @@ async function generateDietAsync(details, onProgress) {
             const isAmino = aminoAcids.includes(n);
             breakdown[n] = {
                 amount: 0, total: 0,
-                unit: isAmino ? 'g' : (n==='energy'?'kcal':n==='protein'||n==='carbs'||n==='fat'||n==='fiber'||n==='sugars'||n==='water'||n==='omega3'||n==='omega6'?'g' : ['b12','folate','a','k','selenium'].includes(n)?'mcg':'mg'),
+                unit: isAmino ? 'g' : (n==='energy'?'kcal':n==='protein'||n==='carbs'||n==='fat'||n==='fiber'||n==='sugars'||n==='water'||n==='omega3'||n==='omega6'||n==='fatSat'||n==='fatPoly'||n==='fatMono'?'g' : ['b12','folate','a','k','selenium'].includes(n)?'mcg':'mg'),
                 sources: []
             };
             Object.entries(bestPlan).forEach(([name, amount]) => {
                 const food = FOOD_DATABASE.find(f => f.name === name);
                 if (!food) return;
                 const factor = amount / 100;
-                let val = (n === 'energy' ? food.calories : n === 'protein' ? food.protein : n === 'carbs' ? food.carbs : n === 'fat' ? food.fat : (food.nutrients[n] || (n === 'fiber' ? food.nutrients['fibre'] : 0) || 0));
+                let val = (n === 'energy' ? food.calories : n === 'protein' ? food.protein : n === 'carbs' ? food.carbs : n === 'fat' ? food.fat : (food.nutrients[n] || 0));
                 let rawVal = factor * val;
                 if (rawVal > 0.001) {
                     breakdown[n].amount += rawVal;
@@ -152,42 +216,8 @@ async function generateDietAsync(details, onProgress) {
     } catch (e) { console.error('Finish Error: ' + e.stack); } finally { stopAll(); }
   };
 
-  let lastProgressUpdate = 0;
-
-  for (let i = 0; i < workerCount; i++) {
-    const workerPath = path.join(__dirname, 'diet_worker.cjs');
-    const worker = new Worker(workerPath, {
-      workerData: {
-        FOOD_DATABASE,
-        details, islandCount: workerCount * islandsPerWorker, islandsPerWorker, maxGens, targetCalories, rdaScale,
-        proteinTarget, fatTarget, carbTarget, essentialKeys, nutrientNames, nutrientConfig
-      }
-    });
-
-    worker.on('message', (msg) => {
-      if (msg.type === 'progress') {
-        workerStates[i] = { gen: msg.gen, islands: msg.islands };
-        const now = Date.now();
-        if (now - lastProgressUpdate > 150) { 
-            const maxGen = Math.max(...workerStates.map(s => s.gen));
-            const allIslands = workerStates.flatMap(s => s.islands || []);
-            onProgress({ done: false, generation: maxGen, accuracy: msg.accuracy, telemetry: msg.telemetry });
-            lastProgressUpdate = now;
-        }
-      } else if (msg.type === 'result') {
-        completedWorkers++;
-        if (!globalBest || msg.result.score > globalBest.score) {
-            globalBest = { genome: msg.result.genome || {}, score: msg.result.score || 0, res: msg.result };
-        }
-        if (completedWorkers === workerCount) finish(globalBest.genome, globalBest.res);
-      } else if (msg.type === 'migration') {
-          workers.forEach((w, idx) => { if (idx !== i) w.postMessage({ type: 'import', genomes: msg.bests }); });
-      }
-    });
-
-    worker.on('error', (err) => console.error(`Worker ${i} ERROR: ` + err.stack));
-    workers.push(worker);
-  }
+  if (overallBest) finish(overallBest.genome, overallBest.res);
+  else onProgress({ done: true, result: null });
 
   return { stop: stopAll };
 }
