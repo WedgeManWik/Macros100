@@ -102,14 +102,53 @@ function buildModel(foods: Food[], useBinaries: boolean) {
 }
 
 function run() {
+    const timeout = setTimeout(() => {
+        console.error("Worker Safety Timeout Triggered!");
+        parentPort?.postMessage({ type: 'result', result: null });
+        process.exit(1);
+    }, 20000);
+
     try {
-        const allowed = FOOD_DATABASE.filter((f: Food) => {
+        let allowed = FOOD_DATABASE.filter((f: Food) => {
             if (details.likedFoods && details.likedFoods.length > 0 && !details.likedFoods.includes(f.name)) {
                 if (details.mustHaveFoods && details.mustHaveFoods.some((m: any) => m.name === f.name)) return true;
                 return false;
             }
             return true;
         });
+
+        if (allowed.length === 0) {
+            allowed = FOOD_DATABASE.slice(0, 50); 
+        }
+
+        if (allowed.length > 50) {
+            const scored = allowed.map((f: Food) => {
+                let nutrientDensity = 0;
+                essentialKeys.forEach((k: string) => {
+                    const val = (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] || 0));
+                    const target = nutrientConfig[k].target;
+                    if (target > 0) nutrientDensity += (val / target);
+                });
+                const score = nutrientDensity / (f.calories / 100 || 1);
+                return { f, score };
+            });
+            scored.sort((a: any, b: any) => {
+                if (isNaN(a.score)) return 1;
+                if (isNaN(b.score)) return -1;
+                return b.score - a.score;
+            });
+            
+            const mustHaveNames = new Set((details.mustHaveFoods || []).map((m: any) => m.name));
+            const topFoods = scored.slice(0, 40).map((s: any) => s.f);
+            
+            const finalAllowed = [...topFoods];
+            allowed.forEach((f: Food) => {
+                if (mustHaveNames.has(f.name) && !finalAllowed.some(fa => fa.name === f.name)) {
+                    finalAllowed.push(f);
+                }
+            });
+            allowed = finalAllowed;
+        }
 
         parentPort?.postMessage({ type: 'progress', gen: 0, accuracy: 0, telemetry: { trialInfo: 'Phase 1: Selection' } });
 
@@ -121,8 +160,12 @@ function run() {
             const mustHave = details.mustHaveFoods ? details.mustHaveFoods.find((m: any) => m.name === f.name) : null;
             if (amount > 0.001 || mustHave) candidates.push({ f, amount });
         });
-        candidates.sort((a, b) => b.amount - a.amount);
-        const usefulFoods = candidates.slice(0, 30).map(c => c.f);
+        candidates.sort((a: any, b: any) => b.amount - a.amount);
+        let usefulFoods = candidates.slice(0, 30).map(c => c.f);
+
+        if (usefulFoods.length === 0) {
+            usefulFoods = allowed.slice(0, 30);
+        }
 
         parentPort?.postMessage({ type: 'progress', gen: 1, accuracy: 50, telemetry: { trialInfo: 'Phase 2: Optimization' } });
 
@@ -156,6 +199,7 @@ function run() {
             if (totals[k] / (nutrientConfig[k].target || 1) >= 0.95) met++;
         });
 
+        clearTimeout(timeout);
         parentPort?.postMessage({ 
             type: 'result', 
             result: {
@@ -167,6 +211,7 @@ function run() {
             }
         });
     } catch (err: any) {
+        clearTimeout(timeout);
         console.error("FATAL: " + err.stack);
         parentPort?.postMessage({ type: 'result', result: null });
     }
