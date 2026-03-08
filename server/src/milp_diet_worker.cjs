@@ -21,21 +21,20 @@ function buildModel(foods, useBinaries) {
 
     if (useBinaries) model.binaries = {};
 
-    // Calorie Slack - Significant penalty for deficit
+    // Calorie Slack - EXTREME penalty for deficit
     model.constraints.bal_energy = { equal: targetCalories };
-    model.variables.en_def = { score: -5000, bal_energy: 1 }; 
+    model.variables.en_def = { score: -100000, bal_energy: 1 }; 
     model.variables.en_ex = { score: -1000, bal_energy: -1 };
 
-    // Macro Slack
+    // Macro Slacks - VERY SOFT to allow filling calories for nutrients
     ['protein', 'fat', 'carbs'].forEach(m => {
         const target = (m === 'protein' ? proteinTarget : (m === 'fat' ? fatTarget : carbTarget));
         model.constraints[`bal_${m}`] = { equal: target };
-        model.variables[`${m}_def`] = { score: -500, [`bal_${m}`]: 1 };
-        model.variables[`${m}_ex`] = { score: -500, [`bal_${m}`]: -1 };
+        model.variables[`${m}_def`] = { score: -10, [`bal_${m}`]: 1 };
+        model.variables[`${m}_ex`] = { score: -10, [`bal_${m}`]: -1 };
     });
 
-    // Nutrient Coverage Reward
-    const NUTRIENT_REWARD = 2000000;
+    const NUTRIENT_REWARD = 10000000;
 
     essentialKeys.forEach(k => {
         const config = nutrientConfig[k];
@@ -46,7 +45,8 @@ function buildModel(foods, useBinaries) {
         model.constraints[`track_cov_${k}`] = { min: 0 };
 
         if (config.max) {
-            model.variables[`over_${k}`] = { score: -NUTRIENT_REWARD * 10, [`track_max_${k}`]: -1 };
+            // Soft Max - Penalty for going over, but not a hard wall
+            model.variables[`over_${k}`] = { score: -10, [`track_max_${k}`]: -1 };
             model.constraints[`track_max_${k}`] = { max: config.max };
         }
     });
@@ -54,7 +54,7 @@ function buildModel(foods, useBinaries) {
     foods.forEach((f, idx) => {
         const varName = `f_${idx}`;
         const foodVar = {
-            score: -0.01,
+            score: -0.0001,
             bal_energy: f.calories,
             bal_protein: f.protein,
             bal_fat: f.fat,
@@ -77,10 +77,7 @@ function buildModel(foods, useBinaries) {
                   ((details.customMaxAmounts && details.customMaxAmounts[f.name] !== undefined) ? (details.customMaxAmounts[f.name] / 100) : (f.maxAmount / 100));
         if (maxVal < minVal) maxVal = minVal;
 
-        model.constraints[`lim_${idx}`] = { min: 0, max: maxVal };
-        foodVar[`lim_${idx}`] = 1;
-
-        if (useBinaries && mustHave) {
+        if (useBinaries) {
             const binName = `u_${idx}`;
             model.binaries[binName] = 1;
             model.constraints[`min_b_${idx}`] = { min: 0 };
@@ -88,11 +85,13 @@ function buildModel(foods, useBinaries) {
             foodVar[`min_b_${idx}`] = 1;
             foodVar[`max_b_${idx}`] = 1;
             model.variables[binName] = { [`min_b_${idx}`]: -minVal, [`max_b_${idx}`]: -maxVal };
-            model.constraints[`force_${idx}`] = { equal: 1 };
-            model.variables[binName][`force_${idx}`] = 1;
-        } else if (minVal > 0) {
-            model.constraints[`min_bound_${idx}`] = { min: minVal };
-            foodVar[`min_bound_${idx}`] = 1;
+            if (mustHave) {
+                model.constraints[`force_${idx}`] = { equal: 1 };
+                model.variables[binName][`force_${idx}`] = 1;
+            }
+        } else {
+            model.constraints[`lim_${idx}`] = { max: maxVal };
+            foodVar[`lim_${idx}`] = 1;
         }
 
         model.variables[varName] = foodVar;
@@ -172,9 +171,9 @@ function run() {
 
         if (allowed.length === 0 && likedFoods.length === 0) allowed = [...FOOD_DATABASE];
 
-        // PHASE 0: Prune to 25 high-potential foods for absolute reliability
-        if (allowed.length > 25) {
-            console.log(`Phase 0: Selecting top 25 foods from ${allowed.length} candidates...`);
+        // PHASE 0: Pre-Selection (Pool up to 35)
+        if (allowed.length > 35) {
+            console.log(`Phase 0: Selecting top foods from ${allowed.length} candidates...`);
             const bestForNutrient = new Set();
             essentialKeys.forEach(k => {
                 const target = nutrientConfig[k].target;
@@ -202,18 +201,41 @@ function run() {
             const finalAllowedSet = new Set();
             allowed.forEach(f => { if (mustHaveNames.has(f.name)) finalAllowedSet.add(f.name); });
             const bfnList = Array.from(bestForNutrient);
-            for (let i = 0; i < bfnList.length && finalAllowedSet.size < 20; i++) finalAllowedSet.add(bfnList[i]);
-            for (let i = 0; i < scored.length && finalAllowedSet.size < 25; i++) finalAllowedSet.add(scored[i].f.name);
+            for (let i = 0; i < bfnList.length && finalAllowedSet.size < 25; i++) finalAllowedSet.add(bfnList[i]);
+            for (let i = 0; i < scored.length && finalAllowedSet.size < 35; i++) finalAllowedSet.add(scored[i].f.name);
             allowed = FOOD_DATABASE.filter(f => finalAllowedSet.has(f.name));
         }
 
-        // Direct MILP on the small 25-food pool
+        // Phase 1: LP to find best candidates for direct MILP
+        parentPort.postMessage({ type: 'progress', gen: 0, accuracy: 0, telemetry: { trialInfo: 'Phase 1: Selection' } });
+        const phase1Results = solver.Solve(buildModel(allowed, false));
+        
+        const candidateMap = new Map();
+        allowed.forEach((f, idx) => {
+            const amount = phase1Results[`f_${idx}`] || 0;
+            if (amount > 0.01) candidateMap.set(f.name, f);
+        });
+        
+        // Ensure must-haves
+        allowed.forEach(f => { if (mustHaveNames.has(f.name)) candidateMap.set(f.name, f); });
+
+        let usefulFoods = Array.from(candidateMap.values());
+        if (usefulFoods.length > 18) {
+            usefulFoods.sort((a, b) => {
+                const amtA = phase1Results[allowed.findIndex(f => f.name === a.name)] || 0;
+                const amtB = phase1Results[allowed.findIndex(f => f.name === b.name)] || 0;
+                return amtB - amtA;
+            });
+            usefulFoods = usefulFoods.slice(0, 18);
+        }
+
+        // Phase 2: Direct MILP on optimized 18-food pool
         parentPort.postMessage({ type: 'progress', gen: 1, accuracy: 50, telemetry: { trialInfo: 'Phase 2: Optimization' } });
-        const model = buildModel(allowed, true);
+        const model = buildModel(usefulFoods, true);
         model.options.timeout = 10000;
         const results = solver.Solve(model);
         clearTimeout(timeout);
-        finish(allowed, results);
+        finish(usefulFoods, results);
 
     } catch (err) {
         clearTimeout(timeout);

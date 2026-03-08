@@ -24,19 +24,20 @@ function buildModel(foods: Food[], useBinaries: boolean) {
 
     if (useBinaries) model.binaries = {};
 
-    // Calorie Slack
+    // Calorie Slack - EXTREME penalty for deficit
     model.constraints.bal_energy = { equal: targetCalories };
-    model.variables.en_def = { score: -5000, bal_energy: 1 };
+    model.variables.en_def = { score: -100000, bal_energy: 1 };
     model.variables.en_ex = { score: -1000, bal_energy: -1 };
 
+    // Macro Slacks - VERY SOFT
     ['protein', 'fat', 'carbs'].forEach(m => {
         const target = (m === 'protein' ? proteinTarget : (m === 'fat' ? fatTarget : carbTarget));
         model.constraints[`bal_${m}`] = { equal: target };
-        model.variables[`${m}_def`] = { score: -500, [`bal_${m}`]: 1 };
-        model.variables[`${m}_ex`] = { score: -500, [`bal_${m}`]: -1 };
+        model.variables[`${m}_def`] = { score: -10, [`bal_${m}`]: 1 };
+        model.variables[`${m}_ex`] = { score: -10, [`bal_${m}`]: -1 };
     });
 
-    const NUTRIENT_REWARD = 2000000;
+    const NUTRIENT_REWARD = 10000000;
 
     essentialKeys.forEach((k: string) => {
         const config = nutrientConfig[k];
@@ -47,7 +48,7 @@ function buildModel(foods: Food[], useBinaries: boolean) {
         model.constraints[`track_cov_${k}`] = { min: 0 };
 
         if (config.max) {
-            model.variables[`over_${k}`] = { score: -NUTRIENT_REWARD * 10, [`track_max_${k}`]: -1 };
+            model.variables[`over_${k}`] = { score: -10, [`track_max_${k}`]: -1 };
             model.constraints[`track_max_${k}`] = { max: config.max };
         }
     });
@@ -55,7 +56,7 @@ function buildModel(foods: Food[], useBinaries: boolean) {
     foods.forEach((f: Food, idx: number) => {
         const varName = `f_${idx}`;
         const foodVar: any = {
-            score: -0.01,
+            score: -0.0001,
             bal_energy: f.calories,
             bal_protein: f.protein,
             bal_fat: f.fat,
@@ -78,10 +79,7 @@ function buildModel(foods: Food[], useBinaries: boolean) {
                   ((details.customMaxAmounts && details.customMaxAmounts[f.name] !== undefined) ? (details.customMaxAmounts[f.name] / 100) : (f.maxAmount / 100));
         if (maxVal < minVal) maxVal = minVal;
 
-        model.constraints[`lim_${idx}`] = { min: 0, max: maxVal };
-        foodVar[`lim_${idx}`] = 1;
-
-        if (useBinaries && mustHave) {
+        if (useBinaries) {
             const binName = `u_${idx}`;
             model.binaries[binName] = 1;
             model.constraints[`min_b_${idx}`] = { min: 0 };
@@ -89,11 +87,13 @@ function buildModel(foods: Food[], useBinaries: boolean) {
             foodVar[`min_b_${idx}`] = 1;
             foodVar[`max_b_${idx}`] = 1;
             model.variables[binName] = { [`min_b_${idx}`]: -minVal, [`max_b_${idx}`]: -maxVal };
-            model.constraints[`force_${idx}`] = { equal: 1 };
-            model.variables[binName][`force_${idx}`] = 1;
-        } else if (minVal > 0) {
-            model.constraints[`min_bound_${idx}`] = { min: minVal };
-            foodVar[`min_bound_${idx}`] = 1;
+            if (mustHave) {
+                model.constraints[`force_${idx}`] = { equal: 1 };
+                model.variables[binName][`force_${idx}`] = 1;
+            }
+        } else {
+            model.constraints[`lim_${idx}`] = { max: maxVal };
+            foodVar[`lim_${idx}`] = 1;
         }
         model.variables[varName] = foodVar;
     });
@@ -175,7 +175,7 @@ function run() {
             allowed = [...FOOD_DATABASE];
         }
 
-        if (allowed.length > 25) {
+        if (allowed.length > 35) {
             const bestForNutrient = new Set<string>();
             essentialKeys.forEach((k: string) => {
                 const target = nutrientConfig[k].target;
@@ -203,17 +203,40 @@ function run() {
             const finalAllowedSet = new Set<string>();
             allowed.forEach((f: Food) => { if (mustHaveNames.has(f.name)) finalAllowedSet.add(f.name); });
             const bfnList = Array.from(bestForNutrient);
-            for (let i = 0; i < bfnList.length && finalAllowedSet.size < 20; i++) finalAllowedSet.add(bfnList[i]);
-            for (let i = 0; i < scored.length && finalAllowedSet.size < 25; i++) finalAllowedSet.add(scored[i].f.name);
+            for (let i = 0; i < bfnList.length && finalAllowedSet.size < 25; i++) finalAllowedSet.add(bfnList[i]);
+            for (let i = 0; i < scored.length && finalAllowedSet.size < 35; i++) finalAllowedSet.add(scored[i].f.name);
             allowed = FOOD_DATABASE.filter((f: Food) => finalAllowedSet.has(f.name));
         }
 
+        parentPort?.postMessage({ type: 'progress', gen: 0, accuracy: 0, telemetry: { trialInfo: 'Phase 1: Selection' } });
+        const phase1Results: any = solver.Solve(buildModel(allowed, false));
+        
+        const candidateMap = new Map<string, Food>();
+        allowed.forEach((f: Food, idx: number) => {
+            const amount = phase1Results[`f_${idx}`] || 0;
+            if (amount > 0.01) candidateMap.set(f.name, f);
+        });
+        
+        allowed.forEach((f: Food) => { if (mustHaveNames.has(f.name)) candidateMap.set(f.name, f); });
+
+        let usefulFoods = Array.from(candidateMap.values());
+        if (usefulFoods.length > 18) {
+            usefulFoods.sort((a, b) => {
+                const idxA = allowed.findIndex((f: Food) => f.name === a.name);
+                const idxB = allowed.findIndex((f: Food) => f.name === b.name);
+                const amtA = idxA >= 0 ? phase1Results[`f_${idxA}`] || 0 : 0;
+                const amtB = idxB >= 0 ? phase1Results[`f_${idxB}`] || 0 : 0;
+                return amtB - amtA;
+            });
+            usefulFoods = usefulFoods.slice(0, 18);
+        }
+
         parentPort?.postMessage({ type: 'progress', gen: 1, accuracy: 50, telemetry: { trialInfo: 'Phase 2: Optimization' } });
-        const model = buildModel(allowed, true);
+        const model = buildModel(usefulFoods, true);
         model.options.timeout = 10000;
         const results = solver.Solve(model);
         clearTimeout(timeout);
-        finish(allowed, results);
+        finish(usefulFoods, results);
 
     } catch (err: any) {
         clearTimeout(timeout);
