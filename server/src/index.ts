@@ -29,7 +29,7 @@ app.post('/api/start-generation', (req, res) => {
   jobs[jobId] = { 
     status: 'running', 
     generation: 0, 
-    maxGenerations: 4000, 
+    maxGenerations: 1, 
     startTime: Date.now(), 
     currentAccuracy: 0,
     result: null 

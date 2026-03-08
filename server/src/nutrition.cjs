@@ -94,12 +94,8 @@ function generateDietAsync(details, onProgress) {
   };
 
   const essentialKeys = Object.keys(nutrientConfig).filter(k => nutrientConfig[k].essential);
-  const maxGens = 4000;
-  const numTrials = 5;
-  const workerCount = 2; 
-  const islandsPerWorker = 4; 
+  const workerCount = 1; 
 
-  let overallBest = null;
   let activeWorkers = [];
 
   const stopAll = () => {
@@ -116,11 +112,11 @@ function generateDietAsync(details, onProgress) {
       let lastProgressUpdate = 0;
 
       for (let i = 0; i < workerCount; i++) {
-        const workerPath = path.join(__dirname, 'diet_worker.cjs');
+        const workerPath = path.join(__dirname, 'milp_diet_worker.cjs');
         const worker = new Worker(workerPath, {
           workerData: {
             FOOD_DATABASE,
-            details, islandsPerWorker, maxGens, targetCalories, rdaScale,
+            details, targetCalories, rdaScale,
             proteinTarget, fatTarget, carbTarget, essentialKeys, nutrientNames, nutrientConfig,
             seedGenome: seed
           }
@@ -130,26 +126,33 @@ function generateDietAsync(details, onProgress) {
 
         worker.on('message', (msg) => {
           if (msg.type === 'progress') {
-            workerStates[i] = { gen: msg.gen, islands: msg.telemetry.islands };
-            if (!currentPhaseBest || msg.telemetry.score > (currentPhaseBest.score || -Infinity)) {
-                currentPhaseBest = { score: msg.telemetry.score, accuracy: msg.accuracy, telemetry: msg.telemetry, genome: msg.telemetry.genome };
+            const telemetry = msg.telemetry || {};
+            workerStates[i] = { gen: msg.gen || 0, islands: telemetry.islands || [] };
+            
+            if (!currentPhaseBest || (msg.accuracy || 0) > (currentPhaseBest.accuracy || -Infinity)) {
+                currentPhaseBest = { 
+                    score: telemetry.score || 0, 
+                    accuracy: msg.accuracy || 0, 
+                    telemetry: telemetry, 
+                    genome: telemetry.genome || {} 
+                };
             }
 
             const now = Date.now();
-            if (now - lastProgressUpdate > 150) { 
-                const maxGen = Math.max(...workerStates.map(s => s.gen));
+            if (now - lastProgressUpdate > 100) { 
                 const allIslands = workerStates.flatMap(s => s.islands || []);
                 onProgress({ 
                     done: false, 
-                    generation: ((trialNum - 1) * maxGens) + maxGen, 
-                    accuracy: currentPhaseBest.accuracy, 
-                    telemetry: { ...currentPhaseBest.telemetry, islands: allIslands, trialInfo: label } 
+                    generation: msg.gen || 0, 
+                    accuracy: msg.accuracy || 0, 
+                    telemetry: { ...(telemetry), islands: allIslands, trialInfo: telemetry.trialInfo || label } 
                 });
                 lastProgressUpdate = now;
             }
           } else if (msg.type === 'result') {
             completedWorkers++;
-            if (!currentPhaseBest || (msg.result.score > (currentPhaseBest.score || -Infinity))) {
+            console.log(`Worker reported result. Accuracy: ${msg.result ? msg.result.accuracy : 'N/A'}`);
+            if (!currentPhaseBest || (msg.result && msg.result.accuracy > (currentPhaseBest.accuracy || -Infinity))) {
                 currentPhaseBest = { genome: msg.result.genome || {}, score: msg.result.score || 0, res: msg.result, accuracy: msg.result.accuracy };
             }
             if (completedWorkers === workerCount) {
@@ -157,12 +160,10 @@ function generateDietAsync(details, onProgress) {
                 activeWorkers = activeWorkers.filter(w => !phaseWorkers.includes(w));
                 resolve(currentPhaseBest);
             }
-          } else if (msg.type === 'migration') {
-              phaseWorkers.forEach((w, idx) => { if (idx !== i) w.postMessage({ type: 'import', genomes: msg.bests }); });
           }
         });
         worker.on('error', (err) => {
-            console.error(`Worker Phase ${label} ${i} ERROR: ` + err.stack);
+            console.error(`Worker Phase ${label} ERROR: ` + err.stack);
             completedWorkers++;
             if (completedWorkers === workerCount) resolve(currentPhaseBest);
         });
@@ -172,6 +173,7 @@ function generateDietAsync(details, onProgress) {
 
   const finish = (bestPlan, bestResult) => {
     try {
+        console.log("Nutrition: starting finish()");
         const breakdown = {};
         const aminoAcids = ['cystine', 'histidine', 'isoleucine', 'leucine', 'lysine', 'methionine', 'phenylalanine', 'threonine', 'tryptophan', 'tyrosine', 'valine'];
         Object.keys(nutrientConfig).forEach(n => {
@@ -182,7 +184,7 @@ function generateDietAsync(details, onProgress) {
                 unit: isAmino ? 'g' : (n==='energy'?'kcal':n==='protein'||n==='carbs'||n==='fat'||n==='fiber'||n==='sugars'||n==='water'||n==='omega3'||n==='omega6'||n==='fatSat'||n==='fatPoly'||n==='fatMono'?'g' : ['b12','folate','a','k','selenium'].includes(n)?'mcg':'mg'),
                 sources: []
             };
-            Object.entries(bestPlan).forEach(([name, amount]) => {
+            Object.entries(bestPlan || {}).forEach(([name, amount]) => {
                 const food = FOOD_DATABASE.find(f => f.name === name);
                 if (!food) return;
                 const factor = amount / 100;
@@ -204,7 +206,7 @@ function generateDietAsync(details, onProgress) {
         });
         
         const sectionedIngredients = {};
-        Object.entries(bestPlan).forEach(([name, amount]) => {
+        Object.entries(bestPlan || {}).forEach(([name, amount]) => {
             if (amount > 0) {
                 const food = FOOD_DATABASE.find(f => f.name === name);
                 if (!food) return;
@@ -213,32 +215,33 @@ function generateDietAsync(details, onProgress) {
             }
         });
 
-        onProgress({ done: true, result: { targetCalories: Math.round(targetCalories), actualCalories: Math.round(breakdown.energy.amount), accuracy: bestResult.accuracy, macros: { protein: Math.round(breakdown.protein.amount), carbs: Math.round(breakdown.carbs.amount), fat: Math.round(breakdown.fat.amount) }, sectionedIngredients, micronutrients: breakdown } });
-    } catch (e) { console.error('Finish Error: ' + e.stack); } finally { stopAll(); }
+        console.log("Nutrition: sending final progress update (done: true)");
+        onProgress({ done: true, result: { targetCalories: Math.round(targetCalories), actualCalories: Math.round(breakdown.energy.amount), accuracy: bestResult ? bestResult.accuracy : 0, macros: { protein: Math.round(breakdown.protein.amount), carbs: Math.round(breakdown.carbs.amount), fat: Math.round(breakdown.fat.amount) }, sectionedIngredients, micronutrients: breakdown } });
+    } catch (e) { 
+        console.error('Finish Error: ' + e.stack); 
+        onProgress({ done: true, result: null });
+    } finally { stopAll(); }
   };
 
   const runAllPhases = async () => {
     try {
-        // Run initial trials
-        for (let trial = 1; trial <= numTrials; trial++) {
-            const trialBest = await runPhase(trial, `Trial ${trial}/${numTrials}`);
-            if (!overallBest || (trialBest && trialBest.score > overallBest.score)) {
-                overallBest = trialBest;
-            }
-        }
+        onProgress({ 
+            done: false, 
+            generation: 0, 
+            accuracy: 0, 
+            telemetry: { calories: 0, fat: 0, score: 0, worstNutrient: 'Waiting...', worstPct: 0, metCount: 0, totalEssential: essentialKeys.length, islands: [], trialInfo: 'Starting MILP Solver...' } 
+        });
 
-        // Final Refinement Phase
-        if (overallBest) {
-            const refinedBest = await runPhase(numTrials + 1, 'Final Refinement', overallBest.genome);
-            if (refinedBest && refinedBest.score > overallBest.score) {
-                overallBest = refinedBest;
-            }
+        const trialBest = await runPhase(1, "MILP Optimization");
+        if (trialBest) {
+            finish(trialBest.genome, trialBest.res);
+        } else {
+            console.warn("MILP Solver returned no trial best.");
+            onProgress({ done: true, result: null });
         }
-
-        if (overallBest) finish(overallBest.genome, overallBest.res);
-        else onProgress({ done: true, result: null });
     } catch (err) {
         console.error('Fatal Phase Error:', err);
+        onProgress({ done: true, result: null });
         stopAll();
     }
   };
