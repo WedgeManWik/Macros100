@@ -203,7 +203,12 @@ async function run() {
                             val += (Math.random() * 30 - 15);
                         } else if (team === 'snipers') {
                             const wk = bestOfIsland.res.worst.key;
-                            const foodNutrientVal = (wk === 'energy' ? f.calories : (wk === 'protein' ? f.protein : (wk === 'fat' ? f.fat : (wk === 'carbs' ? f.carbs : (f.nutrients[wk] || 0)))));
+                            let foodNutrientVal = 0;
+                            if (wk === 'energy') foodNutrientVal = f.calories;
+                            else if (wk === 'protein') foodNutrientVal = f.protein;
+                            else if (wk === 'fat') foodNutrientVal = f.fat;
+                            else if (wk === 'carbs') foodNutrientVal = f.carbs;
+                            else if (f.nutrients) foodNutrientVal = f.nutrients[wk] || (wk === 'fiber' ? f.nutrients['fibre'] : 0) || 0;
                             
                             if (wk && foodNutrientVal > 0) {
                                 if (val === 0) val = 40 + Math.random() * 40;
