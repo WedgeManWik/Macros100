@@ -100,7 +100,7 @@ async function generateDietAsync(details, onProgress) {
   let globalBest = null;
   let completedWorkers = 0;
   const workers = [];
-  const workerStates = Array.from({ length: workerCount }, () => ({ gen: 0, islands: [] }));
+  const workerStates = Array.from({ length: workerCount }, () => ({ gen: 0, islands: [[0], [0], [0], [0], [0], [0], [0], [0]] }));
   const stopAll = () => {
     workers.forEach(w => w.terminate());
   };
@@ -167,31 +167,16 @@ async function generateDietAsync(details, onProgress) {
     worker.on('message', (msg) => {
       if (msg.type === 'progress') {
         workerStates[i] = { gen: msg.gen, islands: msg.islands };
-        
-        // Track the absolute best telemetry across all workers
-        if (!globalBest || msg.telemetry.score > (globalBest.score || -Infinity)) {
-            globalBest = { 
-                score: msg.telemetry.score,
-                accuracy: msg.accuracy,
-                telemetry: msg.telemetry
-            };
-        }
-
         const now = Date.now();
         if (now - lastProgressUpdate > 150) { 
             const maxGen = Math.max(...workerStates.map(s => s.gen));
             const allIslands = workerStates.flatMap(s => s.islands || []);
-            onProgress({ 
-                done: false, 
-                generation: maxGen, 
-                accuracy: globalBest.accuracy, 
-                telemetry: { ...globalBest.telemetry, islands: allIslands } 
-            });
+            onProgress({ done: false, generation: maxGen, accuracy: msg.accuracy, telemetry: msg.telemetry });
             lastProgressUpdate = now;
         }
       } else if (msg.type === 'result') {
         completedWorkers++;
-        if (!globalBest || (msg.result.score > (globalBest.score || -Infinity))) {
+        if (!globalBest || msg.result.score > globalBest.score) {
             globalBest = { genome: msg.result.genome || {}, score: msg.result.score || 0, res: msg.result };
         }
         if (completedWorkers === workerCount) finish(globalBest.genome, globalBest.res);
