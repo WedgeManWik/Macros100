@@ -205,14 +205,34 @@ function generateDietAsync(details, onProgress) {
             }
         });
         
+        const sectionOrder = ['Proteins', 'Carbs', 'Fruits', 'Vegetables', 'Fiber and Vegetables', 'Nuts', 'Seeds', 'Fats and Oils', 'Dairy', 'Other'];
         const sectionedIngredients = {};
+        
+        // Initialize sections in correct order
+        sectionOrder.forEach(s => {
+            sectionedIngredients[s] = [];
+        });
+
         Object.entries(bestPlan || {}).forEach(([name, amount]) => {
             if (amount > 0) {
                 const food = FOOD_DATABASE.find(f => f.name === name);
                 if (!food) return;
-                if (!sectionedIngredients[food.section]) sectionedIngredients[food.section] = [];
-                sectionedIngredients[food.section].push({ name, icon: food.icon, amount: Math.round(amount), calories: Math.round((amount/100)*food.calories) });
+                
+                const section = food.section || 'Other';
+                if (!sectionedIngredients[section]) sectionedIngredients[section] = [];
+                
+                sectionedIngredients[section].push({ 
+                    name, 
+                    icon: food.icon, 
+                    amount: Math.round(amount), 
+                    calories: Math.round((amount/100)*food.calories) 
+                });
             }
+        });
+
+        // Remove empty sections
+        Object.keys(sectionedIngredients).forEach(key => {
+            if (sectionedIngredients[key].length === 0) delete sectionedIngredients[key];
         });
 
         console.log("Nutrition: sending final progress update (done: true)");
