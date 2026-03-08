@@ -46,7 +46,7 @@ function generateDietAsync(details, onProgress) {
 
   const nutrientConfig = {
     energy: { target: targetCalories, max: targetCalories + 70 },
-    water: { target: 2500 * rdaScale, max: 10000 },
+    water: { target: 2500 * rdaScale, max: 10000, essential: false },
     protein: { target: proteinTarget, essential: true, max: proteinTarget * 2 },
     carbs: { target: carbTarget, max: carbTarget * 2 },
     fat: { target: fatTarget, max: fatTarget * 2 },
@@ -235,8 +235,52 @@ function generateDietAsync(details, onProgress) {
             if (sectionedIngredients[key].length === 0) delete sectionedIngredients[key];
         });
 
+        // ADD MINERAL WATER TO HIT TARGET
+        const waterTarget = nutrientConfig.water.target;
+        const currentWater = breakdown.water.amount;
+        if (currentWater < waterTarget) {
+            const deficit = waterTarget - currentWater;
+            const waterFood = FOOD_DATABASE.find(f => f.name === 'Mineral Water');
+            if (waterFood) {
+                // Mineral Water is 100% water (100g = 100ml water)
+                const addedAmount = deficit; 
+                bestPlan['Mineral Water'] = (bestPlan['Mineral Water'] || 0) + addedAmount;
+                
+                // Update breakdown
+                breakdown.water.amount += addedAmount;
+                breakdown.water.total = 100;
+                breakdown.water.sources.push({ food: 'Mineral Water', amount: Math.round((addedAmount / waterTarget) * 100) });
+                
+                // Update sectionedIngredients
+                const section = waterFood.section || 'Other';
+                if (!sectionedIngredients[section]) sectionedIngredients[section] = [];
+                const existing = sectionedIngredients[section].find(i => i.name === 'Mineral Water');
+                if (existing) {
+                    existing.amount = Math.round(bestPlan['Mineral Water']);
+                    existing.calories = Math.round((existing.amount/100)*waterFood.calories);
+                } else {
+                    sectionedIngredients[section].push({
+                        name: 'Mineral Water',
+                        icon: waterFood.icon,
+                        amount: Math.round(addedAmount),
+                        calories: Math.round((addedAmount/100)*waterFood.calories)
+                    });
+                }
+            }
+        }
+
+        // Update accuracy including water
+        let met = 0;
+        essentialKeys.forEach(k => {
+            if (breakdown[k].total >= 95) met++;
+        });
+        // Include water in accuracy since it's now guaranteed met
+        if (breakdown.water.total >= 95) met++;
+        
+        const finalAccuracy = Math.round((met / (essentialKeys.length + 1)) * 1000) / 10;
+
         console.log("Nutrition: sending final progress update (done: true)");
-        onProgress({ done: true, result: { targetCalories: Math.round(targetCalories), actualCalories: Math.round(breakdown.energy.amount), accuracy: bestResult ? bestResult.accuracy : 0, macros: { protein: Math.round(breakdown.protein.amount), carbs: Math.round(breakdown.carbs.amount), fat: Math.round(breakdown.fat.amount) }, sectionedIngredients, micronutrients: breakdown } });
+        onProgress({ done: true, result: { targetCalories: Math.round(targetCalories), actualCalories: Math.round(breakdown.energy.amount), accuracy: finalAccuracy, macros: { protein: Math.round(breakdown.protein.amount), carbs: Math.round(breakdown.carbs.amount), fat: Math.round(breakdown.fat.amount) }, sectionedIngredients, micronutrients: breakdown } });
     } catch (e) { 
         console.error('Finish Error: ' + e.stack); 
         onProgress({ done: true, result: null });

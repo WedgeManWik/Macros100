@@ -24,7 +24,7 @@ function buildModel(foods: Food[], useBinaries: boolean) {
 
     if (useBinaries) model.binaries = {};
 
-    const nutrientReward = 100000;
+    const nutrientReward = 1000000;
 
     model.constraints.bal_energy = { equal: targetCalories };
     model.variables.en_def = { score: -1000, bal_energy: 1 };
@@ -109,62 +109,88 @@ function run() {
     }, 20000);
 
     try {
+        const likedFoods = details.likedFoods || [];
+        const mustHaveNames = new Set((details.mustHaveFoods || []).map((m: any) => m.name));
+
         let allowed = FOOD_DATABASE.filter((f: Food) => {
-            if (details.likedFoods && details.likedFoods.length > 0 && !details.likedFoods.includes(f.name)) {
-                if (details.mustHaveFoods && details.mustHaveFoods.some((m: any) => m.name === f.name)) return true;
-                return false;
-            }
-            return true;
+            if (mustHaveNames.has(f.name)) return true;
+            if (likedFoods.length === 0) return true;
+            
+            const nameLower = f.name.toLowerCase();
+            return likedFoods.some((l: string) => {
+                const lLower = l.toLowerCase();
+                return nameLower.includes(lLower) || lLower.includes(nameLower);
+            });
         });
 
         if (allowed.length === 0) {
-            allowed = FOOD_DATABASE.slice(0, 50); 
+            allowed = [...FOOD_DATABASE];
         }
 
-        if (allowed.length > 50) {
+        if (allowed.length > 30) {
+            const bestForNutrient = new Set<string>();
+            essentialKeys.forEach((k: string) => {
+                const target = nutrientConfig[k].target;
+                if (target <= 0) return;
+
+                const sortedForK = [...allowed].sort((a, b) => {
+                    const valA = (k === 'energy' ? a.calories : k === 'protein' ? a.protein : k === 'carbs' ? a.carbs : k === 'fat' ? a.fat : (a.nutrients[k] || 0));
+                    const valB = (k === 'energy' ? b.calories : k === 'protein' ? b.protein : k === 'carbs' ? b.carbs : k === 'fat' ? b.fat : (b.nutrients[k] || 0));
+                    const scoreA = (valA / target) / (a.calories / 100 || 1);
+                    const scoreB = (valB / target) / (b.calories / 100 || 1);
+                    return scoreB - scoreA;
+                });
+                
+                if (sortedForK[0]) bestForNutrient.add(sortedForK[0].name);
+                if (sortedForK[1]) bestForNutrient.add(sortedForK[1].name);
+            });
+
             const scored = allowed.map((f: Food) => {
-                let nutrientDensity = 0;
+                let density = 0;
                 essentialKeys.forEach((k: string) => {
                     const val = (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] || 0));
                     const target = nutrientConfig[k].target;
-                    if (target > 0) nutrientDensity += (val / target);
+                    if (target > 0) density += Math.min(1.5, (val / target) / (f.calories / 100 || 1));
                 });
-                const score = nutrientDensity / (f.calories / 100 || 1);
-                return { f, score };
+                return { f, score: density };
             });
-            scored.sort((a: any, b: any) => {
-                if (isNaN(a.score)) return 1;
-                if (isNaN(b.score)) return -1;
-                return b.score - a.score;
-            });
-            
-            const mustHaveNames = new Set((details.mustHaveFoods || []).map((m: any) => m.name));
-            const topFoods = scored.slice(0, 40).map((s: any) => s.f);
-            
-            const finalAllowed = [...topFoods];
+            scored.sort((a: any, b: any) => b.score - a.score);
+
+            const finalAllowedSet = new Set<string>();
             allowed.forEach((f: Food) => {
-                if (mustHaveNames.has(f.name) && !finalAllowed.some(fa => fa.name === f.name)) {
-                    finalAllowed.push(f);
-                }
+                if (mustHaveNames.has(f.name)) finalAllowedSet.add(f.name);
             });
-            allowed = finalAllowed;
+
+            const bfnList = Array.from(bestForNutrient);
+            for (let i = 0; i < bfnList.length && finalAllowedSet.size < 20; i++) {
+                finalAllowedSet.add(bfnList[i]);
+            }
+
+            for (let i = 0; i < scored.length && finalAllowedSet.size < 30; i++) {
+                finalAllowedSet.add(scored[i].f.name);
+            }
+
+            allowed = FOOD_DATABASE.filter((f: Food) => finalAllowedSet.has(f.name));
         }
 
         parentPort?.postMessage({ type: 'progress', gen: 0, accuracy: 0, telemetry: { trialInfo: 'Phase 1: Selection' } });
 
         const phase1Results: any = solver.Solve(buildModel(allowed, false));
 
-        const candidates: { f: Food, amount: number }[] = [];
+        const candidateMap = new Map<string, { f: Food, amount: number }>();
         allowed.forEach((f: Food, idx: number) => {
             const amount = phase1Results[`f_${idx}`] || 0;
             const mustHave = details.mustHaveFoods ? details.mustHaveFoods.find((m: any) => m.name === f.name) : null;
-            if (amount > 0.001 || mustHave) candidates.push({ f, amount });
+            if (amount > 0.01 || mustHave) {
+                candidateMap.set(f.name, { f, amount });
+            }
         });
-        candidates.sort((a: any, b: any) => b.amount - a.amount);
-        let usefulFoods = candidates.slice(0, 30).map(c => c.f);
+
+        let sortedCandidates = Array.from(candidateMap.values()).sort((a, b) => b.amount - a.amount);
+        let usefulFoods = sortedCandidates.slice(0, 40).map(c => c.f);
 
         if (usefulFoods.length === 0) {
-            usefulFoods = allowed.slice(0, 30);
+            usefulFoods = allowed.slice(0, 40);
         }
 
         parentPort?.postMessage({ type: 'progress', gen: 1, accuracy: 50, telemetry: { trialInfo: 'Phase 2: Optimization' } });

@@ -21,9 +21,9 @@ function buildModel(foods, useBinaries) {
 
     if (useBinaries) model.binaries = {};
 
-    const nutrientReward = 100000;
+    const nutrientReward = 1000000;
 
-    // Soft Macro Constraints
+    // Soft Macro Constraints - Restored moderate penalties to ensure convergence
     model.constraints.bal_energy = { equal: targetCalories };
     model.variables.en_def = { score: -1000, bal_energy: 1 };
     model.variables.en_ex = { score: -1000, bal_energy: -1 };
@@ -114,54 +114,80 @@ function run() {
     }, 20000);
 
     try {
-        const likedSet = details.likedFoods && details.likedFoods.length > 0 ? new Set(details.likedFoods) : null;
+        const likedFoods = details.likedFoods || [];
         const mustHaveNames = new Set((details.mustHaveFoods || []).map(m => m.name));
 
         let allowed = FOOD_DATABASE.filter((f) => {
-            // If we have a liked list, only include foods in that list OR must-haves
-            if (likedSet) {
-                return likedSet.has(f.name) || mustHaveNames.has(f.name);
-            }
-            return true;
+            if (mustHaveNames.has(f.name)) return true;
+            if (likedFoods.length === 0) return true;
+            
+            // Flexible matching: check if any liked food string is contained in the database food name
+            // or vice versa. This handles "Chicken Breast" matching "Chicken Breast (Skinless)"
+            const nameLower = f.name.toLowerCase();
+            return likedFoods.some(l => {
+                const lLower = l.toLowerCase();
+                return nameLower.includes(lLower) || lLower.includes(nameLower);
+            });
         });
 
-        // If after filtering we have no foods, fallback to all foods
         if (allowed.length === 0) {
-            console.log("No matched foods allowed, falling back to full database");
             allowed = [...FOOD_DATABASE];
         }
 
-        // Even if we have a liked list, if it's large (>25), Phase 1 can still hang.
-        // We MUST limit the complexity of the Phase 1 LP to ensure speed.
-        if (allowed.length > 25) {
-            console.log(`Phase 0: Scoring ${allowed.length} foods to pick top 25...`);
+        // Even if we have a liked list, if it's large (>30), Phase 1 can still hang.
+        if (allowed.length > 30) {
+            console.log(`Phase 0: Selecting top 30 foods from ${allowed.length} candidates...`);
+            
+            // 1. For EVERY essential nutrient, pick the top 2 foods that provide the most of it per 100kcal.
+            const bestForNutrient = new Set();
+            essentialKeys.forEach(k => {
+                const target = nutrientConfig[k].target;
+                if (target <= 0) return;
+
+                const sortedForK = [...allowed].sort((a, b) => {
+                    const valA = (k === 'energy' ? a.calories : k === 'protein' ? a.protein : k === 'carbs' ? a.carbs : k === 'fat' ? a.fat : (a.nutrients[k] || 0));
+                    const valB = (k === 'energy' ? b.calories : k === 'protein' ? b.protein : k === 'carbs' ? b.carbs : k === 'fat' ? b.fat : (b.nutrients[k] || 0));
+                    const scoreA = (valA / target) / (a.calories / 100 || 1);
+                    const scoreB = (valB / target) / (b.calories / 100 || 1);
+                    return scoreB - scoreA;
+                });
+                
+                if (sortedForK[0]) bestForNutrient.add(sortedForK[0].name);
+                if (sortedForK[1]) bestForNutrient.add(sortedForK[1].name);
+            });
+
+            // 2. General nutrient density score
             const scored = allowed.map(f => {
-                let nutrientDensity = 0;
+                let density = 0;
                 essentialKeys.forEach(k => {
                     const val = (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] || 0));
                     const target = nutrientConfig[k].target;
-                    if (target > 0) nutrientDensity += (val / target);
+                    if (target > 0) density += Math.min(1.5, (val / target) / (f.calories / 100 || 1));
                 });
-                const score = nutrientDensity / (f.calories / 100 || 1);
-                return { f, score };
+                return { f, score: density };
+            });
+            scored.sort((a, b) => b.score - a.score);
+
+            const finalAllowedSet = new Set();
+            
+            // Priority 1: Must-haves
+            allowed.forEach(f => {
+                if (mustHaveNames.has(f.name)) finalAllowedSet.add(f.name);
             });
 
-            scored.sort((a, b) => {
-                if (isNaN(a.score)) return 1;
-                if (isNaN(b.score)) return -1;
-                return b.score - a.score;
-            });
-            
-            const topFoods = scored.slice(0, 25).map(s => s.f);
-            
-            // Ensure must-haves are ALWAYS in the selection regardless of score
-            const finalAllowed = [...topFoods];
-            allowed.forEach(f => {
-                if (mustHaveNames.has(f.name) && !finalAllowed.some(fa => fa.name === f.name)) {
-                    finalAllowed.push(f);
-                }
-            });
-            allowed = finalAllowed;
+            // Priority 2: Best-for-nutrient (fill until 20)
+            const bfnList = Array.from(bestForNutrient);
+            for (let i = 0; i < bfnList.length && finalAllowedSet.size < 20; i++) {
+                finalAllowedSet.add(bfnList[i]);
+            }
+
+            // Priority 3: General density (fill until 30)
+            for (let i = 0; i < scored.length && finalAllowedSet.size < 30; i++) {
+                finalAllowedSet.add(scored[i].f.name);
+            }
+
+            allowed = FOOD_DATABASE.filter(f => finalAllowedSet.has(f.name));
+            console.log(`Phase 0: Selected ${allowed.length} distinct foods for Phase 1`);
         }
 
         console.log(`Phase 1: Starting with ${allowed.length} allowed foods`);
@@ -171,19 +197,33 @@ function run() {
         const phase1Results = solver.Solve(buildModel(allowed, false));
         console.log("Phase 1: Solved");
 
-        // Get Top 30 Foods
-        const candidates = [];
+        // Get Top 40 Foods for Phase 2
+        // We don't just want the highest amounts; we want the foods that were most helpful for nutrients.
+        const candidateMap = new Map();
+        
+        // 1. Include any food that Phase 1 gave a non-trivial amount to
         allowed.forEach((f, idx) => {
             const amount = phase1Results[`f_${idx}`] || 0;
             const mustHave = details.mustHaveFoods ? details.mustHaveFoods.find((m) => m.name === f.name) : null;
-            if (amount > 0.001 || mustHave) candidates.push({ f, amount });
+            
+            // If it provides a significant amount (>1g) or is a must-have
+            if (amount > 0.01 || mustHave) {
+                candidateMap.set(f.name, { f, amount });
+            }
         });
-        candidates.sort((a, b) => b.amount - a.amount);
-        let usefulFoods = candidates.slice(0, 30).map(c => c.f);
+
+        // 2. Ensure foods that are "best-in-class" for still-struggling nutrients are kept
+        // (Even if Phase 1 didn't use much of them, Phase 2 MILP might find they work better with binaries)
+        // ... already covered by our Phase 0 selection being the base for Phase 1.
+
+        let sortedCandidates = Array.from(candidateMap.values()).sort((a, b) => b.amount - a.amount);
+        
+        // Limit to 40 foods for Phase 2 MILP to keep it fast
+        let usefulFoods = sortedCandidates.slice(0, 40).map(c => c.f);
 
         if (usefulFoods.length === 0) {
             console.log("No useful foods found in Phase 1, using fallback");
-            usefulFoods = allowed.slice(0, 30);
+            usefulFoods = allowed.slice(0, 40);
         }
 
         parentPort.postMessage({ type: 'progress', gen: 1, accuracy: 50, telemetry: { trialInfo: 'Phase 2: Optimization' } });
