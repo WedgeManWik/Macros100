@@ -57,16 +57,13 @@ const evaluate = (ingredients) => {
             if (boundedPct < worst.pct) worst = { name: nutrientNames[k] || k, pct: boundedPct, key: k };
         }
 
-        // Apply Upper Limit (UL) Penalties
         if (max !== undefined && val > max) {
             const overage = val - max;
-            // Higher penalty for micronutrients than energy/macros
             const weight = ['energy', 'protein', 'carbs', 'fat'].includes(k) ? 100 : 1000;
             nutrientScore -= (overage / (target || 1)) * weight;
         }
     });
 
-    // Bottleneck Penalty: Heavily penalize the single worst nutrient to force improvement
     let bottleneckPenalty = (1.0 - worst.pct) * 20000;
 
     let ratioPenalty = 0;
@@ -80,13 +77,12 @@ const evaluate = (ingredients) => {
         ratioPenalty += 20000;
     }
 
-    // REBALANCED VARIETY PENALTIES
     let varietyPenalty = 0;
     for (const section in sectionCounts) {
         const count = sectionCounts[section];
-        if (count === 0) varietyPenalty += 25000; // High penalty for skipping a section
-        else if (count === 1) varietyPenalty += 10000; // Moderate penalty for no variety
-        else if (count > 4) varietyPenalty += (count - 4) * 5000; // Penalty for too many items
+        if (count === 0) varietyPenalty += 25000; 
+        else if (count === 1) varietyPenalty += 10000; 
+        else if (count > 4) varietyPenalty += (count - 4) * 5000; 
     }
 
     const calDiff = Math.abs(totals.energy - targetCalories);
@@ -136,17 +132,35 @@ const likedFoods = FOOD_DATABASE.filter((f) => (details.likedFoods && details.li
 
 const createRandomGenome = () => {
     const genome = {};
-    likedFoods.forEach((f) => {
-        const mustHave = (details.mustHaveFoods || []).find((m) => m.name === f.name);
-        if (mustHave) {
-            genome[f.name] = Math.round((mustHave.min || 0) + Math.random() * ((mustHave.max || 150) - (mustHave.min || 0)));
-        } else {
-            let val = Math.random() < 0.15 ? 50 + Math.random() * 100 : 0;
+    likedFoods.forEach(f => genome[f.name] = 0);
+
+    // 1. Mandatory foods
+    (details.mustHaveFoods || []).forEach(m => {
+        genome[m.name] = Math.round((m.min || 0) + Math.random() * ((m.max || 150) - (m.min || 0)));
+    });
+
+    // 2. Saturation: For every essential nutrient, pick a random provider
+    essentialKeys.forEach(k => {
+        const providers = likedFoods.filter(f => {
+            const val = (k === 'energy' ? f.calories : (k === 'protein' ? f.protein : (k === 'fat' ? f.fat : (k === 'carbs' ? f.carbs : (f.nutrients[k] || 0)))));
+            return val > 0;
+        });
+        if (providers.length > 0) {
+            const f = providers[Math.floor(Math.random() * providers.length)];
             const max = (details.customMaxAmounts && details.customMaxAmounts[f.name] !== undefined) ? details.customMaxAmounts[f.name] : f.maxAmount;
-            if (val > max) val = max;
-            genome[f.name] = Math.round(val);
+            const current = genome[f.name] || 0;
+            genome[f.name] = Math.max(current, Math.min(max, 40 + Math.random() * 80));
         }
     });
+
+    // 3. Random noise
+    likedFoods.forEach(f => {
+        if (!genome[f.name] && Math.random() < 0.05) {
+            const max = (details.customMaxAmounts && details.customMaxAmounts[f.name] !== undefined) ? details.customMaxAmounts[f.name] : f.maxAmount;
+            genome[f.name] = Math.round(Math.random() * Math.min(max, 50));
+        }
+    });
+
     return genome;
 };
 
@@ -217,19 +231,17 @@ async function run() {
                 const team = island[nextPop.length] ? island[nextPop.length].team : 'snipers';
                 const scale = currentGen < 1000 ? 60 : 20;
 
-                // SPECIALIZED MUTATION LOGIC
-                if (Math.random() < 0.3) {
+                if (Math.random() < 0.35) {
                     if (team === 'snipers') {
                         const wk = bestOfIsland.res.worst.key;
                         if (wk) {
-                            // Find the food in our child genome that is best for this missing nutrient
                             const foodToBoost = likedFoods
                                 .filter(f => (wk === 'energy' ? f.calories : (wk === 'protein' ? f.protein : (wk === 'fat' ? f.fat : (wk === 'carbs' ? f.carbs : (f.nutrients[wk] || 0))))) > 0)
                                 .sort((a, b) => {
                                     const valA = (wk === 'energy' ? a.calories : (wk === 'protein' ? a.protein : (wk === 'fat' ? a.fat : (wk === 'carbs' ? a.carbs : (a.nutrients[wk] || 0)))));
                                     const valB = (wk === 'energy' ? b.calories : (wk === 'protein' ? b.protein : (wk === 'fat' ? b.fat : (wk === 'carbs' ? b.carbs : (b.nutrients[wk] || 0)))));
                                     return valB - valA;
-                                })[Math.floor(Math.random() * 3)]; // Pick from top 3 candidates
+                                })[Math.floor(Math.random() * 3)];
 
                             if (foodToBoost) {
                                 let amt = childGenome[foodToBoost.name] || 0;
@@ -242,7 +254,6 @@ async function run() {
                         const targetVal = (mk === 'energy' ? targetCalories : (mk === 'fat' ? fatTarget : (mk === 'protein' ? proteinTarget : carbTarget)));
                         const isUnder = bestOfIsland.res.totals[mk] < targetVal;
                         
-                        // Pick a food that heavily impacts this macro
                         const foods = likedFoods.filter(f => (mk === 'energy' ? f.calories : f[mk]) > 5);
                         if (foods.length > 0) {
                             const f = foods[Math.floor(Math.random() * foods.length)];
@@ -250,8 +261,38 @@ async function run() {
                             if (isUnder) childGenome[f.name] = amt + scale * 3;
                             else childGenome[f.name] = Math.max(0, amt - scale * 3);
                         }
+                    } else if (team === 'sculptors') {
+                        // PRUNING: Identify biggest surplus and reduce Portions
+                        let bestOverageKey = '';
+                        let maxOveragePct = 0;
+                        
+                        // Energy/Macros overage
+                        ['energy', 'protein', 'fat', 'carbs'].forEach(m => {
+                            const target = m === 'energy' ? targetCalories : (m === 'fat' ? fatTarget : (m === 'protein' ? proteinTarget : carbTarget));
+                            const pct = bestOfIsland.res.totals[m] / (target || 1);
+                            if (pct > 1.05 && pct > maxOveragePct) { maxOveragePct = pct; bestOverageKey = m; }
+                        });
+
+                        // Micronutrient overage
+                        Object.keys(nutrientConfig).forEach(k => {
+                            const target = nutrientConfig[k].target;
+                            const pct = bestOfIsland.res.totals[k] / (target || 1);
+                            if (pct > 1.5 && pct > maxOveragePct) { maxOveragePct = pct; bestOverageKey = k; }
+                        });
+
+                        if (bestOverageKey) {
+                            const providers = Object.keys(childGenome).filter(name => {
+                                const f = foodMap.get(name);
+                                if (!f || childGenome[name] <= 0) return false;
+                                const val = (bestOverageKey === 'energy' ? f.calories : (bestOverageKey === 'protein' ? f.protein : (bestOverageKey === 'fat' ? f.fat : (bestOverageKey === 'carbs' ? f.carbs : (f.nutrients[bestOverageKey] || 0)))));
+                                return val > 0;
+                            });
+                            if (providers.length > 0) {
+                                const name = providers[Math.floor(Math.random() * providers.length)];
+                                childGenome[name] = Math.max(0, childGenome[name] - scale * 4);
+                            }
+                        }
                     } else {
-                        // Regular random mutation
                         const f = likedFoods[Math.floor(Math.random() * likedFoods.length)];
                         let amt = childGenome[f.name] || 0;
                         if (Math.random() < 0.1) childGenome[f.name] = Math.random() < 0.5 ? 0 : 50 + Math.random() * 100;
@@ -259,7 +300,6 @@ async function run() {
                     }
                 }
 
-                // Final clamp
                 likedFoods.forEach((f) => {
                     const mustHave = (details.mustHaveFoods || []).find((m) => m.name === f.name);
                     const max = (details.customMaxAmounts && details.customMaxAmounts[f.name] !== undefined) ? details.customMaxAmounts[f.name] : f.maxAmount;
@@ -287,7 +327,8 @@ async function run() {
                     worstPct: Math.round(best.res.worst.pct * 100),
                     metCount: best.res.metCount,
                     totalEssential: essentialKeys.length,
-                    islands: islands.map(isl => isl.slice(0, 10).map(p => p.res ? p.res.accuracy : 0))
+                    islands: islands.map(isl => isl.slice(0, 10).map(p => p.res ? p.res.accuracy : 0)),
+                    genome: best.genome
                 }
             });
 
