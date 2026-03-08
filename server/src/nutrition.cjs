@@ -174,6 +174,7 @@ function generateDietAsync(details, onProgress) {
   const finish = (bestPlan, bestResult) => {
     try {
         console.log("Nutrition: starting finish()");
+        console.log("RAW PLAN:", JSON.stringify(bestPlan));
         const breakdown = {};
         const aminoAcids = ['cystine', 'histidine', 'isoleucine', 'leucine', 'lysine', 'methionine', 'phenylalanine', 'threonine', 'tryptophan', 'tyrosine', 'valine'];
         Object.keys(nutrientConfig).forEach(n => {
