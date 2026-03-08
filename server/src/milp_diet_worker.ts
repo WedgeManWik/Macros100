@@ -53,7 +53,7 @@ function buildModel(foods: Food[], useBinaries: boolean) {
         }
     });
 
-    foods.forEach((f, idx) => {
+    foods.forEach((f: Food, idx: number) => {
         const varName = `f_${idx}`;
         const foodVar: any = {
             score: -0.1,
@@ -116,7 +116,7 @@ function run() {
         const phase1Results: any = solver.Solve(buildModel(allowed, false));
 
         const candidates: { f: Food, amount: number }[] = [];
-        allowed.forEach((f, idx) => {
+        allowed.forEach((f: Food, idx: number) => {
             const amount = phase1Results[`f_${idx}`] || 0;
             const mustHave = details.mustHaveFoods ? details.mustHaveFoods.find((m: any) => m.name === f.name) : null;
             if (amount > 0.001 || mustHave) candidates.push({ f, amount });
@@ -129,7 +129,7 @@ function run() {
         const results: any = solver.Solve(buildModel(usefulFoods, true));
 
         const genome: Record<string, number> = {};
-        usefulFoods.forEach((f, idx) => {
+        usefulFoods.forEach((f: Food, idx: number) => {
             genome[f.name] = Math.round((results[`f_${idx}`] || 0) * 100);
         });
 
