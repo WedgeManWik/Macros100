@@ -100,7 +100,7 @@ async function generateDietAsync(details, onProgress) {
   let globalBest = null;
   let completedWorkers = 0;
   const workers = [];
-  const workerStates = Array.from({ length: workerCount }, () => ({ gen: 0, islands: [[0], [0], [0], [0], [0], [0], [0], [0]] }));
+  const workerStates = Array.from({ length: workerCount }, () => ({ gen: 0, islands: [] }));
   const stopAll = () => {
     workers.forEach(w => w.terminate());
   };

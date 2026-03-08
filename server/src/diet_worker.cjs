@@ -252,7 +252,7 @@ async function run() {
                     worstPct: Math.round(best.res.worst.pct * 100),
                     metCount: best.res.metCount,
                     totalEssential: essentialKeys.length,
-                    islands: islands.map(isl => isl.slice(0, 10).map(p => p.res ? p.res.accuracy : 0))
+                    islands: islands.map(isl => isl.map(p => p.res ? p.res.accuracy : 0))
                 }
             });
 
