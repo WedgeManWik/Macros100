@@ -11,7 +11,7 @@ const nutrientNames = {
     cystine: 'Cystine', histidine: 'Histidine', isoleucine: 'Isoleucine', leucine: 'Leucine', lysine: 'Lysine', methionine: 'Methionine', phenylalanine: 'Phenylalanine', threonine: 'Threonine', tryptophan: 'Tryptophan', tyrosine: 'Tyrosine', valine: 'Valine'
 };
 
-async function generateDietAsync(details, onProgress) {
+function generateDietAsync(details, onProgress) {
   let targetCalories;
   if (details.maintenanceCalories !== undefined && details.calorieOffset !== undefined) {
     targetCalories = parseFloat(details.maintenanceCalories) + parseFloat(details.calorieOffset);
@@ -45,58 +45,59 @@ async function generateDietAsync(details, onProgress) {
   }
 
   const nutrientConfig = {
-    energy: { target: targetCalories },
-    water: { target: 2500 * rdaScale },
-    protein: { target: proteinTarget, essential: true },
-    carbs: { target: carbTarget },
-    fat: { target: fatTarget },
-    fatSat: { target: targetCalories * 0.1 / 9 },
-    fatPoly: { target: targetCalories * 0.08 / 9 },
-    fiber: { target: 30 * rdaScale, essential: true },
-    sugars: { target: 50 },
-    omega3: { target: (details.gender === 'male' ? 4.25 : 3) * rdaScale, essential: true },
-    omega6: { target: (details.gender === 'male' ? 17 : 12) * rdaScale, essential: true },
-    cholesterol: { target: 300 },
-    b1: { target: 1.2 * rdaScale, essential: true },
-    b2: { target: 1.3 * rdaScale, essential: true },
-    b3: { target: 16 * rdaScale, essential: true },
-    b5: { target: 5 * rdaScale, essential: true },
-    b6: { target: 1.7 * rdaScale, essential: true },
-    b12: { target: 2.4 * rdaScale, essential: true },
-    folate: { target: 400 * rdaScale, essential: true },
-    a: { target: 900 * rdaScale, essential: true },
-    c: { target: 90 * rdaScale, essential: true },
-    d: { target: 20 * rdaScale, essential: true },
-    e: { target: 15 * rdaScale, essential: true },
-    k: { target: 120 * rdaScale, essential: true },
-    calcium: { target: 1300 * rdaScale, essential: true },
-    copper: { target: 0.9 * rdaScale, essential: true },
-    iron: { target: 18 * rdaScale, essential: true },
-    magnesium: { target: 420 * rdaScale, essential: true },
-    manganese: { target: 2.3 * rdaScale, essential: true },
-    phosphorus: { target: 1250 * rdaScale, essential: true },
-    potassium: { target: 4700 * rdaScale, essential: true },
-    selenium: { target: 55 * rdaScale, essential: true },
-    sodium: { target: 2300 * rdaScale, essential: true },
-    zinc: { target: 11 * rdaScale, essential: true },
-    cystine: { target: 500 * rdaScale, essential: true },
-    histidine: { target: 700 * rdaScale, essential: true },
-    isoleucine: { target: 1400 * rdaScale, essential: true },
-    leucine: { target: 2700 * rdaScale, essential: true },
-    lysine: { target: 2100 * rdaScale, essential: true },
-    methionine: { target: 700 * rdaScale, essential: true },
-    phenylalanine: { target: 1100 * rdaScale, essential: true },
-    threonine: { target: 1000 * rdaScale, essential: true },
-    tryptophan: { target: 280 * rdaScale, essential: true },
-    tyrosine: { target: 800 * rdaScale, essential: true },
-    valine: { target: 1600 * rdaScale, essential: true }
+    energy: { target: targetCalories, max: targetCalories + 70 },
+    water: { target: 2500 * rdaScale, max: 10000 },
+    protein: { target: proteinTarget, essential: true, max: proteinTarget * 2 },
+    carbs: { target: carbTarget, max: carbTarget * 2 },
+    fat: { target: fatTarget, max: fatTarget * 2 },
+    fatSat: { target: targetCalories * 0.1 / 9, max: targetCalories * 0.15 / 9 },
+    fatPoly: { target: targetCalories * 0.08 / 9, max: targetCalories * 0.15 / 9 },
+    fatMono: { target: targetCalories * 0.12 / 9, max: targetCalories * 0.20 / 9 },
+    fiber: { target: 30 * rdaScale, essential: true, max: 100 },
+    sugars: { target: 50, max: 100 },
+    omega3: { target: (details.gender === 'male' ? 4.25 : 3) * rdaScale, essential: true, max: 10 * rdaScale },
+    omega6: { target: (details.gender === 'male' ? 17 : 12) * rdaScale, essential: true, max: 40 * rdaScale },
+    cholesterol: { target: 300, max: 600 },
+    b1: { target: 1.2 * rdaScale, essential: true, max: 100 },
+    b2: { target: 1.3 * rdaScale, essential: true, max: 100 },
+    b3: { target: 16 * rdaScale, essential: true, max: 35 },
+    b5: { target: 5 * rdaScale, essential: true, max: 100 },
+    b6: { target: 1.7 * rdaScale, essential: true, max: 100 },
+    b12: { target: 2.4 * rdaScale, essential: true, max: 100 },
+    folate: { target: 400 * rdaScale, essential: true, max: 1000 },
+    a: { target: 900 * rdaScale, essential: true, max: 3000 },
+    c: { target: 90 * rdaScale, essential: true, max: 2000 },
+    d: { target: 20 * rdaScale, essential: true, max: 100 },
+    e: { target: 15 * rdaScale, essential: true, max: 1000 },
+    k: { target: 120 * rdaScale, essential: true, max: 1000 },
+    calcium: { target: 1300 * rdaScale, essential: true, max: 2500 },
+    copper: { target: 0.9 * rdaScale, essential: true, max: 10 },
+    iron: { target: 18 * rdaScale, essential: true, max: 45 },
+    magnesium: { target: 420 * rdaScale, essential: true, max: 1000 },
+    manganese: { target: 2.3 * rdaScale, essential: true, max: 11 },
+    phosphorus: { target: 1250 * rdaScale, essential: true, max: 4000 },
+    potassium: { target: 4700 * rdaScale, essential: true, max: 10000 },
+    selenium: { target: 55 * rdaScale, essential: true, max: 400 },
+    sodium: { target: 2300 * rdaScale, essential: true, max: 3000 },
+    zinc: { target: 11 * rdaScale, essential: true, max: 40 },
+    cystine: { target: 500 * rdaScale, essential: true, max: 5000 },
+    histidine: { target: 700 * rdaScale, essential: true, max: 5000 },
+    isoleucine: { target: 1400 * rdaScale, essential: true, max: 10000 },
+    leucine: { target: 2700 * rdaScale, essential: true, max: 20000 },
+    lysine: { target: 2100 * rdaScale, essential: true, max: 15000 },
+    methionine: { target: 700 * rdaScale, essential: true, max: 5000 },
+    phenylalanine: { target: 1100 * rdaScale, essential: true, max: 10000 },
+    threonine: { target: 1000 * rdaScale, essential: true, max: 10000 },
+    tryptophan: { target: 280 * rdaScale, essential: true, max: 2000 },
+    tyrosine: { target: 800 * rdaScale, essential: true, max: 10000 },
+    valine: { target: 1600 * rdaScale, essential: true, max: 12000 }
   };
 
   const essentialKeys = Object.keys(nutrientConfig).filter(k => nutrientConfig[k].essential);
   const maxGens = 4000;
   const numTrials = 5;
-  const workerCount = 4; 
-  const islandsPerWorker = 2; 
+  const workerCount = 2; 
+  const islandsPerWorker = 4; 
 
   let overallBest = null;
   let activeWorkers = [];
@@ -106,11 +107,11 @@ async function generateDietAsync(details, onProgress) {
     activeWorkers = [];
   };
 
-  for (let trial = 1; trial <= numTrials; trial++) {
-    const trialBest = await new Promise((resolve) => {
-      let currentTrialBest = null;
+  const runPhase = async (trialNum, label, seed = null) => {
+    return await new Promise((resolve) => {
+      let currentPhaseBest = null;
       let completedWorkers = 0;
-      const trialWorkers = [];
+      const phaseWorkers = [];
       const workerStates = Array.from({ length: workerCount }, () => ({ gen: 0, islands: [] }));
       let lastProgressUpdate = 0;
 
@@ -119,18 +120,19 @@ async function generateDietAsync(details, onProgress) {
         const worker = new Worker(workerPath, {
           workerData: {
             FOOD_DATABASE,
-            details, islandCount: workerCount * islandsPerWorker, islandsPerWorker, maxGens, targetCalories, rdaScale,
-            proteinTarget, fatTarget, carbTarget, essentialKeys, nutrientNames, nutrientConfig
+            details, islandsPerWorker, maxGens, targetCalories, rdaScale,
+            proteinTarget, fatTarget, carbTarget, essentialKeys, nutrientNames, nutrientConfig,
+            seedGenome: seed
           }
         });
-        trialWorkers.push(worker);
+        phaseWorkers.push(worker);
         activeWorkers.push(worker);
 
         worker.on('message', (msg) => {
           if (msg.type === 'progress') {
             workerStates[i] = { gen: msg.gen, islands: msg.telemetry.islands };
-            if (!currentTrialBest || msg.telemetry.score > (currentTrialBest.score || -Infinity)) {
-                currentTrialBest = { score: msg.telemetry.score, accuracy: msg.accuracy, telemetry: msg.telemetry };
+            if (!currentPhaseBest || msg.telemetry.score > (currentPhaseBest.score || -Infinity)) {
+                currentPhaseBest = { score: msg.telemetry.score, accuracy: msg.accuracy, telemetry: msg.telemetry, genome: msg.telemetry.genome };
             }
 
             const now = Date.now();
@@ -139,35 +141,34 @@ async function generateDietAsync(details, onProgress) {
                 const allIslands = workerStates.flatMap(s => s.islands || []);
                 onProgress({ 
                     done: false, 
-                    generation: ((trial - 1) * maxGens) + maxGen, 
-                    accuracy: currentTrialBest.accuracy, 
-                    telemetry: { ...currentTrialBest.telemetry, islands: allIslands, trialInfo: `Trial ${trial}/${numTrials}` } 
+                    generation: ((trialNum - 1) * maxGens) + maxGen, 
+                    accuracy: currentPhaseBest.accuracy, 
+                    telemetry: { ...currentPhaseBest.telemetry, islands: allIslands, trialInfo: label } 
                 });
                 lastProgressUpdate = now;
             }
           } else if (msg.type === 'result') {
             completedWorkers++;
-            if (!currentTrialBest || (msg.result.score > (currentTrialBest.score || -Infinity))) {
-                currentTrialBest = { genome: msg.result.genome || {}, score: msg.result.score || 0, res: msg.result };
+            if (!currentPhaseBest || (msg.result.score > (currentPhaseBest.score || -Infinity))) {
+                currentPhaseBest = { genome: msg.result.genome || {}, score: msg.result.score || 0, res: msg.result, accuracy: msg.result.accuracy };
             }
             if (completedWorkers === workerCount) {
-                trialWorkers.forEach(w => w.terminate());
-                // Remove these workers from activeWorkers
-                activeWorkers = activeWorkers.filter(w => !trialWorkers.includes(w));
-                resolve(currentTrialBest);
+                phaseWorkers.forEach(w => w.terminate());
+                activeWorkers = activeWorkers.filter(w => !phaseWorkers.includes(w));
+                resolve(currentPhaseBest);
             }
           } else if (msg.type === 'migration') {
-              trialWorkers.forEach((w, idx) => { if (idx !== i) w.postMessage({ type: 'import', genomes: msg.bests }); });
+              phaseWorkers.forEach((w, idx) => { if (idx !== i) w.postMessage({ type: 'import', genomes: msg.bests }); });
           }
         });
-        worker.on('error', (err) => console.error(`Worker Trial ${trial} ${i} ERROR: ` + err.stack));
+        worker.on('error', (err) => {
+            console.error(`Worker Phase ${label} ${i} ERROR: ` + err.stack);
+            completedWorkers++;
+            if (completedWorkers === workerCount) resolve(currentPhaseBest);
+        });
       }
     });
-
-    if (!overallBest || trialBest.score > overallBest.score) {
-      overallBest = trialBest;
-    }
-  }
+  };
 
   const finish = (bestPlan, bestResult) => {
     try {
@@ -216,9 +217,33 @@ async function generateDietAsync(details, onProgress) {
     } catch (e) { console.error('Finish Error: ' + e.stack); } finally { stopAll(); }
   };
 
-  if (overallBest) finish(overallBest.genome, overallBest.res);
-  else onProgress({ done: true, result: null });
+  const runAllPhases = async () => {
+    try {
+        // Run initial trials
+        for (let trial = 1; trial <= numTrials; trial++) {
+            const trialBest = await runPhase(trial, `Trial ${trial}/${numTrials}`);
+            if (!overallBest || (trialBest && trialBest.score > overallBest.score)) {
+                overallBest = trialBest;
+            }
+        }
 
+        // Final Refinement Phase
+        if (overallBest) {
+            const refinedBest = await runPhase(numTrials + 1, 'Final Refinement', overallBest.genome);
+            if (refinedBest && refinedBest.score > overallBest.score) {
+                overallBest = refinedBest;
+            }
+        }
+
+        if (overallBest) finish(overallBest.genome, overallBest.res);
+        else onProgress({ done: true, result: null });
+    } catch (err) {
+        console.error('Fatal Phase Error:', err);
+        stopAll();
+    }
+  };
+
+  runAllPhases();
   return { stop: stopAll };
 }
 

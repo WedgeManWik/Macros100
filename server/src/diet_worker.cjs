@@ -3,7 +3,7 @@ const { parentPort, workerData } = require('worker_threads');
 const { 
   FOOD_DATABASE, details, islandsPerWorker, maxGens, 
   targetCalories, proteinTarget, fatTarget, carbTarget, 
-  essentialKeys, nutrientNames, nutrientConfig 
+  essentialKeys, nutrientNames, nutrientConfig, seedGenome 
 } = workerData;
 
 const foodMap = new Map();
@@ -42,20 +42,28 @@ const evaluate = (ingredients) => {
     let metCount = 0;
     let worst = { name: '', pct: 1.0, key: '' };
 
-    essentialKeys.forEach((k) => {
-        const target = nutrientConfig[k].target;
+    Object.keys(nutrientConfig).forEach((k) => {
+        const config = nutrientConfig[k];
+        const target = config.target;
+        const max = config.max;
         const val = totals[k] || 0;
         const pct = target > 0 ? val / target : 1.0;
         const boundedPct = Math.min(1.0, pct);
         
-        nutrientScore += boundedPct * 1000;
-        if (pct < 0.1) nutrientScore -= 5000; // Penalty for near-zero essential nutrients
-        
-        if (k === 'a' && val > 3000) nutrientScore -= (val - 3000) * 100;
-        if (k === 'zinc' && val > 40) nutrientScore -= (val - 40) * 1000;
+        if (config.essential) {
+            nutrientScore += boundedPct * 1000;
+            if (pct < 0.1) nutrientScore -= 5000; 
+            if (pct >= 0.95) metCount++;
+            if (boundedPct < worst.pct) worst = { name: nutrientNames[k] || k, pct: boundedPct, key: k };
+        }
 
-        if (pct >= 0.95) metCount++;
-        if (boundedPct < worst.pct) worst = { name: nutrientNames[k] || k, pct: boundedPct, key: k };
+        // Apply Upper Limit (UL) Penalties
+        if (max !== undefined && val > max) {
+            const overage = val - max;
+            // Higher penalty for micronutrients than energy/macros
+            const weight = ['energy', 'protein', 'carbs', 'fat'].includes(k) ? 100 : 1000;
+            nutrientScore -= (overage / (target || 1)) * weight;
+        }
     });
 
     // Bottleneck Penalty: Heavily penalize the single worst nutrient to force improvement
@@ -90,7 +98,7 @@ const evaluate = (ingredients) => {
     const macroWeight = 0.5 + (Math.pow(metPct, 2) * 9.5); 
 
     const macroPenalty = (
-        Math.pow(Math.max(0, calDiff - 20) / 5, 2) + 
+        Math.pow(Math.max(0, calDiff - 70) / 5, 2) + 
         Math.pow(Math.max(0, fatDiff - 2) * 5, 2) + 
         Math.pow(Math.max(0, pDiff - 2) * 5, 2) +
         Math.pow(Math.max(0, cDiff - 5) * 2, 2)
@@ -144,6 +152,18 @@ const createRandomGenome = () => {
 
 let islands = Array.from({ length: islandsPerWorker || 8 }, () => 
     Array.from({ length: 30 }, (_, i) => {
+        if (seedGenome) {
+            const genome = { ...seedGenome };
+            if (i > 0) {
+                likedFoods.forEach(f => {
+                    if (Math.random() < 0.2) {
+                        const max = (details.customMaxAmounts && details.customMaxAmounts[f.name] !== undefined) ? details.customMaxAmounts[f.name] : f.maxAmount;
+                        genome[f.name] = Math.max(0, Math.min(max, (genome[f.name] || 0) + (Math.random() * 40 - 20)));
+                    }
+                });
+            }
+            return { genome, team: i < 10 ? 'snipers' : i < 20 ? 'macro-snipers' : i < 27 ? 'sculptors' : 'elitists', res: null };
+        }
         const genome = createRandomGenome();
         return { 
             genome, 
