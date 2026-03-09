@@ -14,15 +14,14 @@ const foodMap = new Map<string, Food>();
 FOOD_DATABASE.forEach((f: Food) => foodMap.set(f.name, f));
 
 interface Priorities {
-    calPenalty?: number;
-    calDefPenalty?: number;
-    calExPenalty?: number;
+    calDefPenalty: number;
+    calExPenalty: number;
     macroPenalty: number;
     nutrientReward: number;
     timeout: number;
 }
 
-function buildModel(foods: Food[], useBinaries: boolean, priorities: Partial<Priorities>) {
+function buildModel(foods: Food[], useBinaries: boolean, priorities: Priorities) {
     const model: any = {
         optimize: "score",
         opType: "max",
@@ -36,13 +35,14 @@ function buildModel(foods: Food[], useBinaries: boolean, priorities: Partial<Pri
     // --- HARD CALORIE BOUNDARY (+/- 100) ---
     model.constraints.bal_energy = { min: targetCalories - 100, max: targetCalories + 100 };
     
-    const DEF_PENALTY = priorities.calDefPenalty || priorities.calPenalty || 50000000;
-    const EX_PENALTY = priorities.calExPenalty || priorities.calPenalty || 10000000;
-    const MACRO_PENALTY = priorities.macroPenalty || 10000000;
-    const NUTRIENT_REWARD = priorities.nutrientReward || 1000000;
+    // Slacks for calories within the hard range
+    model.variables.en_def = { score: -1000, bal_energy: 1 };
+    model.variables.en_ex = { score: -1000, bal_energy: -1 };
 
-    model.variables.en_def = { score: -DEF_PENALTY, bal_energy: 1 };
-    model.variables.en_ex = { score: -EX_PENALTY, bal_energy: -1 };
+    const CAL_DEF_PENALTY = priorities.calDefPenalty;
+    const CAL_EX_PENALTY = priorities.calExPenalty;
+    const MACRO_PENALTY = priorities.macroPenalty;
+    const NUTRIENT_REWARD = priorities.nutrientReward;
 
     ['protein', 'fat', 'carbs'].forEach(m => {
         const target = (m === 'protein' ? proteinTarget : (m === 'fat' ? fatTarget : carbTarget));
@@ -138,8 +138,7 @@ function evaluateDiet(genome: Record<string, number>) {
     const calDiff = Math.abs(totals.energy - targetCalories);
     const macroDiff = Math.abs(totals.protein - proteinTarget) + Math.abs(totals.fat - fatTarget) + Math.abs(totals.carbs - carbTarget);
     
-    const calRangePenalty = calDiff > 100 ? 1000000 : 0;
-    const score = (avgRdaPct * 100) - calRangePenalty - (calDiff / 2) - (macroDiff * 5);
+    const score = (avgRdaPct * 100) - (calDiff / 5) - (macroDiff * 5);
     
     return {
         score,
@@ -178,15 +177,6 @@ function run() {
         if (allowed.length > 40) {
             const selectedSet = new Set<string>();
             allowed.forEach((f: Food) => { if (mustHaveNames.has(f.name)) selectedSet.add(f.name); });
-            ['protein', 'fat', 'carbs'].forEach((m: string) => {
-                const mk = m as keyof Food;
-                const sortedByMacro = [...allowed].sort((a, b) => {
-                    const valA = a[mk] as number;
-                    const valB = b[mk] as number;
-                    return (valB / b.calories) - (valA / a.calories);
-                });
-                for (let i = 0; i < 5; i++) if (sortedByMacro[i]) selectedSet.add(sortedByMacro[i].name);
-            });
             essentialKeys.forEach((k: string) => {
                 const sortedForK = [...allowed].sort((a, b) => {
                     const valA = (k === 'energy' ? a.calories : k === 'protein' ? a.protein : k === 'carbs' ? a.carbs : k === 'fat' ? a.fat : (a.nutrients[k] as any || 0));
@@ -209,34 +199,37 @@ function run() {
             allowed = FOOD_DATABASE.filter((f: Food) => selectedSet.has(f.name));
         }
 
-        const rdaPriorities: Partial<Priorities> = { calDefPenalty: 100000, calExPenalty: 1000, macroPenalty: 10, nutrientReward: 10000000, timeout: 5000 };
+        const rdaPriorities: Priorities = { calDefPenalty: 100000, calExPenalty: 1000, macroPenalty: 10, nutrientReward: 10000000, timeout: 5000 };
         const resNutrient = solver.Solve(buildModel(allowed, false, rdaPriorities));
         const poolNutrient = allowed.filter((f: Food, idx: number) => resNutrient[`f_${idx}`] > 0.01 || mustHaveNames.has(f.name)).slice(0, 18);
 
-        const macroPriorities: Partial<Priorities> = { calDefPenalty: 10000000, calExPenalty: 1000000, macroPenalty: 10000000, nutrientReward: 10, timeout: 5000 };
+        const macroPriorities: Priorities = { calDefPenalty: 10000000, calExPenalty: 1000000, macroPenalty: 10000000, nutrientReward: 10, timeout: 5000 };
         const resMacro = solver.Solve(buildModel(allowed, false, macroPriorities));
         const poolMacro = allowed.filter((f: Food, idx: number) => resMacro[`f_${idx}`] > 0.01 || mustHaveNames.has(f.name)).slice(0, 18);
 
         let globalBest: any = null;
-        const totalIterations = 100;
+        const totalIterations = 25;
 
         for (let i = 0; i < totalIterations; i++) {
-            if (i % 10 === 0) parentPort?.postMessage({ type: 'progress', gen: 1, accuracy: globalBest ? globalBest.accuracy : 0, telemetry: { trialInfo: `Optimizing: ${i}%` } });
-
             const ratio = i / (totalIterations - 1);
+            const gen = Math.round((i / totalIterations) * 24000);
+            if (i % 2 === 0) parentPort?.postMessage({ type: 'progress', gen: gen, accuracy: globalBest ? globalBest.accuracy : 0, telemetry: { trialInfo: `Optimizing: ${Math.round(ratio*100)}%` } });
+
             const priorities: Priorities = {
-                calPenalty: 10000000,
+                calDefPenalty: 100000 * (1 - ratio) + 100000000 * ratio,
+                calExPenalty: 1000 * (1 - ratio) + 10000000 * ratio,
                 macroPenalty: 10 * (1 - ratio) + 10000000 * ratio,
                 nutrientReward: 10000000 * (1 - ratio) + 100000 * ratio,
                 timeout: 300 
             };
 
-            const currentPool = ratio < 0.5 ? poolNutrient : poolMacro;
-            let milpLimit = Math.min(currentPool.length, 25);
+            const fullPool = ratio < 0.5 ? poolNutrient : poolMacro;
+            let milpLimit = Math.min(fullPool.length, 25);
             
             while (milpLimit >= 12) {
-                const subset = currentPool.slice(0, milpLimit);
-                const results = solver.Solve(buildModel(subset, true, priorities));
+                const subset = fullPool.slice(0, milpLimit);
+                const model = buildModel(subset, true, priorities);
+                const results = solver.Solve(model);
                 
                 if (results.feasible && results.result && !results.timeout) {
                     const genome: Record<string, number> = {};

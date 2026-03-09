@@ -24,7 +24,7 @@ function buildModel(foods, useBinaries, priorities) {
     // --- HARD CALORIE BOUNDARY (+/- 100) ---
     model.constraints.bal_energy = { min: targetCalories - 100, max: targetCalories + 100 };
     
-    // Slacks for calories within the hard range to encourage target accuracy
+    // Slacks for calories within the hard range
     model.variables.en_def = { score: -1000, bal_energy: 1 };
     model.variables.en_ex = { score: -1000, bal_energy: -1 };
 
@@ -123,10 +123,8 @@ function evaluateDiet(genome) {
     const calDiff = Math.abs(totals.energy - targetCalories);
     const macroDiff = Math.abs(totals.protein - proteinTarget) + Math.abs(totals.fat - fatTarget) + Math.abs(totals.carbs - carbTarget);
     
-    // Final score prioritized: Calories (within 100 range) -> Macros -> RDAs
-    // Use large penalty if outside 100kcal range (though model should block it)
-    const calRangePenalty = calDiff > 100 ? 1000000 : 0;
-    const score = (avgRdaPct * 100) - calRangePenalty - (calDiff / 2) - (macroDiff * 5);
+    // Final score: Nutrients minus penalties for Calories and Macros
+    const score = (avgRdaPct * 100) - (calDiff / 5) - (macroDiff * 5);
     
     return {
         score,
@@ -200,22 +198,26 @@ function run() {
         const poolMacro = allowed.filter((f, idx) => resMacro[`f_${idx}`] > 0.01 || mustHaveNames.has(f.name)).slice(0, 18);
 
         let globalBest = null;
-        const totalIterations = 100;
+        const totalIterations = 25; // REDUCED for speed (approx 5-8 seconds total runtime)
 
         for (let i = 0; i < totalIterations; i++) {
             const ratio = i / (totalIterations - 1);
+            const gen = Math.round((i / totalIterations) * 24000);
+            if (i % 2 === 0) parentPort.postMessage({ type: 'progress', gen: gen, accuracy: globalBest ? globalBest.accuracy : 0, telemetry: { trialInfo: `Optimizing: ${Math.round(ratio*100)}%` } });
+
             const priorities = {
-                calPenalty: 10000000, // Balanced slack within hard range
+                calDefPenalty: 100000 * (1 - ratio) + 100000000 * ratio,
+                calExPenalty: 1000 * (1 - ratio) + 10000000 * ratio,
                 macroPenalty: 10 * (1 - ratio) + 10000000 * ratio,
                 nutrientReward: 10000000 * (1 - ratio) + 100000 * ratio,
                 timeout: 300 
             };
 
-            const currentPool = ratio < 0.5 ? poolNutrient : poolMacro;
-            let milpLimit = Math.min(currentPool.length, 25);
+            const fullPool = ratio < 0.5 ? poolNutrient : poolMacro;
+            let milpLimit = Math.min(fullPool.length, 25);
             
             while (milpLimit >= 12) {
-                const subset = currentPool.slice(0, milpLimit);
+                const subset = fullPool.slice(0, milpLimit);
                 const results = solver.Solve(buildModel(subset, true, priorities));
                 
                 if (results.feasible && results.result && !results.timeout) {
