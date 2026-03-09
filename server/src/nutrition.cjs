@@ -129,13 +129,15 @@ function generateDietAsync(details, onProgress) {
             const telemetry = msg.telemetry || {};
             workerStates[i] = { gen: msg.gen || 0, islands: telemetry.islands || [] };
             
-            if (!currentPhaseBest || (msg.accuracy || 0) > (currentPhaseBest.accuracy || -Infinity)) {
-                currentPhaseBest = { 
-                    score: telemetry.score || 0, 
-                    accuracy: msg.accuracy || 0, 
-                    telemetry: telemetry, 
-                    genome: telemetry.genome || {} 
-                };
+            if (telemetry.genome && Object.keys(telemetry.genome).length > 0) {
+                if (!currentPhaseBest || (msg.accuracy || 0) > (currentPhaseBest.accuracy || -Infinity)) {
+                    currentPhaseBest = { 
+                        score: telemetry.score || 0, 
+                        accuracy: msg.accuracy || 0, 
+                        telemetry: telemetry, 
+                        genome: telemetry.genome 
+                    };
+                }
             }
 
             const now = Date.now();

@@ -14,14 +14,15 @@ const foodMap = new Map<string, Food>();
 FOOD_DATABASE.forEach((f: Food) => foodMap.set(f.name, f));
 
 interface Priorities {
-    calDefPenalty: number;
-    calExPenalty: number;
+    calPenalty?: number;
+    calDefPenalty?: number;
+    calExPenalty?: number;
     macroPenalty: number;
     nutrientReward: number;
     timeout: number;
 }
 
-function buildModel(foods: Food[], useBinaries: boolean, priorities: Priorities) {
+function buildModel(foods: Food[], useBinaries: boolean, priorities: Partial<Priorities>) {
     const model: any = {
         optimize: "score",
         opType: "max",
@@ -32,14 +33,16 @@ function buildModel(foods: Food[], useBinaries: boolean, priorities: Priorities)
 
     if (useBinaries) model.binaries = {};
 
-    const CAL_DEF_PENALTY = priorities.calDefPenalty;
-    const CAL_EX_PENALTY = priorities.calExPenalty;
-    const MACRO_PENALTY = priorities.macroPenalty;
-    const NUTRIENT_REWARD = priorities.nutrientReward;
+    // --- HARD CALORIE BOUNDARY (+/- 100) ---
+    model.constraints.bal_energy = { min: targetCalories - 100, max: targetCalories + 100 };
+    
+    const DEF_PENALTY = priorities.calDefPenalty || priorities.calPenalty || 50000000;
+    const EX_PENALTY = priorities.calExPenalty || priorities.calPenalty || 10000000;
+    const MACRO_PENALTY = priorities.macroPenalty || 10000000;
+    const NUTRIENT_REWARD = priorities.nutrientReward || 1000000;
 
-    model.constraints.bal_energy = { equal: targetCalories };
-    model.variables.en_def = { score: -CAL_DEF_PENALTY, bal_energy: 1 };
-    model.variables.en_ex = { score: -CAL_EX_PENALTY, bal_energy: -1 };
+    model.variables.en_def = { score: -DEF_PENALTY, bal_energy: 1 };
+    model.variables.en_ex = { score: -EX_PENALTY, bal_energy: -1 };
 
     ['protein', 'fat', 'carbs'].forEach(m => {
         const target = (m === 'protein' ? proteinTarget : (m === 'fat' ? fatTarget : carbTarget));
@@ -55,7 +58,7 @@ function buildModel(foods: Food[], useBinaries: boolean, priorities: Priorities)
         model.constraints[`lim_cov_${k}`] = { max: 1.0 };
         model.constraints[`track_cov_${k}`] = { min: 0 };
         if (config.max) {
-            model.variables[`over_${k}`] = { score: -NUTRIENT_REWARD * 2, [`track_max_${k}`]: -1 };
+            model.variables[`over_${k}`] = { score: -NUTRIENT_REWARD * 10, [`track_max_${k}`]: -1 };
             model.constraints[`track_max_${k}`] = { max: config.max };
         }
     });
@@ -134,7 +137,9 @@ function evaluateDiet(genome: Record<string, number>) {
     const avgRdaPct = totalRdaPct / essentialKeys.length;
     const calDiff = Math.abs(totals.energy - targetCalories);
     const macroDiff = Math.abs(totals.protein - proteinTarget) + Math.abs(totals.fat - fatTarget) + Math.abs(totals.carbs - carbTarget);
-    const score = (avgRdaPct * 100) - (calDiff / 10) - (macroDiff / 2);
+    
+    const calRangePenalty = calDiff > 100 ? 1000000 : 0;
+    const score = (avgRdaPct * 100) - calRangePenalty - (calDiff / 2) - (macroDiff * 5);
     
     return {
         score,
@@ -149,7 +154,7 @@ function run() {
         console.error("Worker Global Safety Timeout Triggered!");
         parentPort?.postMessage({ type: 'result', result: null });
         process.exit(1);
-    }, 45000);
+    }, 60000);
 
     try {
         const likedFoods = details.likedFoods || [];
@@ -170,9 +175,18 @@ function run() {
 
         if (allowed.length === 0 && likedFoods.length === 0) allowed = [...FOOD_DATABASE];
 
-        if (allowed.length > 35) {
+        if (allowed.length > 40) {
             const selectedSet = new Set<string>();
             allowed.forEach((f: Food) => { if (mustHaveNames.has(f.name)) selectedSet.add(f.name); });
+            ['protein', 'fat', 'carbs'].forEach((m: string) => {
+                const mk = m as keyof Food;
+                const sortedByMacro = [...allowed].sort((a, b) => {
+                    const valA = a[mk] as number;
+                    const valB = b[mk] as number;
+                    return (valB / b.calories) - (valA / a.calories);
+                });
+                for (let i = 0; i < 5; i++) if (sortedByMacro[i]) selectedSet.add(sortedByMacro[i].name);
+            });
             essentialKeys.forEach((k: string) => {
                 const sortedForK = [...allowed].sort((a, b) => {
                     const valA = (k === 'energy' ? a.calories : k === 'protein' ? a.protein : k === 'carbs' ? a.carbs : k === 'fat' ? a.fat : (a.nutrients[k] as any || 0));
@@ -191,62 +205,53 @@ function run() {
                 return { f, score: density };
             });
             scored.sort((a: any, b: any) => b.score - a.score);
-            for (let i = 0; i < scored.length && selectedSet.size < 35; i++) selectedSet.add(scored[i].f.name);
+            for (let i = 0; i < scored.length && selectedSet.size < 40; i++) selectedSet.add(scored[i].f.name);
             allowed = FOOD_DATABASE.filter((f: Food) => selectedSet.has(f.name));
         }
 
-        const lpPriorities: Priorities = { calDefPenalty: 100000, calExPenalty: 1000, macroPenalty: 10, nutrientReward: 10000000, timeout: 5000 };
-        parentPort?.postMessage({ type: 'progress', gen: 0, accuracy: 0, telemetry: { trialInfo: 'Selecting Candidates' } });
-        const initialResults = solver.Solve(buildModel(allowed, false, lpPriorities));
-        
-        const candidateMap = new Map<string, Food>();
-        allowed.forEach((f: Food, idx: number) => {
-            const amount = initialResults[`f_${idx}`] || 0;
-            if (amount > 0.01) candidateMap.set(f.name, f);
-        });
-        allowed.forEach((f: Food) => { if (mustHaveNames.has(f.name)) candidateMap.set(f.name, f); });
+        const rdaPriorities: Partial<Priorities> = { calDefPenalty: 100000, calExPenalty: 1000, macroPenalty: 10, nutrientReward: 10000000, timeout: 5000 };
+        const resNutrient = solver.Solve(buildModel(allowed, false, rdaPriorities));
+        const poolNutrient = allowed.filter((f: Food, idx: number) => resNutrient[`f_${idx}`] > 0.01 || mustHaveNames.has(f.name)).slice(0, 18);
 
-        let usefulPool = Array.from(candidateMap.values());
-        if (usefulPool.length > 18) {
-            usefulPool.sort((a, b) => {
-                const idxA = allowed.findIndex((f: Food) => f.name === a.name);
-                const idxB = allowed.findIndex((f: Food) => f.name === b.name);
-                const amtA = idxA >= 0 ? initialResults[`f_${idxA}`] || 0 : 0;
-                const amtB = idxB >= 0 ? initialResults[`f_${idxB}`] || 0 : 0;
-                return amtB - amtA;
-            });
-            usefulPool = usefulPool.slice(0, 18);
-        }
+        const macroPriorities: Partial<Priorities> = { calDefPenalty: 10000000, calExPenalty: 1000000, macroPenalty: 10000000, nutrientReward: 10, timeout: 5000 };
+        const resMacro = solver.Solve(buildModel(allowed, false, macroPriorities));
+        const poolMacro = allowed.filter((f: Food, idx: number) => resMacro[`f_${idx}`] > 0.01 || mustHaveNames.has(f.name)).slice(0, 18);
 
         let globalBest: any = null;
         const totalIterations = 100;
 
         for (let i = 0; i < totalIterations; i++) {
+            if (i % 10 === 0) parentPort?.postMessage({ type: 'progress', gen: 1, accuracy: globalBest ? globalBest.accuracy : 0, telemetry: { trialInfo: `Optimizing: ${i}%` } });
+
             const ratio = i / (totalIterations - 1);
             const priorities: Priorities = {
-                calDefPenalty: 100000 * (1 - ratio) + 50000000 * ratio,
-                calExPenalty: 1000 * (1 - ratio) + 10000000 * ratio,
-                macroPenalty: 10 * (1 - ratio) + 5000000 * ratio,
-                nutrientReward: 10000000 * (1 - ratio) + 1000000 * ratio,
+                calPenalty: 10000000,
+                macroPenalty: 10 * (1 - ratio) + 10000000 * ratio,
+                nutrientReward: 10000000 * (1 - ratio) + 100000 * ratio,
                 timeout: 300 
             };
 
-            const model = buildModel(usefulPool, true, priorities);
-            const results = solver.Solve(model);
+            const currentPool = ratio < 0.5 ? poolNutrient : poolMacro;
+            let milpLimit = Math.min(currentPool.length, 25);
             
-            if (results.feasible && results.result && !results.timeout) {
-                const genome: Record<string, number> = {};
-                usefulPool.forEach((f: Food, idx: number) => { genome[f.name] = Math.round((results[`f_${idx}`] || 0) * 100); });
-                const evaluated = evaluateDiet(genome);
-                if (!globalBest || evaluated.score > globalBest.score) {
-                    globalBest = evaluated;
+            while (milpLimit >= 12) {
+                const subset = currentPool.slice(0, milpLimit);
+                const results = solver.Solve(buildModel(subset, true, priorities));
+                
+                if (results.feasible && results.result && !results.timeout) {
+                    const genome: Record<string, number> = {};
+                    subset.forEach((f: Food, idx: number) => { genome[f.name] = Math.round((results[`f_${idx}`] || 0) * 100); });
+                    const evaluated = evaluateDiet(genome);
+                    if (!globalBest || evaluated.score > globalBest.score) globalBest = evaluated;
+                    break; 
                 }
+                milpLimit -= 2; 
             }
         }
 
         if (!globalBest) {
             const genome: Record<string, number> = {};
-            allowed.forEach((f: Food, idx: number) => { genome[f.name] = Math.round((initialResults[`f_${idx}`] || 0) * 100); });
+            allowed.forEach((f: Food, idx: number) => { genome[f.name] = Math.round((resNutrient[`f_${idx}`] || 0) * 100); });
             globalBest = evaluateDiet(genome);
         }
 
