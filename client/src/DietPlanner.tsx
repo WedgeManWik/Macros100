@@ -466,7 +466,7 @@ const DietPlanner = () => {
                   <hr className="my-4" />
 
                   <h3 className="h5 mb-3 d-flex align-items-center justify-content-between fw-bold">
-                    <span className="d-flex align-items-center"><Activity className="me-2 text-macro" size={20} /> Macronutrient Goals</span>
+                    <span className="d-flex align-items-center"><Activity className="me-2 text-macro" size={20} /> Macronutrient Split</span>
                     <Form.Check 
                       type="switch"
                       id="custom-macros-switch"
@@ -497,7 +497,7 @@ const DietPlanner = () => {
                   <hr className="my-4" />
 
                   <h3 className="h5 mb-3 d-flex align-items-center fw-bold">
-                    <Utensils className="me-2 text-musthave" size={20} /> Must Have Ingredients
+                    <Utensils className="me-2 text-musthave" size={20} /> Must Have Foods
                   </h3>
                   <div className="mb-3">
                     <Form.Select size="sm" className="bg-light" onChange={(e) => { if (e.target.value) addMustHave(e.target.value); e.target.value = ""; }}>
@@ -549,7 +549,7 @@ const DietPlanner = () => {
         <Col lg={7} className="h-100 overflow-y-auto p-5 custom-scrollbar panel-right">
           <header className="text-center mb-5 pb-4">
             <div className="d-inline-block px-3 py-1 mb-3 glass-panel rounded-pill small fw-bold text-primary tracking-widest text-uppercase" style={{ fontSize: '0.7rem', border: '1px solid rgba(61, 155, 255, 0.3)' }}>Next-Gen Health Optimization</div>
-            <h1 className="display-2 fw-800 mb-3">Precision AI Nutrition</h1>
+            <h1 className="display-2 fw-800 mb-3">Macros100</h1>
             <p className="lead text-secondary mx-auto" style={{ maxWidth: '700px', fontSize: '1.1rem' }}>Experience professional-grade mathematical optimization. Your perfect health targets, calculated with scientific accuracy.</p>
           </header>
 
