@@ -27,7 +27,6 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
     targetCalories = (bmr * details.activityLevel) + offset;
   }
   
-  const rdaScale = details.weight / 70;
   let proteinTarget = 0, fatTarget = 0, carbTarget = 0;
   
   const calcMacro = (config: any, type: string, tdee: number, weight: number) => {
@@ -50,53 +49,55 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
     else if (usedCals < targetCalories) carbTarget += remainingCals / 4;
   }
 
+  const isMale = details.gender === 'male';
+
   const nutrientConfig: Record<string, NutrientConfig> = {
     energy: { target: targetCalories, max: targetCalories + 50 },
-    water: { target: 2500 * rdaScale, max: 10000 },
+    water: { target: isMale ? 3700 : 2700, max: 10000 },
     protein: { target: proteinTarget, essential: true, max: proteinTarget * 2 },
     carbs: { target: carbTarget, max: carbTarget * 2 },
     fat: { target: fatTarget, max: fatTarget * 2 },
     fatSat: { target: targetCalories * 0.1 / 9, max: targetCalories * 0.15 / 9 },
     fatPoly: { target: targetCalories * 0.08 / 9, max: targetCalories * 0.15 / 9 },
     fatMono: { target: targetCalories * 0.12 / 9, max: targetCalories * 0.20 / 9 },
-    fiber: { target: 30 * rdaScale, essential: true, max: 100 },
+    fiber: { target: isMale ? 38 : 25, essential: true, max: 100 },
     sugars: { target: 50, max: 100 },
-    omega3: { target: (details.gender === 'male' ? 4.25 : 3) * rdaScale, essential: true, max: 10 * rdaScale },
-    omega6: { target: (details.gender === 'male' ? 17 : 12) * rdaScale, essential: true, max: 40 * rdaScale },
+    omega3: { target: isMale ? 1.6 : 1.1, essential: true, max: 10 },
+    omega6: { target: isMale ? 17 : 12, essential: true, max: 40 },
     cholesterol: { target: 300, max: 600 },
-    b1: { target: 1.2 * rdaScale, essential: true, max: 100 },
-    b2: { target: 1.3 * rdaScale, essential: true, max: 100 },
-    b3: { target: 16 * rdaScale, essential: true, max: 35 },
-    b5: { target: 5 * rdaScale, essential: true, max: 100 },
-    b6: { target: 1.7 * rdaScale, essential: true, max: 100 },
-    b12: { target: 2.4 * rdaScale, essential: true, max: 100 },
-    folate: { target: 400 * rdaScale, essential: true, max: 1000 },
-    a: { target: 900 * rdaScale, essential: true, max: 3000 },
-    c: { target: 90 * rdaScale, essential: true, max: 2000 },
-    d: { target: 20 * rdaScale, essential: true, max: 100 },
-    e: { target: 15 * rdaScale, essential: true, max: 1000 },
-    k: { target: 120 * rdaScale, essential: true, max: 1000 },
-    calcium: { target: 1300 * rdaScale, essential: true, max: 2500 },
-    copper: { target: 0.9 * rdaScale, essential: true, max: 10 },
-    iron: { target: 18 * rdaScale, essential: true, max: 45 },
-    magnesium: { target: 420 * rdaScale, essential: true, max: 1000 },
-    manganese: { target: 2.3 * rdaScale, essential: true, max: 11 },
-    phosphorus: { target: 1250 * rdaScale, essential: true, max: 4000 },
-    potassium: { target: 4700 * rdaScale, essential: true, max: 10000 },
-    selenium: { target: 55 * rdaScale, essential: true, max: 400 },
-    sodium: { target: 2300 * rdaScale, essential: true, max: 3000 },
-    zinc: { target: 11 * rdaScale, essential: true, max: 40 },
-    cystine: { target: 500 * rdaScale, essential: true, max: 5000 },
-    histidine: { target: 700 * rdaScale, essential: true, max: 5000 },
-    isoleucine: { target: 1400 * rdaScale, essential: true, max: 10000 },
-    leucine: { target: 2700 * rdaScale, essential: true, max: 20000 },
-    lysine: { target: 2100 * rdaScale, essential: true, max: 15000 },
-    methionine: { target: 700 * rdaScale, essential: true, max: 5000 },
-    phenylalanine: { target: 1100 * rdaScale, essential: true, max: 10000 },
-    threonine: { target: 1000 * rdaScale, essential: true, max: 10000 },
-    tryptophan: { target: 280 * rdaScale, essential: true, max: 2000 },
-    tyrosine: { target: 800 * rdaScale, essential: true, max: 10000 },
-    valine: { target: 1600 * rdaScale, essential: true, max: 12000 }
+    b1: { target: isMale ? 1.2 : 1.1, essential: true, max: 100 },
+    b2: { target: isMale ? 1.3 : 1.1, essential: true, max: 100 },
+    b3: { target: isMale ? 16 : 14, essential: true, max: 35 },
+    b5: { target: 5, essential: true, max: 100 },
+    b6: { target: 1.7, essential: true, max: 100 },
+    b12: { target: 2.4, essential: true, max: 100 },
+    folate: { target: 400, essential: true, max: 1000 },
+    a: { target: isMale ? 900 : 700, essential: true, max: 3000 },
+    c: { target: isMale ? 90 : 75, essential: true, max: 2000 },
+    d: { target: 20, essential: true, max: 100 },
+    e: { target: 15, essential: true, max: 1000 },
+    k: { target: isMale ? 120 : 90, essential: true, max: 1000 },
+    calcium: { target: 1000, essential: true, max: 2500 },
+    copper: { target: 0.9, essential: true, max: 10 },
+    iron: { target: isMale ? 8 : 18, essential: true, max: 45 },
+    magnesium: { target: isMale ? 420 : 320, essential: true, max: 1000 },
+    manganese: { target: isMale ? 2.3 : 1.8, essential: true, max: 11 },
+    phosphorus: { target: 700, essential: true, max: 4000 },
+    potassium: { target: isMale ? 3400 : 2600, essential: true, max: 10000 },
+    selenium: { target: 55, essential: true, max: 400 },
+    sodium: { target: 2300, essential: true, max: 3000 },
+    zinc: { target: isMale ? 11 : 8, essential: true, max: 40 },
+    cystine: { target: 500, essential: true, max: 5000 },
+    histidine: { target: 700, essential: true, max: 5000 },
+    isoleucine: { target: 1400, essential: true, max: 10000 },
+    leucine: { target: 2700, essential: true, max: 20000 },
+    lysine: { target: 2100, essential: true, max: 15000 },
+    methionine: { target: 700, essential: true, max: 5000 },
+    phenylalanine: { target: 1100, essential: true, max: 10000 },
+    threonine: { target: 1000, essential: true, max: 10000 },
+    tryptophan: { target: 280, essential: true, max: 2000 },
+    tyrosine: { target: 800, essential: true, max: 10000 },
+    valine: { target: 1600, essential: true, max: 12000 }
   };
 
   const essentialKeys = Object.keys(nutrientConfig).filter(k => nutrientConfig[k].essential);
@@ -123,7 +124,7 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
         const worker = new Worker(workerPath, {
           workerData: {
             FOOD_DATABASE,
-            details, targetCalories, rdaScale,
+            details, targetCalories,
             proteinTarget, fatTarget, carbTarget, essentialKeys, nutrientNames, nutrientConfig,
             seedGenome: seed
           }
