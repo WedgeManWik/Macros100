@@ -32,6 +32,12 @@ export interface DietDetails {
   customMaxAmounts?: Record<string, number>;
 }
 
+export interface NutrientConfig {
+  target: number;
+  max?: number;
+  essential?: boolean;
+}
+
 export interface MacroConfig {
   mode: 'g/kg' | 'g' | '%' | 'remainder';
   value: number;
