@@ -54,31 +54,45 @@ const DietPlanner = () => {
     customMacros: false,
     maintenanceCalories: 2111,
     calorieOffset: 0,
+    targetCalories: 2111,
     customMaxAmounts: {} as Record<string, number>
   });
 
-  // Calculate Maintenance & Target Calories on change
+  const getGoalFromOffset = (offset: number) => {
+    if (offset <= -500) return 'fast-lose';
+    if (offset <= -250) return 'moderate-lose';
+    if (offset >= 500) return 'fast-gain';
+    if (offset >= 250) return 'moderate-gain';
+    return 'maintain';
+  };
+
+  const getOffsetFromGoal = (goal: string) => {
+    switch (goal) {
+      case 'fast-lose': return -500;
+      case 'moderate-lose': return -250;
+      case 'moderate-gain': return 250;
+      case 'fast-gain': return 500;
+      default: return 0;
+    }
+  };
+
+  // Calculate Maintenance & Target Calories on biometric change
   useEffect(() => {
     const lbm = formData.weight * (1 - (formData.bodyFat / 100));
     const bmr = 370 + (21.6 * lbm);
     const maintenance = Math.round(bmr * formData.activityLevel);
     
-    let offset = 0;
-    switch (formData.goal) {
-        case 'fast-lose': offset = -500; break;
-        case 'moderate-lose': offset = -250; break;
-        case 'moderate-gain': offset = 250; break;
-        case 'fast-gain': offset = 500; break;
-        default: offset = 0;
-    }
-    
     setFormData(prev => {
-        if (prev.maintenanceCalories !== maintenance || prev.calorieOffset !== offset) {
-            return { ...prev, maintenanceCalories: maintenance, calorieOffset: offset };
+        if (prev.maintenanceCalories !== maintenance) {
+            return { 
+              ...prev, 
+              maintenanceCalories: maintenance, 
+              targetCalories: maintenance + prev.calorieOffset 
+            };
         }
         return prev;
     });
-  }, [formData.weight, formData.bodyFat, formData.activityLevel, formData.goal]);
+  }, [formData.weight, formData.bodyFat, formData.activityLevel]);
 
   // Handle Dynamic Macro Goals
   useEffect(() => {
@@ -207,10 +221,31 @@ const DietPlanner = () => {
 
   const handleInputChange = (e: React.ChangeEvent<any>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'gender' || name === 'goal' ? value : parseFloat(value)
-    }));
+    let val = name === 'gender' || name === 'goal' ? value : parseFloat(value);
+    
+    // Handle empty/invalid numeric inputs
+    if (typeof val === 'number' && isNaN(val)) {
+        val = 0;
+    }
+    
+    setFormData(prev => {
+      const updated = { ...prev, [name]: val };
+      
+      if (name === 'goal') {
+        updated.calorieOffset = getOffsetFromGoal(val as string);
+        updated.targetCalories = prev.maintenanceCalories + updated.calorieOffset;
+      } else if (name === 'calorieOffset') {
+        updated.goal = getGoalFromOffset(val as number);
+        updated.targetCalories = prev.maintenanceCalories + (val as number);
+      } else if (name === 'targetCalories') {
+        updated.calorieOffset = (val as number) - prev.maintenanceCalories;
+        updated.goal = getGoalFromOffset(updated.calorieOffset);
+      } else if (name === 'maintenanceCalories') {
+        updated.targetCalories = (val as number) + prev.calorieOffset;
+      }
+      
+      return updated;
+    });
   };
 
   const handleMacroChange = (macro: 'protein'|'fat'|'carbs', field: 'mode'|'value', val: any) => {
@@ -461,6 +496,11 @@ const DietPlanner = () => {
                   <div className="mb-4">
                     <Form.Label>Calorie Offset</Form.Label>
                     <Form.Control type="number" name="calorieOffset" value={formData.calorieOffset} onChange={handleInputChange} />
+                  </div>
+
+                  <div className="mb-4">
+                    <Form.Label>Target Calories</Form.Label>
+                    <Form.Control type="number" name="targetCalories" value={formData.targetCalories} onChange={handleInputChange} />
                   </div>
 
                   <hr className="my-4" />
