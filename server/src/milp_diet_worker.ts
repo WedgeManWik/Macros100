@@ -7,7 +7,7 @@ function log(msg: string) {
     console.log(`[MILP Worker] ${msg}`);
 }
 
-log("Worker process starting in BEAST MODE (Restricted to User Selection)...");
+log("Worker process starting in BEAST MODE (Enforcing Custom Boundaries)...");
 
 const { 
   FOOD_DATABASE, details, targetCalories, 
@@ -67,7 +67,6 @@ async function solveGLPK(foods: Food[], isMILP: boolean) {
     const objectiveVars: any[] = [];
 
     // --- 1. SLACK VARIABLES ---
-    // Penalty logic: Calories (10^12) > Macros (10^9) > Nutrients (10^5)
     vars.push({ name: 'cal_def', lb: 0, ub: 10000, type: glp.GLP_DB });
     objectiveVars.push({ name: 'cal_def', coef: -1000000000000 });
 
@@ -78,7 +77,7 @@ async function solveGLPK(foods: Food[], isMILP: boolean) {
         objectiveVars.push({ name: `${m}_ex`, coef: -1000000000 });
     });
 
-    // --- 2. NUTRIENT VARIABLES (0-100%) ---
+    // --- 2. NUTRIENT VARIABLES ---
     essentialKeys.forEach((k: string) => {
         vars.push({ name: `cov_${k}`, lb: 0, ub: 1.0, type: glp.GLP_DB });
         objectiveVars.push({ name: `cov_${k}`, coef: 100000 }); 
@@ -87,20 +86,55 @@ async function solveGLPK(foods: Food[], isMILP: boolean) {
     vars.push({ name: 'min_coverage', lb: 0, ub: 1.0, type: glp.GLP_DB });
     objectiveVars.push({ name: 'min_coverage', coef: 1000000 });
 
-    // --- 3. FOOD VARIABLES ---
+    // --- 3. FOOD VARIABLES & BOUNDARIES ---
     foods.forEach((f, i) => {
-        vars.push({ name: `f_${i}`, lb: 0, ub: (f.maxAmount || 1000) / 100, type: glp.GLP_DB });
-        // Tiny filler bonus to use the extra 50kcal
+        // Resolve the specific min/max for this food
+        const mustHave = details.mustHaveFoods?.find((m: any) => m.name === f.name);
+        const customMax = details.customMaxAmounts?.[f.name];
+        
+        let minVal = (mustHave ? (mustHave.min || f.minAmount || 0) : (f.minAmount || 0)) / 100;
+        let maxVal = (mustHave && mustHave.max !== undefined) ? (mustHave.max / 100) : 
+                     (customMax !== undefined ? (customMax / 100) : (f.maxAmount / 100));
+        
+        if (maxVal < minVal) maxVal = minVal;
+
+        // If not isMILP (LP pass), we set boundaries directly on the continuous variable
+        // However, if mustHave, we MUST enforce the minVal even in LP to rank pools correctly
+        vars.push({ 
+            name: `f_${i}`, 
+            lb: mustHave ? minVal : 0, 
+            ub: maxVal, 
+            type: glp.GLP_DB 
+        });
+
         objectiveVars.push({ name: `f_${i}`, coef: f.calories * 0.001 }); 
+
         if (isMILP) {
             vars.push({ name: `u_${i}`, lb: 0, ub: 1, type: glp.GLP_DB });
             binaries.push(`u_${i}`);
+            
+            // MILP Binary logic: 
+            // f_i >= minVal * u_i
+            // f_i <= maxVal * u_i
+            constraints.push({
+                name: `min_bound_${i}`,
+                vars: [{ name: `f_${i}`, coef: 1 }, { name: `u_${i}`, coef: -minVal }],
+                bnds: { type: glp.GLP_LO, lb: 0, ub: 0 }
+            });
+            constraints.push({
+                name: `max_bound_${i}`,
+                vars: [{ name: `f_${i}`, coef: 1 }, { name: `u_${i}`, coef: -maxVal }],
+                bnds: { type: glp.GLP_UP, lb: 0, ub: 0 }
+            });
+
+            // If mustHave, force u_i to 1
+            if (mustHave) {
+                constraints.push({ name: `force_${i}`, vars: [{ name: `u_${i}`, coef: 1 }], bnds: { type: glp.GLP_FX, lb: 1, ub: 1 } });
+            }
         }
     });
 
     // --- 4. CONSTRAINTS ---
-    
-    // Calories
     constraints.push({
         name: 'cal_min',
         vars: [...foods.map((f, i) => ({ name: `f_${i}`, coef: f.calories })), { name: 'cal_def', coef: 1 }],
@@ -112,7 +146,6 @@ async function solveGLPK(foods: Food[], isMILP: boolean) {
         bnds: { type: glp.GLP_UP, lb: 0, ub: targetCalories + 50 }
     });
 
-    // Macros
     const macroTargets = [{ name: 'protein', val: proteinTarget }, { name: 'fat', val: fatTarget }, { name: 'carbs', val: carbTarget }];
     macroTargets.forEach(m => {
         constraints.push({
@@ -122,7 +155,6 @@ async function solveGLPK(foods: Food[], isMILP: boolean) {
         });
     });
 
-    // Nutrient Linking
     essentialKeys.forEach((k: string) => {
         const config = nutrientConfig[k];
         const foodCoeffs = foods.map((f, i) => {
@@ -147,17 +179,6 @@ async function solveGLPK(foods: Food[], isMILP: boolean) {
             });
         }
     });
-
-    if (isMILP) {
-        foods.forEach((f, i) => {
-            const minVal = (f.minAmount || 0) / 100;
-            const maxVal = (f.maxAmount || 1000) / 100;
-            constraints.push({ name: `min_bound_${i}`, vars: [{ name: `f_${i}`, coef: 1 }, { name: `u_${i}`, coef: -minVal }], bnds: { type: glp.GLP_LO, lb: 0, ub: 0 } });
-            constraints.push({ name: `max_bound_${i}`, vars: [{ name: `f_${i}`, coef: 1 }, { name: `u_${i}`, coef: -maxVal }], bnds: { type: glp.GLP_UP, lb: 0, ub: 0 } });
-            const mustHave = details.mustHaveFoods?.find((m: any) => m.name === f.name);
-            if (mustHave) constraints.push({ name: `force_${i}`, vars: [{ name: `u_${i}`, coef: 1 }], bnds: { type: glp.GLP_FX, lb: 1, ub: 1 } });
-        });
-    }
 
     return await glp.solve({
         name: 'DietPlanner',
@@ -202,8 +223,7 @@ async function run() {
             return liked.some((l: string) => {
                 const lLower = l.toLowerCase();
                 if (nameLower === lLower) return true;
-                const escapedL = lLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const regex = new RegExp(`\\b${escapedL}\\b`, 'i');
+                const regex = new RegExp(`\\b${lLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
                 return regex.test(nameLower);
             });
         });
@@ -237,7 +257,6 @@ async function run() {
         });
 
         // 2. 1000 Randomized LP Trials
-        // Rank trials by solver's actual objective value (which includes macro penalties)
         const trials: { pool: Food[], z: number }[] = [];
         const numTrials = 1000;
         const subsetSize = Math.min(35, specialistsPool.length); 
@@ -251,7 +270,6 @@ async function run() {
             
             const res = await solveGLPK(trialPool, false);
             if (res.result.status === 5 || res.result.status === 2) {
-                // Status 5 = Optimal, 2 = Feasible
                 trials.push({ pool: trialPool, z: res.result.z });
             }
 
@@ -260,13 +278,10 @@ async function run() {
             }
         }
 
-        // 3. Take Top 15 Finalists for full MILP Refinement
-        // trials are sorted by 'z' (Higher is better, including penalties)
         trials.sort((a, b) => b.z - a.z);
         const finalists = trials.slice(0, 15);
-        log(`Top LP Trial Solver Value: ${finalists[0]?.z}`);
 
-        // 4. Run MILP on the top 15 finalists
+        // 4. Run MILP on the top finalists
         const results: any[] = [];
         for (let i = 0; i < finalists.length; i++) {
             parentPort?.postMessage({ type: 'progress', gen: 50 + (i*3), accuracy: 0, telemetry: { trialInfo: `Optimizing Top Combo ${i+1}/${finalists.length}...` } });
@@ -281,7 +296,6 @@ async function run() {
             }
         }
 
-        // 5. Final Best Pick (By Nutrient Score among pools that respected macros best)
         results.sort((a, b) => b.score - a.score);
         const bestEval = results[0] || evaluateDiet({});
 
