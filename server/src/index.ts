@@ -25,7 +25,9 @@ app.get('/api/foods', (req, res) => {
 });
 
 app.post('/api/start-generation', (req, res) => {
+  console.log(`[Server] Received generation request. Body keys: ${Object.keys(req.body)}`);
   const jobId = Math.random().toString(36).substring(7);
+  console.log(`[Server] Starting job ${jobId}`);
   jobs[jobId] = { 
     status: 'running', 
     generation: 0, 
@@ -35,16 +37,27 @@ app.post('/api/start-generation', (req, res) => {
     result: null 
   };
 
-  generateDietAsync(req.body, (progress: any) => {
-    if (progress.done) {
-        jobs[jobId].status = 'completed';
-        jobs[jobId].result = progress.result;
-    } else {
-        jobs[jobId].generation = progress.generation;
-        jobs[jobId].currentAccuracy = progress.accuracy;
-        jobs[jobId].telemetry = progress.telemetry;
-    }
-  });
+  try {
+    generateDietAsync(req.body, (progress: any) => {
+      try {
+        if (progress.done) {
+            console.log(`[Server] Job ${jobId} finished. Success: ${!!progress.result}`);
+            jobs[jobId].status = 'completed';
+            jobs[jobId].result = progress.result;
+        } else {
+            jobs[jobId].generation = progress.generation;
+            jobs[jobId].currentAccuracy = progress.accuracy;
+            jobs[jobId].telemetry = progress.telemetry;
+        }
+      } catch (err: any) {
+        console.error(`[Server] Error in progress callback for job ${jobId}: ${err.message}`);
+      }
+    });
+  } catch (err: any) {
+    console.error(`[Server] Failed to start generation for job ${jobId}: ${err.message}`);
+    jobs[jobId].status = 'failed';
+    jobs[jobId].error = err.message;
+  }
 
   res.json({ jobId });
 });
