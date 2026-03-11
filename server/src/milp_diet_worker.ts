@@ -7,7 +7,7 @@ function log(msg: string) {
     console.log(`[MILP Worker] ${msg}`);
 }
 
-log("Worker process starting in BEAST MODE (Enforcing Custom Boundaries)...");
+log("Worker process starting in TITAN MODE...");
 
 const { 
   FOOD_DATABASE, details, targetCalories, 
@@ -88,7 +88,6 @@ async function solveGLPK(foods: Food[], isMILP: boolean) {
 
     // --- 3. FOOD VARIABLES & BOUNDARIES ---
     foods.forEach((f, i) => {
-        // Resolve the specific min/max for this food
         const mustHave = details.mustHaveFoods?.find((m: any) => m.name === f.name);
         const customMax = details.customMaxAmounts?.[f.name];
         
@@ -98,39 +97,15 @@ async function solveGLPK(foods: Food[], isMILP: boolean) {
         
         if (maxVal < minVal) maxVal = minVal;
 
-        // If not isMILP (LP pass), we set boundaries directly on the continuous variable
-        // However, if mustHave, we MUST enforce the minVal even in LP to rank pools correctly
-        vars.push({ 
-            name: `f_${i}`, 
-            lb: mustHave ? minVal : 0, 
-            ub: maxVal, 
-            type: glp.GLP_DB 
-        });
-
+        vars.push({ name: `f_${i}`, lb: mustHave ? minVal : 0, ub: maxVal, type: glp.GLP_DB });
         objectiveVars.push({ name: `f_${i}`, coef: f.calories * 0.001 }); 
 
         if (isMILP) {
             vars.push({ name: `u_${i}`, lb: 0, ub: 1, type: glp.GLP_DB });
             binaries.push(`u_${i}`);
-            
-            // MILP Binary logic: 
-            // f_i >= minVal * u_i
-            // f_i <= maxVal * u_i
-            constraints.push({
-                name: `min_bound_${i}`,
-                vars: [{ name: `f_${i}`, coef: 1 }, { name: `u_${i}`, coef: -minVal }],
-                bnds: { type: glp.GLP_LO, lb: 0, ub: 0 }
-            });
-            constraints.push({
-                name: `max_bound_${i}`,
-                vars: [{ name: `f_${i}`, coef: 1 }, { name: `u_${i}`, coef: -maxVal }],
-                bnds: { type: glp.GLP_UP, lb: 0, ub: 0 }
-            });
-
-            // If mustHave, force u_i to 1
-            if (mustHave) {
-                constraints.push({ name: `force_${i}`, vars: [{ name: `u_${i}`, coef: 1 }], bnds: { type: glp.GLP_FX, lb: 1, ub: 1 } });
-            }
+            constraints.push({ name: `min_bound_${i}`, vars: [{ name: `f_${i}`, coef: 1 }, { name: `u_${i}`, coef: -minVal }], bnds: { type: glp.GLP_LO, lb: 0, ub: 0 } });
+            constraints.push({ name: `max_bound_${i}`, vars: [{ name: `f_${i}`, coef: 1 }, { name: `u_${i}`, coef: -maxVal }], bnds: { type: glp.GLP_UP, lb: 0, ub: 0 } });
+            if (mustHave) constraints.push({ name: `force_${i}`, vars: [{ name: `u_${i}`, coef: 1 }], bnds: { type: glp.GLP_FX, lb: 1, ub: 1 } });
         }
     });
 
@@ -161,22 +136,10 @@ async function solveGLPK(foods: Food[], isMILP: boolean) {
             const val = (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0));
             return { name: `f_${i}`, coef: val / (config.target || 1) };
         });
-        constraints.push({
-            name: `link_cov_${k}`,
-            vars: [...foodCoeffs, { name: `cov_${k}`, coef: -1 }],
-            bnds: { type: glp.GLP_LO, lb: 0, ub: 0 }
-        });
-        constraints.push({
-            name: `link_min_${k}`,
-            vars: [{ name: 'min_coverage', coef: 1 }, { name: `cov_${k}`, coef: -1 }],
-            bnds: { type: glp.GLP_UP, lb: 0, ub: 0 }
-        });
+        constraints.push({ name: `link_cov_${k}`, vars: [...foodCoeffs, { name: `cov_${k}`, coef: -1 }], bnds: { type: glp.GLP_LO, lb: 0, ub: 0 } });
+        constraints.push({ name: `link_min_${k}`, vars: [{ name: 'min_coverage', coef: 1 }, { name: `cov_${k}`, coef: -1 }], bnds: { type: glp.GLP_UP, lb: 0, ub: 0 } });
         if (config.max) {
-            constraints.push({
-                name: `max_${k}`,
-                vars: foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) })),
-                bnds: { type: glp.GLP_UP, lb: 0, ub: config.max }
-            });
+            constraints.push({ name: `max_${k}`, vars: foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) })), bnds: { type: glp.GLP_UP, lb: 0, ub: config.max } });
         }
     });
 
@@ -184,7 +147,7 @@ async function solveGLPK(foods: Food[], isMILP: boolean) {
         name: 'DietPlanner',
         objective: { direction: glp.GLP_MAX, name: 'score', vars: objectiveVars },
         subjectTo: constraints, bounds: vars, binaries: binaries,
-        options: { presol: true, tmlim: 10 }
+        options: { presol: true, tmlim: 15 } // 15s per complex solve
     });
 }
 
@@ -208,12 +171,12 @@ function evaluateDiet(genome: Record<string, number>) {
 }
 
 async function run() {
-    log("Starting SUPER-POWERED multi-trial selection...");
+    log("Starting TITAN MODE (5000 Trials)...");
     const totalTimeout = setTimeout(() => {
         log("Worker Global Safety Timeout Triggered!");
         parentPort?.postMessage({ type: 'result', result: null });
         process.exit(1);
-    }, 180000);
+    }, 240000); // 4 minutes
 
     try {
         const likedFoodsPool = FOOD_DATABASE.filter((f: Food) => {
@@ -232,7 +195,7 @@ async function run() {
         log(`User Selection Pool: ${likedFoodsPool.length} foods.`);
 
         // 1. Identify Specialist Pool
-        parentPort?.postMessage({ type: 'progress', gen: 5, accuracy: 0, telemetry: { trialInfo: "Ranking User Selections..." } });
+        parentPort?.postMessage({ type: 'progress', gen: 2, accuracy: 0, telemetry: { trialInfo: "Deep Ranking User Selections..." } });
         
         const specialistsPool: Food[] = [];
         const seenSpecialists = new Set<string>();
@@ -248,7 +211,8 @@ async function run() {
                 };
                 return (getVal(b) / (b.calories || 1)) - (getVal(a) / (a.calories || 1));
             });
-            for (let i = 0; i < 15; i++) {
+            // Take top 25 specialists per nutrient
+            for (let i = 0; i < 25; i++) {
                 if (sorted[i] && !seenSpecialists.has(sorted[i].name)) {
                     specialistsPool.push(sorted[i]);
                     seenSpecialists.add(sorted[i].name);
@@ -256,12 +220,12 @@ async function run() {
             }
         });
 
-        // 2. 1000 Randomized LP Trials
+        // 2. 5000 Randomized LP Trials
         const trials: { pool: Food[], z: number }[] = [];
-        const numTrials = 1000;
-        const subsetSize = Math.min(35, specialistsPool.length); 
+        const numTrials = 5000;
+        const subsetSize = Math.min(50, specialistsPool.length); 
         
-        parentPort?.postMessage({ type: 'progress', gen: 10, accuracy: 0, telemetry: { trialInfo: `Testing ${numTrials} Combinations...` } });
+        parentPort?.postMessage({ type: 'progress', gen: 5, accuracy: 0, telemetry: { trialInfo: `Testing ${numTrials} Combinations...` } });
 
         for (let i = 0; i < numTrials; i++) {
             const shuffled = [...specialistsPool].sort(() => 0.5 - Math.random());
@@ -273,18 +237,19 @@ async function run() {
                 trials.push({ pool: trialPool, z: res.result.z });
             }
 
-            if (i % 100 === 0) {
-                parentPort?.postMessage({ type: 'progress', gen: 10 + (i/25), accuracy: 0, telemetry: { trialInfo: `Analyzing Combos ${i}/${numTrials}...` } });
+            if (i % 500 === 0) {
+                parentPort?.postMessage({ type: 'progress', gen: 5 + (i/125), accuracy: 0, telemetry: { trialInfo: `Combo Analysis ${i}/${numTrials}...` } });
             }
         }
 
+        // 3. Take Top 40 Finalists for full MILP Refinement
         trials.sort((a, b) => b.z - a.z);
-        const finalists = trials.slice(0, 15);
+        const finalists = trials.slice(0, 40);
 
-        // 4. Run MILP on the top finalists
+        // 4. Run MILP on the top 40 finalists
         const results: any[] = [];
         for (let i = 0; i < finalists.length; i++) {
-            parentPort?.postMessage({ type: 'progress', gen: 50 + (i*3), accuracy: 0, telemetry: { trialInfo: `Optimizing Top Combo ${i+1}/${finalists.length}...` } });
+            parentPort?.postMessage({ type: 'progress', gen: 45 + (i*1.25), accuracy: 0, telemetry: { trialInfo: `Final Refinement ${i+1}/${finalists.length}...` } });
             const res = await solveGLPK(finalists[i].pool, true);
             if (res.result.vars) {
                 const genome: Record<string, number> = {};
@@ -296,6 +261,7 @@ async function run() {
             }
         }
 
+        // 5. Final Best Pick
         results.sort((a, b) => b.score - a.score);
         const bestEval = results[0] || evaluateDiet({});
 
