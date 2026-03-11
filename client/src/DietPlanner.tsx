@@ -516,22 +516,49 @@ const DietPlanner = () => {
                     />
                   </h3>
                   <div style={{ opacity: formData.customMacros ? 1 : 0.5, pointerEvents: formData.customMacros ? 'all' : 'none', transition: 'opacity 0.2s' }}>
-                    {['protein', 'fat', 'carbs'].map(macro => (
-                      <Row key={macro} className="mb-3 align-items-center">
-                        <Col xs={3} className="text-capitalize fw-bold small text-muted">{macro}</Col>
-                        <Col xs={4}>
-                          <Form.Control size="sm" type="number" step="any" disabled={(formData.macros as any)[macro].mode === 'remainder'} value={(formData.macros as any)[macro].value} onChange={(e) => handleMacroChange(macro as any, 'value', e.target.value)} />
-                        </Col>
-                        <Col xs={5}>
-                          <Form.Select size="sm" value={(formData.macros as any)[macro].mode} onChange={(e) => handleMacroChange(macro as any, 'mode', e.target.value)}>
-                            <option value="g/kg">g/kg</option>
-                            <option value="%">%</option>
-                            <option value="g">g</option>
-                            <option value="remainder">Remainder</option>
-                          </Form.Select>
-                        </Col>
-                      </Row>
-                    ))}
+                    {(() => {
+                      const calc = { protein: 0, fat: 0, carbs: 0 };
+                      const targetCals = formData.targetCalories;
+                      
+                      // Pre-calculate all for remainders
+                      ['protein', 'fat', 'carbs'].forEach(m => {
+                        const macro = (formData.macros as any)[m];
+                        if (macro.mode === 'g/kg') calc[m as keyof typeof calc] = macro.value * formData.weight;
+                        else if (macro.mode === '%') calc[m as keyof typeof calc] = (macro.value / 100 * targetCals) / (m === 'fat' ? 9 : 4);
+                        else if (macro.mode === 'g') calc[m as keyof typeof calc] = macro.value;
+                      });
+                      const remainderMacro = Object.keys(formData.macros).find(k => (formData.macros as any)[k].mode === 'remainder');
+                      if (remainderMacro) {
+                        const usedCals = (calc.protein * 4) + (calc.fat * 9) + (calc.carbs * 4);
+                        calc[remainderMacro as keyof typeof calc] = Math.max(0, targetCals - usedCals) / (remainderMacro === 'fat' ? 9 : 4);
+                      }
+
+                      return ['protein', 'fat', 'carbs'].map(macroName => (
+                        <Row key={macroName} className="mb-3 align-items-center g-2">
+                          <Col xs={2} className="text-capitalize fw-bold small text-muted">{macroName}</Col>
+                          <Col xs={4}>
+                            <Form.Control size="sm" type="number" step="any" disabled={(formData.macros as any)[macroName].mode === 'remainder'} value={(formData.macros as any)[macroName].value} onChange={(e) => handleMacroChange(macroName as any, 'value', e.target.value)} />
+                          </Col>
+                          <Col xs={4}>
+                            <Form.Select size="sm" value={(formData.macros as any)[macroName].mode} onChange={(e) => handleMacroChange(macroName as any, 'mode', e.target.value)}>
+                              <option value="g/kg">g/kg</option>
+                              <option value="%">%</option>
+                              <option value="g">g</option>
+                              <option value="remainder">Remainder</option>
+                            </Form.Select>
+                          </Col>
+                          <Col xs={2} className="text-end">
+                            <span className="fw-bold" style={{ 
+                                color: macroName === 'protein' ? 'var(--accent-danger)' : macroName === 'carbs' ? 'var(--accent-primary)' : 'var(--accent-warn)',
+                                fontSize: '0.85rem',
+                                whiteSpace: 'nowrap'
+                            }}>
+                              {Math.round(calc[macroName as keyof typeof calc])}g
+                            </span>
+                          </Col>
+                        </Row>
+                      ));
+                    })()}
                   </div>
 
                   <hr className="my-4" />
@@ -665,27 +692,69 @@ const DietPlanner = () => {
                   </Card>
                 </Col>
                 <Col md={4}>
-                  <Card className="shadow-sm border-0 h-100 p-2 glass-panel">
-                    <Card.Body className="d-flex flex-column justify-content-center">
-                      <div className="d-flex justify-content-between mb-3 px-1 gap-2">
-                        <div className="text-center flex-grow-1">
-                          <div className="small fw-bold text-white mb-1" style={{ fontSize: '0.7rem' }}>Protein</div>
-                          <div className="h5 mb-0 fw-bold" style={{ color: 'var(--accent-danger)' }}>{diet.macros.protein}g</div>
-                        </div>
-                        <div className="text-center flex-grow-1 border-start border-end border-secondary border-opacity-25">
-                          <div className="small fw-bold text-white mb-1" style={{ fontSize: '0.7rem' }}>Carbs</div>
-                          <div className="h5 mb-0 fw-bold text-primary">{diet.macros.carbs}g</div>
-                        </div>
-                        <div className="text-center flex-grow-1">
-                          <div className="small fw-bold text-white mb-1" style={{ fontSize: '0.7rem' }}>Fat</div>
-                          <div className="h5 mb-0 fw-bold" style={{ color: 'var(--accent-warn)' }}>{diet.macros.fat}g</div>
-                        </div>
-                        </div>
-                      <ProgressBar style={{ height: '8px', backgroundColor: 'rgba(255,255,255,0.1)' }}>
-                        <ProgressBar now={30} key={1} className="bg-vibrant-danger" />
-                        <ProgressBar now={40} key={2} className="bg-primary" />
-                        <ProgressBar now={30} key={3} className="bg-vibrant-warning" />
-                      </ProgressBar>
+                  <Card className="shadow-sm border-0 h-100 p-3 glass-panel">
+                    <Card.Body className="d-flex align-items-center p-0">
+                      {(() => {
+                        const pCal = diet.macros.protein * 4;
+                        const cCal = diet.macros.carbs * 4;
+                        const fCal = diet.macros.fat * 9;
+                        const totalCal = pCal + cCal + fCal || 1;
+                        
+                        const pPct = pCal / totalCal;
+                        const cPct = cCal / totalCal;
+                        const fPct = fCal / totalCal;
+
+                        // Calculate SVG path for pie slices
+                        let cumulativePct = 0;
+                        const getCoordinatesForPercent = (percent: number) => {
+                          const x = Math.cos(2 * Math.PI * percent);
+                          const y = Math.sin(2 * Math.PI * percent);
+                          return [x, y];
+                        };
+
+                        const createPath = (percent: number, color: string) => {
+                          if (percent >= 1) return <circle cx="0" cy="0" r="1" fill={color} />;
+                          if (percent <= 0) return null;
+                          const [startX, startY] = getCoordinatesForPercent(cumulativePct);
+                          cumulativePct += percent;
+                          const [endX, endY] = getCoordinatesForPercent(cumulativePct);
+                          const largeArcFlag = percent > 0.5 ? 1 : 0;
+                          const pathData = [
+                            `M ${startX} ${startY}`,
+                            `A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY}`,
+                            `L 0 0`,
+                          ].join(' ');
+                          return <path d={pathData} fill={color} />;
+                        };
+
+                        return (
+                          <Row className="w-100 g-0 align-items-center">
+                            <Col xs={5} className="d-flex flex-column gap-3 border-end border-secondary border-opacity-10 py-1">
+                              <div className="ps-1">
+                                <div className="small fw-bold text-white-50 text-uppercase tracking-wider mb-1" style={{ fontSize: '0.6rem' }}>Protein</div>
+                                <div className="h5 mb-0 fw-bold" style={{ color: 'var(--accent-danger)' }}>{diet.macros.protein}g</div>
+                              </div>
+                              <div className="ps-1">
+                                <div className="small fw-bold text-white-50 text-uppercase tracking-wider mb-1" style={{ fontSize: '0.6rem' }}>Carbs</div>
+                                <div className="h5 mb-0 fw-bold text-primary">{diet.macros.carbs}g</div>
+                              </div>
+                              <div className="ps-1">
+                                <div className="small fw-bold text-white-50 text-uppercase tracking-wider mb-1" style={{ fontSize: '0.6rem' }}>Fat</div>
+                                <div className="h5 mb-0 fw-bold" style={{ color: 'var(--accent-warn)' }}>{diet.macros.fat}g</div>
+                              </div>
+                            </Col>
+                            <Col xs={7} className="d-flex justify-content-center align-items-center p-2">
+                              <div style={{ width: '100px', height: '100px', filter: 'drop-shadow(0 0 8px rgba(0,0,0,0.5))' }}>
+                                <svg viewBox="-1 -1 2 2" style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}>
+                                  {createPath(pPct, '#ff3131')}
+                                  {createPath(cPct, '#3d9bff')}
+                                  {createPath(fPct, '#ffea00')}
+                                </svg>
+                              </div>
+                            </Col>
+                          </Row>
+                        );
+                      })()}
                     </Card.Body>
                   </Card>
                 </Col>

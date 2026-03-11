@@ -7,7 +7,7 @@
   --bg-card-hover: #1a1a1a;
   --accent-primary: #3d9bff; 
   --accent-secondary: #00ff41; 
-  --accent-warn: #ffdf00; 
+  --accent-warn: #ffff00; 
   --accent-danger: #ff3131; 
   --text-primary: #ffffff;
   --text-secondary: #d1d5db; 
@@ -91,9 +91,10 @@ hr { border-color: var(--border-color) !important; margin: 2rem 0; }
 
 .nutrient-progress { height: 8px !important; background-color: rgba(255, 255, 255, 0.05) !important; border-radius: 10px; overflow: hidden; margin-top: 4px; }
 /* ATOMIC VIBRANT OVERRIDES */
-.bg-vibrant-success { background-color: #00ff41 !important; box-shadow: 0 0 10px rgba(0, 255, 65, 0.3) !important; }
-.bg-vibrant-warning { background-color: #ffdf00 !important; box-shadow: 0 0 10px rgba(255, 223, 0, 0.3) !important; }
-.bg-vibrant-danger { background-color: #ff3131 !important; box-shadow: 0 0 10px rgba(255, 49, 49, 0.3) !important; }
+.bg-vibrant-primary { background-color: #3d9bff !important; }
+.bg-vibrant-success { background-color: #00ff41 !important; }
+.bg-vibrant-warning { background-color: #ffff00 !important; }
+.bg-vibrant-danger { background-color: #ff3131 !important; }
 
 .nutrient-progress .progress-bar { transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
 
