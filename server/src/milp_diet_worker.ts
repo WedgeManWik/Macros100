@@ -5,6 +5,7 @@ import { Food } from './types.js';
 
 function log(msg: string) {
     console.log(`[MILP Worker] ${msg}`);
+    parentPort?.postMessage({ type: 'progress', gen: 0, accuracy: 0, telemetry: { trialInfo: msg } });
 }
 
 const { 
@@ -14,7 +15,7 @@ const {
 } = workerData;
 
 const modelType = details.algoModel || 'beast';
-log(`Worker starting in ${modelType.toUpperCase()} mode (LEAN & DEEP)...`);
+log(`Worker starting in ${modelType.toUpperCase()} mode (REBUST MAX LIMITS)...`);
 
 const foodMap = new Map<string, Food>();
 FOOD_DATABASE.forEach((f: Food) => foodMap.set(f.name, f));
@@ -23,8 +24,7 @@ log("Awaiting GLPK module initialization...");
 const GLPK_PROMISE = (glpkModule as any)();
 
 /**
- * NUTRIENT SCORING:
- * Sum of percentages capped at 1.0 (100%) per nutrient.
+ * Granular Saturation Score (Capped at 100% per nutrient)
  */
 function calculateNutrientScore(totals: any) {
     let score = 0;
@@ -36,9 +36,6 @@ function calculateNutrientScore(totals: any) {
     return score;
 }
 
-/**
- * Extract totals from solver results
- */
 function getTotalsFromVars(vars: any, pool: Food[]) {
     const totals: any = { energy: 0, protein: 0, carbs: 0, fat: 0 };
     Object.keys(nutrientConfig).forEach(k => totals[k] = 0);
@@ -76,6 +73,13 @@ async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number) {
         vars.push({ name: `${m}_ex`, lb: 0, ub: 1000, type: glp.GLP_DB });
         objectiveVars.push({ name: `${m}_def`, coef: -1000000000 });
         objectiveVars.push({ name: `${m}_ex`, coef: -1000000000 });
+    });
+
+    essentialKeys.forEach((k: string) => {
+        if (nutrientConfig[k].max) {
+            vars.push({ name: `max_slack_${k}`, lb: 0, ub: 1000000, type: glp.GLP_DB });
+            objectiveVars.push({ name: `max_slack_${k}`, coef: -1000000000 });
+        }
     });
 
     // --- 2. NUTRIENT VARIABLES (0-100%) ---
@@ -137,10 +141,25 @@ async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number) {
             const val = (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0));
             return { name: `f_${i}`, coef: val / (config.target || 1) };
         });
-        constraints.push({ name: `link_cov_${k}`, vars: [...foodCoeffs, { name: `cov_${k}`, coef: -1 }], bnds: { type: glp.GLP_LO, lb: 0, ub: 0 } });
-        constraints.push({ name: `link_min_${k}`, vars: [{ name: 'min_coverage', coef: 1 }, { name: `cov_${k}`, coef: -1 }], bnds: { type: glp.GLP_UP, lb: 0, ub: 0 } });
+        constraints.push({
+            name: `link_cov_${k}`,
+            vars: [...foodCoeffs, { name: `cov_${k}`, coef: -1 }],
+            bnds: { type: glp.GLP_LO, lb: 0, ub: 0 }
+        });
+        constraints.push({
+            name: `link_min_${k}`,
+            vars: [{ name: 'min_coverage', coef: 1 }, { name: `cov_${k}`, coef: -1 }],
+            bnds: { type: glp.GLP_UP, lb: 0, ub: 0 }
+        });
         if (config.max) {
-            constraints.push({ name: `max_${k}`, vars: foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) })), bnds: { type: glp.GLP_UP, lb: 0, ub: config.max } });
+            constraints.push({
+                name: `max_${k}`,
+                vars: [...foods.map((f, i) => {
+                    const val = (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0));
+                    return { name: `f_${i}`, coef: val };
+                }), { name: `max_slack_${k}`, coef: -1 }],
+                bnds: { type: glp.GLP_UP, lb: 0, ub: config.max }
+            });
         }
     });
 
@@ -166,22 +185,10 @@ function evaluateDiet(genome: Record<string, number>) {
         totals.fat += r * f.fat;
         if (f.nutrients) for (const n in f.nutrients) if (totals[n] !== undefined) totals[n] += r * (f.nutrients[n] || 0);
     }
-    
-    // Saturation Score: Sum of percentages capped at 100%
     let totalPct = 0;
-    essentialKeys.forEach((k: string) => { 
-        const pct = (totals[k] / (nutrientConfig[k].target || 1));
-        totalPct += Math.min(1.0, pct);
-    });
-    
-    const saturationScore = Math.round((totalPct / essentialKeys.length) * 1000) / 10;
-
-    return { 
-        accuracy: saturationScore, 
-        totals, 
-        genome, 
-        score: totalPct 
-    };
+    essentialKeys.forEach((k: string) => { totalPct += Math.min(1.0, (totals[k] / (nutrientConfig[k].target || 1))); });
+    const accuracy = Math.round((totalPct / essentialKeys.length) * 1000) / 10;
+    return { accuracy, totals, genome, score: totalPct };
 }
 
 async function run() {
@@ -191,7 +198,6 @@ async function run() {
         olympian: { specs: 20, trials: 15000, subset: 40, refinements: 30, milpLimit: 30, timeout: 480000 },
         god: { specs: 25, trials: 40000, subset: 45, refinements: 40, milpLimit: 60, timeout: 900000 }
     };
-    
     const cfg = configs[modelType] || configs.beast;
 
     const totalTimeout = setTimeout(() => {
@@ -255,6 +261,22 @@ async function run() {
             }
         }
 
+        if (trials.length === 0) {
+            log("CRITICAL: All trials failed! Falling back to full liked pool LP...");
+            const fallbackRes = await solveGLPK(likedFoodsPool, false, 30);
+            if (fallbackRes.result.vars) {
+                const genome: Record<string, number> = {};
+                likedFoodsPool.forEach((f: Food, idx: number) => {
+                    const val = fallbackRes.result.vars[`f_${idx}`] || 0;
+                    if (val > 0.001) genome[f.name] = Math.round(val * 100);
+                });
+                const finalEval = evaluateDiet(genome);
+                clearTimeout(totalTimeout);
+                parentPort?.postMessage({ type: 'result', result: { genome: finalEval.genome, targetCalories, actualCalories: Math.round(finalEval.totals.energy), accuracy: finalEval.accuracy, macros: { protein: Math.round(finalEval.totals.protein), carbs: Math.round(finalEval.totals.carbs), fat: Math.round(finalEval.totals.fat) } } });
+                return;
+            }
+        }
+
         // 3. Take Top Finalists for full MILP Refinement
         trials.sort((a, b) => b.z - a.z);
         const finalists = trials.slice(0, cfg.refinements);
@@ -266,7 +288,7 @@ async function run() {
             const res = await solveGLPK(finalists[i].pool, true, cfg.milpLimit);
             if (res.result.vars) {
                 const genome: Record<string, number> = {};
-                finalists[i].pool.forEach((f, idx) => {
+                finalists[i].pool.forEach((f: Food, idx: number) => {
                     const val = res.result.vars[`f_${idx}`] || 0;
                     if (val > 0.001) genome[f.name] = Math.round(val * 100);
                 });
