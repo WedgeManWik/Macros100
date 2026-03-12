@@ -31,7 +31,7 @@ const details = {
     algoModel: 'god'
 };
 
-console.log("Starting God Mode Debug Simulation...");
+console.log("Starting God Mode Validation Simulation...");
 
 generateDietAsync(details, (msg) => {
     if (msg.done) {

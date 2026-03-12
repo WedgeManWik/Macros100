@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Container, Row, Col, Form, Button, Card, Alert, ProgressBar, Spinner } from 'react-bootstrap';
-import { Calculator, Utensils, Target, Activity, Heart, Info } from 'lucide-react';
+import { Calculator, Utensils, Target, Activity, Heart, Info, RotateCcw } from 'lucide-react';
 
 interface Food {
   name: string;
@@ -56,8 +56,12 @@ const DietPlanner = () => {
     calorieOffset: 0,
     targetCalories: 2111,
     customMaxAmounts: {} as Record<string, number>,
-    algoModel: 'beast' as 'beast' | 'titan' | 'olympian' | 'god'
+    algoModel: 'beast' as 'beast' | 'titan' | 'olympian' | 'god',
+    advancedSettings: false,
+    customRDAs: {} as Record<string, { target?: number, max?: number }>
   });
+
+  const [showRDAModal, setShowRDAModal] = useState(false);
 
   const getGoalFromOffset = (offset: number) => {
     if (offset <= -500) return 'fast-lose';
@@ -262,6 +266,96 @@ const DietPlanner = () => {
     }));
   };
 
+  const updateCustomRDA = (key: string, field: 'target' | 'max', value: number | undefined) => {
+    setFormData(prev => ({
+      ...prev,
+      customRDAs: {
+        ...prev.customRDAs,
+        [key]: {
+          ...(prev.customRDAs[key] || {}),
+          [field]: value
+        }
+      }
+    }));
+  };
+
+  const revertNutrient = (key: string) => {
+    setFormData(prev => {
+      const updated = { ...prev.customRDAs };
+      delete updated[key];
+      return { ...prev, customRDAs: updated };
+    });
+  };
+
+  const getDefaultNutrientConfig = (key: string) => {
+    const isMale = formData.gender === 'male';
+    const weight = formData.weight;
+    const targetCals = formData.targetCalories;
+    
+    // Logic mirrored from nutrition.ts
+    const configs: Record<string, { target: number, max: number }> = {
+        energy: { target: targetCals, max: targetCals + 50 },
+        water: { target: isMale ? 3700 : 2700, max: 10000 },
+        fiber: { target: isMale ? 38 : 25, max: 100 },
+        sugars: { target: 50, max: 100 },
+        omega3: { target: isMale ? 1.6 : 1.1, max: 10 },
+        omega6: { target: isMale ? 17 : 12, max: 40 },
+        cholesterol: { target: 300, max: 600 },
+        b1: { target: isMale ? 1.2 : 1.1, max: 100 },
+        b2: { target: isMale ? 1.3 : 1.1, max: 100 },
+        b3: { target: isMale ? 16 : 14, max: 35 },
+        b5: { target: 5, max: 100 },
+        b6: { target: 1.7, max: 100 },
+        b12: { target: 2.4, max: 100 },
+        folate: { target: 400, max: 1000 },
+        a: { target: isMale ? 900 : 700, max: 3000 },
+        c: { target: isMale ? 90 : 75, max: 2000 },
+        d: { target: 20, max: 100 },
+        e: { target: 15, max: 1000 },
+        k: { target: isMale ? 120 : 90, max: 1000 },
+        calcium: { target: 1000, max: 2500 },
+        copper: { target: 0.9, max: 10 },
+        iron: { target: isMale ? 8 : 18, max: 45 },
+        magnesium: { target: isMale ? 420 : 320, max: 1000 },
+        manganese: { target: isMale ? 2.3 : 1.8, max: 11 },
+        phosphorus: { target: 700, max: 4000 },
+        potassium: { target: isMale ? 3400 : 2600, max: 10000 },
+        selenium: { target: 55, max: 400 },
+        sodium: { target: 2300, max: 3000 },
+        zinc: { target: isMale ? 11 : 8, max: 40 },
+        cystine: { target: 500, max: 5000 },
+        histidine: { target: 700, max: 5000 },
+        isoleucine: { target: 1400, max: 10000 },
+        leucine: { target: 2700, max: 20000 },
+        lysine: { target: 2100, max: 15000 },
+        methionine: { target: 700, max: 5000 },
+        phenylalanine: { target: 1100, max: 10000 },
+        threonine: { target: 1000, max: 10000 },
+        tryptophan: { target: 280, max: 2000 },
+        tyrosine: { target: 800, max: 10000 },
+        valine: { target: 1600, max: 12000 }
+    };
+
+    if (configs[key]) return configs[key];
+    
+    // Macro fallbacks (approximate for display)
+    if (key === 'protein') return { target: 2.2 * weight, max: 4.4 * weight };
+    if (key === 'carbs') return { target: 300, max: 600 };
+    if (key === 'fat') return { target: 70, max: 140 };
+    if (key.includes('fat')) return { target: targetCals * 0.1 / 9, max: targetCals * 0.15 / 9 };
+
+    return { target: 0, max: 0 };
+  };
+
+  const nutrientGroups = [ 
+    { title: "General", keys: ["energy", "water", "caffeine", "alcohol"] },
+    { title: "Carbohydrates", keys: ["fiber", "sugars"] },
+    { title: "Lipids", keys: ["cholesterol", "fatMono", "fatPoly", "omega3", "omega6", "fatSat", "fatTrans"] },
+    { title: "Protein (Amino Acids)", keys: ["cystine", "histidine", "isoleucine", "leucine", "lysine", "methionine", "phenylalanine", "threonine", "tryptophan", "tyrosine", "valine"] },
+    { title: "Vitamins", keys: ["b1", "b2", "b3", "b5", "b6", "b12", "folate", "a", "c", "e", "k"] },
+    { title: "Minerals", keys: ["calcium", "copper", "iron", "magnesium", "manganese", "phosphorus", "potassium", "selenium", "sodium", "zinc"] }
+  ];
+
   const [foodSearch, setFoodSearch] = useState('');
   const [showFoodModal, setShowFoodModal] = useState(false);
 
@@ -417,6 +511,79 @@ const DietPlanner = () => {
             </div>
             <div className="mt-4 text-center">
                 <Button variant="primary" size="lg" className="px-5" onClick={() => setShowFoodModal(false)}>Save & Close</Button>
+            </div>
+        </div>
+      </div>
+
+      {/* CUSTOM RDAs MODAL */}
+      <div className={`modal-blur-overlay ${showRDAModal ? 'active' : ''}`} />
+      <div className={`custom-modal-container ${showRDAModal ? 'active' : ''}`} onClick={() => setShowRDAModal(false)}>
+        <div className="custom-modal-content glass-panel p-4" onClick={e => e.stopPropagation()} style={{ width: '80%', height: '80%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <h2 className="h3 mb-0 fw-bold d-flex align-items-center">
+                    <Activity className="me-2 text-info" size={28} /> Custom RDAs & Upper Limits
+                </h2>
+                <Button variant="outline-light" className="rounded-circle border-0" onClick={() => setShowRDAModal(false)}>✕</Button>
+            </div>
+
+            <div className="flex-grow-1 overflow-y-auto pr-3 custom-scrollbar">
+                <Alert variant="info" className="mb-4 bg-opacity-10 border-info text-info">
+                    Leave fields empty to use standard gender-specific RDAs.
+                </Alert>
+                
+                {nutrientGroups.map(group => (
+                    <div key={group.title} className="mb-5">
+                        <h5 className="text-uppercase fw-bold text-muted mb-4 pb-2 border-bottom" style={{ fontSize: '0.8rem', letterSpacing: '0.15em' }}>{group.title}</h5>
+                        <Row className="g-4">
+                            {group.keys.map(key => (
+                                <Col md={6} lg={4} key={key}>
+                                    <div className="p-3 rounded-3 border bg-light bg-opacity-5 position-relative">
+                                        <div className="d-flex justify-content-between align-items-center mb-2">
+                                            <div className="fw-bold text-capitalize" style={{ fontSize: '0.85rem' }}>
+                                                {key === 'fatMono' ? 'Monounsaturated Fat' : key === 'fatPoly' ? 'Polyunsaturated Fat' : key === 'fatSat' ? 'Saturated Fat' : key === 'fatTrans' ? 'Trans Fat' : key.replace(/([A-Z])/g, ' $1')}
+                                            </div>
+                                            {formData.customRDAs[key] && (
+                                                <Button 
+                                                    variant="link" 
+                                                    className="p-0 text-muted hover-text-primary" 
+                                                    onClick={() => revertNutrient(key)}
+                                                    title="Revert to standard"
+                                                >
+                                                    <RotateCcw size={14} />
+                                                </Button>
+                                            )}
+                                        </div>
+                                        <Row className="g-2">
+                                            <Col xs={6}>
+                                                <Form.Label className="small text-muted mb-1">Target</Form.Label>
+                                                <Form.Control 
+                                                    size="sm" 
+                                                    type="number" 
+                                                    placeholder={getDefaultNutrientConfig(key).target.toString()}
+                                                    value={formData.customRDAs[key]?.target ?? ''} 
+                                                    onChange={(e) => updateCustomRDA(key, 'target', e.target.value ? parseFloat(e.target.value) : undefined)} 
+                                                />
+                                            </Col>
+                                            <Col xs={6}>
+                                                <Form.Label className="small text-muted mb-1">Max Limit</Form.Label>
+                                                <Form.Control 
+                                                    size="sm" 
+                                                    type="number" 
+                                                    placeholder={getDefaultNutrientConfig(key).max.toString()}
+                                                    value={formData.customRDAs[key]?.max ?? ''} 
+                                                    onChange={(e) => updateCustomRDA(key, 'max', e.target.value ? parseFloat(e.target.value) : undefined)} 
+                                                />
+                                            </Col>
+                                        </Row>
+                                    </div>
+                                </Col>
+                            ))}
+                        </Row>
+                    </div>
+                ))}
+            </div>
+            <div className="mt-4 text-center">
+                <Button variant="primary" size="lg" className="px-5" onClick={() => setShowRDAModal(false)}>Save Changes</Button>
             </div>
         </div>
       </div>
@@ -614,6 +781,31 @@ const DietPlanner = () => {
                       Higher modes run more simulations to find better nutrient coverage but take longer to complete.
                     </Form.Text>
                   </div>
+
+                  <hr className="my-4" />
+
+                  <h3 className="h5 mb-3 d-flex align-items-center justify-content-between fw-bold">
+                    <span className="d-flex align-items-center"><Activity className="me-2 text-info" size={20} /> Advanced Settings</span>
+                    <Form.Check 
+                      type="switch"
+                      id="advanced-settings-switch"
+                      label={<small className="text-muted" style={{ fontSize: '0.7rem' }}>Enable</small>}
+                      checked={formData.advancedSettings}
+                      onChange={(e) => setFormData(prev => ({ ...prev, advancedSettings: e.target.checked }))}
+                    />
+                  </h3>
+
+                  {formData.advancedSettings && (
+                    <div className="fade-in">
+                      <Button 
+                        variant="outline-info" 
+                        className="w-100 py-2 d-flex align-items-center justify-content-center fw-bold mb-3"
+                        onClick={() => setShowRDAModal(true)}
+                      >
+                        <Utensils className="me-2" size={18} /> Custom RDAs & Upper Limits
+                      </Button>
+                    </div>
+                  )}
                 </Form>
               </Card.Body>
             </Card>

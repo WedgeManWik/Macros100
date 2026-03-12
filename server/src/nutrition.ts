@@ -100,6 +100,20 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
     valine: { target: 1600, essential: true, max: 12000 }
   };
 
+  // Merge custom RDAs/limits
+  if (details.customRDAs) {
+    Object.entries(details.customRDAs).forEach(([key, custom]: [string, any]) => {
+      if (nutrientConfig[key]) {
+        if (custom.target !== undefined && !isNaN(custom.target)) {
+          nutrientConfig[key].target = custom.target;
+        }
+        if (custom.max !== undefined && !isNaN(custom.max)) {
+          nutrientConfig[key].max = custom.max;
+        }
+      }
+    });
+  }
+
   const essentialKeys = Object.keys(nutrientConfig).filter(k => nutrientConfig[k].essential);
   const workerCount = 1; 
 
