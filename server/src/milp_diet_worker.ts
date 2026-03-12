@@ -13,8 +13,8 @@ const {
   essentialKeys, nutrientNames, nutrientConfig 
 } = workerData;
 
-const modelType = details.algoModel || 'titan';
-log(`Worker starting in ${modelType.toUpperCase()} mode...`);
+const modelType = details.algoModel || 'beast';
+log(`Worker starting in ${modelType.toUpperCase()} mode (LEAN & DEEP)...`);
 
 const foodMap = new Map<string, Food>();
 FOOD_DATABASE.forEach((f: Food) => foodMap.set(f.name, f));
@@ -78,7 +78,7 @@ async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number) {
         objectiveVars.push({ name: `${m}_ex`, coef: -1000000000 });
     });
 
-    // --- 2. NUTRIENT VARIABLES ---
+    // --- 2. NUTRIENT VARIABLES (0-100%) ---
     essentialKeys.forEach((k: string) => {
         vars.push({ name: `cov_${k}`, lb: 0, ub: 1.0, type: glp.GLP_DB });
         objectiveVars.push({ name: `cov_${k}`, coef: 100000 }); 
@@ -172,15 +172,16 @@ function evaluateDiet(genome: Record<string, number>) {
 }
 
 async function run() {
-    // Mode Configuration
+    // LEAN & DEEP Strategy: Moderate pool sizes (30-45) to ensure solver speed and accuracy,
+    // but massive trial counts to explore more combinations.
     const configs: Record<string, any> = {
-        beast: { specs: 15, trials: 1000, subset: 35, refinements: 15, milpLimit: 10, timeout: 120000 },
-        titan: { specs: 25, trials: 5000, subset: 50, refinements: 40, milpLimit: 15, timeout: 240000 },
-        olympian: { specs: 35, trials: 10000, subset: 60, refinements: 60, milpLimit: 20, timeout: 480000 },
-        god: { specs: 50, trials: 20000, subset: 80, refinements: 100, milpLimit: 30, timeout: 900000 }
+        beast: { specs: 10, trials: 1000, subset: 30, refinements: 10, milpLimit: 10, timeout: 120000 },
+        titan: { specs: 15, trials: 5000, subset: 35, refinements: 20, milpLimit: 15, timeout: 240000 },
+        olympian: { specs: 20, trials: 15000, subset: 40, refinements: 30, milpLimit: 30, timeout: 480000 },
+        god: { specs: 25, trials: 40000, subset: 45, refinements: 40, milpLimit: 60, timeout: 900000 }
     };
     
-    const cfg = configs[modelType] || configs.titan;
+    const cfg = configs[modelType] || configs.beast;
 
     const totalTimeout = setTimeout(() => {
         log("Worker Global Safety Timeout Triggered!");
@@ -205,7 +206,7 @@ async function run() {
         
         log(`User Selection Pool: ${likedFoodsPool.length} foods.`);
 
-        // 1. Identify Specialist Pool
+        // 1. Identify Specialist Pool (Keep it small to maintain trial diversity)
         parentPort?.postMessage({ type: 'progress', gen: 2, accuracy: 0, telemetry: { trialInfo: "Ranking User Selections..." } });
         
         const specialistsPool: Food[] = [];
@@ -244,6 +245,8 @@ async function run() {
             
             const res = await solveGLPK(trialPool, false, 5);
             if (res.result.status === 5 || res.result.status === 2) {
+                // IMPORTANT: trials are ranked by 'z' which prioritizes macro feasibility first,
+                // but then uses nutrient coverage as the differentiator.
                 trials.push({ pool: trialPool, z: res.result.z });
             }
 
