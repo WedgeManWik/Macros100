@@ -26,7 +26,7 @@ interface DietPlan {
     amount: number;
     calories: number;
   }>>;
-  micronutrients: Record<string, { amount: number; total: number; unit: string; sources: { food: string; amount: number }[] }>;
+  micronutrients: Record<string, { amount: number; total: number; unit: string; sources: { food: string; amount: number }[]; max?: number }>;
 }
 
 const DietPlanner = () => {
@@ -860,19 +860,55 @@ const DietPlanner = () => {
                               const data = diet.micronutrients[name];
                               if (!data) return null;
                               const pct = Math.round(data.total || 0);
+                              const isOverMax = data.max && data.amount > data.max;
+                              
+                              let statusClass = 'text-danger-vibrant';
+                              let variant = 'danger';
+                              
+                              if (isOverMax) {
+                                statusClass = ''; // Clear classes to use inline style
+                                variant = 'warning';
+                              } else if (pct >= 95) {
+                                statusClass = 'text-success-vibrant';
+                                variant = 'success';
+                              } else if (pct >= 70) {
+                                statusClass = 'text-warning-vibrant';
+                                variant = 'warning';
+                              }
+
                               return (
                                 <Col md={6} xl={4} key={name}>
                                   <div className="mb-1 d-flex justify-content-between align-items-center">
                                     <span className="text-uppercase fw-bold text-white opacity-75" style={{ fontSize: '0.65rem', letterSpacing: '0.05em' }}>
                                       {name === 'fatMono' ? 'Monounsaturated Fat' : name === 'fatPoly' ? 'Polyunsaturated Fat' : name === 'fatSat' ? 'Saturated Fat' : name === 'fatTrans' ? 'Trans Fat' : name === 'energy' ? 'Energy' : name.replace(/([A-Z])/g, ' $1')} 
                                     </span>
-                                    <span className={`small fw-bold ${pct >= 95 ? 'text-success-vibrant' : pct >= 70 ? 'text-warning-vibrant' : 'text-danger-vibrant'}`}>{(data.amount || 0).toFixed(1)}{data.unit} ({pct}%)</span>
+                                    <span className={`small fw-bold ${statusClass}`} style={isOverMax ? { color: '#ff8c00' } : {}}>
+                                      {(data.amount || 0).toFixed(1)}{data.unit} ({pct}%)
+                                    </span>
                                   </div>
-                                  <ProgressBar 
-                                    now={pct} 
-                                    variant={pct >= 95 ? 'success' : pct >= 70 ? 'warning' : 'danger'} 
-                                    className="nutrient-progress"
-                                  />
+                                  <div className="nutrient-progress-wrapper" style={{ position: 'relative' }}>
+                                    <ProgressBar 
+                                      now={pct} 
+                                      variant={isOverMax ? undefined : variant} 
+                                      className="nutrient-progress"
+                                      style={isOverMax ? { backgroundColor: 'rgba(255, 140, 0, 0.2)' } : {}}
+                                    />
+                                    {isOverMax && (
+                                      <div 
+                                        className="progress-bar" 
+                                        style={{ 
+                                          width: `${Math.min(pct, 100)}%`, 
+                                          backgroundColor: '#ff8c00',
+                                          position: 'absolute',
+                                          top: 0,
+                                          left: 0,
+                                          height: '100%',
+                                          borderRadius: '4px',
+                                          transition: 'width 0.6s ease'
+                                        }} 
+                                      />
+                                    )}
+                                  </div>
                                 </Col>
                               );
                             })}
