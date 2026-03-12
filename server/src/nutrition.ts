@@ -277,13 +277,14 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
             }
         }
 
-        let met = 0;
+        let totalSaturation = 0;
         essentialKeys.forEach(k => {
-            if (breakdown[k].total >= 95) met++;
+            totalSaturation += Math.min(1.0, breakdown[k].total / 100);
         });
-        if (breakdown.water.total >= 95) met++;
+        // Include water in saturation calculation
+        totalSaturation += Math.min(1.0, breakdown.water.total / 100);
         
-        const finalAccuracy = Math.round((met / (essentialKeys.length + 1)) * 1000) / 10;
+        const finalAccuracy = Math.round((totalSaturation / (essentialKeys.length + 1)) * 1000) / 10;
 
         console.log("Nutrition: sending final progress update (done: true)");
         onProgress({ done: true, result: { targetCalories: Math.round(targetCalories), actualCalories: Math.round(breakdown.energy.amount), accuracy: finalAccuracy, macros: { protein: Math.round(breakdown.protein.amount), carbs: Math.round(breakdown.carbs.amount), fat: Math.round(breakdown.fat.amount) }, sectionedIngredients, micronutrients: breakdown } });

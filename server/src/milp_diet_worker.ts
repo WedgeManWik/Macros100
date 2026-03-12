@@ -166,14 +166,25 @@ function evaluateDiet(genome: Record<string, number>) {
         totals.fat += r * f.fat;
         if (f.nutrients) for (const n in f.nutrients) if (totals[n] !== undefined) totals[n] += r * (f.nutrients[n] || 0);
     }
-    let metCount = 0;
-    essentialKeys.forEach((k: string) => { if (totals[k] / (nutrientConfig[k].target || 1) >= 0.95) metCount++; });
-    return { accuracy: Math.round((metCount / essentialKeys.length) * 1000) / 10, totals, genome, score: calculateNutrientScore(totals) };
+    
+    // Saturation Score: Sum of percentages capped at 100%
+    let totalPct = 0;
+    essentialKeys.forEach((k: string) => { 
+        const pct = (totals[k] / (nutrientConfig[k].target || 1));
+        totalPct += Math.min(1.0, pct);
+    });
+    
+    const saturationScore = Math.round((totalPct / essentialKeys.length) * 1000) / 10;
+
+    return { 
+        accuracy: saturationScore, 
+        totals, 
+        genome, 
+        score: totalPct 
+    };
 }
 
 async function run() {
-    // LEAN & DEEP Strategy: Moderate pool sizes (30-45) to ensure solver speed and accuracy,
-    // but massive trial counts to explore more combinations.
     const configs: Record<string, any> = {
         beast: { specs: 10, trials: 1000, subset: 30, refinements: 10, milpLimit: 10, timeout: 120000 },
         titan: { specs: 15, trials: 5000, subset: 35, refinements: 20, milpLimit: 15, timeout: 240000 },
@@ -197,21 +208,16 @@ async function run() {
             return liked.some((l: string) => {
                 const lLower = l.toLowerCase();
                 if (nameLower === lLower) return true;
-                const escapedL = lLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const regex = new RegExp(`\\b${escapedL}\\b`, 'i');
+                const regex = new RegExp(`\\b${lLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
                 return regex.test(nameLower);
             });
         });
         const mustHaveFoods = FOOD_DATABASE.filter((f: Food) => (details.mustHaveFoods || []).some((m: any) => m.name === f.name));
         
-        log(`User Selection Pool: ${likedFoodsPool.length} foods.`);
-
-        // 1. Identify Specialist Pool (Keep it small to maintain trial diversity)
+        // 1. Identify Specialist Pool
         parentPort?.postMessage({ type: 'progress', gen: 2, accuracy: 0, telemetry: { trialInfo: "Ranking User Selections..." } });
-        
         const specialistsPool: Food[] = [];
         const seenSpecialists = new Set<string>();
-        
         essentialKeys.forEach((k: string) => {
             const sorted = [...likedFoodsPool].sort((a, b) => {
                 const getVal = (food: Food) => {
@@ -234,22 +240,16 @@ async function run() {
         // 2. Randomized LP Trials
         const trials: { pool: Food[], z: number }[] = [];
         const subsetSize = Math.min(cfg.subset, specialistsPool.length); 
-        
         parentPort?.postMessage({ type: 'progress', gen: 5, accuracy: 0, telemetry: { trialInfo: `Testing ${cfg.trials} Combinations...` } });
-
         const trialInterval = Math.max(1, Math.floor(cfg.trials / 20));
         for (let i = 0; i < cfg.trials; i++) {
             const shuffled = [...specialistsPool].sort(() => 0.5 - Math.random());
             const randomSubset = shuffled.slice(0, subsetSize);
             const trialPool = Array.from(new Set([...mustHaveFoods, ...randomSubset]));
-            
             const res = await solveGLPK(trialPool, false, 5);
             if (res.result.status === 5 || res.result.status === 2) {
-                // IMPORTANT: trials are ranked by 'z' which prioritizes macro feasibility first,
-                // but then uses nutrient coverage as the differentiator.
                 trials.push({ pool: trialPool, z: res.result.z });
             }
-
             if (i % trialInterval === 0) {
                 parentPort?.postMessage({ type: 'progress', gen: 5 + (i/cfg.trials * 40), accuracy: 0, telemetry: { trialInfo: `Analysing Combos ${i}/${cfg.trials}...` } });
             }
@@ -259,10 +259,10 @@ async function run() {
         trials.sort((a, b) => b.z - a.z);
         const finalists = trials.slice(0, cfg.refinements);
 
-        // 4. Run MILP Refinements
-        const results: any[] = [];
+        // 4. Run MILP Refinements and track the absolute best
+        let bestOverall: any = null;
         for (let i = 0; i < finalists.length; i++) {
-            parentPort?.postMessage({ type: 'progress', gen: 45 + (i/finalists.length * 50), accuracy: 0, telemetry: { trialInfo: `Optimizing Top Combo ${i+1}/${finalists.length}...` } });
+            parentPort?.postMessage({ type: 'progress', gen: 45 + (i/finalists.length * 50), accuracy: bestOverall ? bestOverall.accuracy : 0, telemetry: { trialInfo: `Optimizing Top Combo ${i+1}/${finalists.length}...` } });
             const res = await solveGLPK(finalists[i].pool, true, cfg.milpLimit);
             if (res.result.vars) {
                 const genome: Record<string, number> = {};
@@ -270,23 +270,24 @@ async function run() {
                     const val = res.result.vars[`f_${idx}`] || 0;
                     if (val > 0.001) genome[f.name] = Math.round(val * 100);
                 });
-                results.push(evaluateDiet(genome));
+                const evaluation = evaluateDiet(genome);
+                if (!bestOverall || evaluation.score > bestOverall.score) {
+                    bestOverall = evaluation;
+                }
             }
         }
 
-        // 5. Final Best Pick
-        results.sort((a, b) => b.score - a.score);
-        const bestEval = results[0] || evaluateDiet({});
+        const finalEval = bestOverall || evaluateDiet({});
 
         clearTimeout(totalTimeout);
         parentPort?.postMessage({ 
             type: 'result', 
             result: {
-                genome: bestEval.genome,
+                genome: finalEval.genome,
                 targetCalories,
-                actualCalories: Math.round(bestEval.totals.energy),
-                accuracy: bestEval.accuracy,
-                macros: { protein: Math.round(bestEval.totals.protein), carbs: Math.round(bestEval.totals.carbs), fat: Math.round(bestEval.totals.fat) }
+                actualCalories: Math.round(finalEval.totals.energy),
+                accuracy: finalEval.accuracy,
+                macros: { protein: Math.round(finalEval.totals.protein), carbs: Math.round(finalEval.totals.carbs), fat: Math.round(finalEval.totals.fat) }
             }
         });
     } catch (err: any) {
