@@ -17,6 +17,12 @@ const {
 const modelType = details.algoModel || 'beast';
 log(`Worker starting in ${modelType.toUpperCase()} mode (REBUST MAX LIMITS)...`);
 
+// Debug custom RDAs
+const customCount = Object.keys(details.customRDAs || {}).length;
+if (customCount > 0) {
+    log(`Received ${customCount} custom RDAs/Limits from details.`);
+}
+
 const foodMap = new Map<string, Food>();
 FOOD_DATABASE.forEach((f: Food) => foodMap.set(f.name, f));
 

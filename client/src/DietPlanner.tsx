@@ -523,7 +523,22 @@ const DietPlanner = () => {
                 <h2 className="h3 mb-0 fw-bold d-flex align-items-center">
                     <Activity className="me-2 text-info" size={28} /> Custom RDAs & Upper Limits
                 </h2>
-                <Button variant="outline-light" className="rounded-circle border-0" onClick={() => setShowRDAModal(false)}>✕</Button>
+                <div className="d-flex align-items-center gap-3">
+                    <Button 
+                        variant="outline-danger" 
+                        size="sm" 
+                        className="fw-bold d-flex align-items-center"
+                        disabled={Object.keys(formData.customRDAs).length === 0}
+                        onClick={() => {
+                            if (window.confirm("Are you sure you want to reset ALL nutrients back to standard values?")) {
+                                setFormData(prev => ({ ...prev, customRDAs: {} }));
+                            }
+                        }}
+                    >
+                        <RotateCcw size={14} className="me-2" /> Reset All to Standard
+                    </Button>
+                    <Button variant="outline-light" className="rounded-circle border-0" onClick={() => setShowRDAModal(false)}>✕</Button>
+                </div>
             </div>
 
             <div className="flex-grow-1 overflow-y-auto pr-3 custom-scrollbar">

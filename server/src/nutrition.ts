@@ -114,7 +114,15 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
     });
   }
 
-  const essentialKeys = Object.keys(nutrientConfig).filter(k => nutrientConfig[k].essential);
+  // Determine essential keys dynamically
+  const essentialKeys = Object.keys(nutrientConfig).filter(k => {
+    const isDefaultEssential = nutrientConfig[k].essential;
+    const hasCustomTarget = details.customRDAs?.[k]?.target !== undefined && !isNaN(details.customRDAs[k].target);
+    const hasCustomMax = details.customRDAs?.[k]?.max !== undefined && !isNaN(details.customRDAs[k].max);
+    
+    // A nutrient is prioritized if it's default essential OR has user-provided custom settings
+    return isDefaultEssential || hasCustomTarget || hasCustomMax;
+  });
   const workerCount = 1; 
 
   let activeWorkers: Worker[] = [];
