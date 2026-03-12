@@ -55,7 +55,8 @@ const DietPlanner = () => {
     maintenanceCalories: 2111,
     calorieOffset: 0,
     targetCalories: 2111,
-    customMaxAmounts: {} as Record<string, number>
+    customMaxAmounts: {} as Record<string, number>,
+    algoModel: 'beast' as 'beast' | 'titan' | 'olympian' | 'god'
   });
 
   const getGoalFromOffset = (offset: number) => {
@@ -221,7 +222,7 @@ const DietPlanner = () => {
 
   const handleInputChange = (e: React.ChangeEvent<any>) => {
     const { name, value } = e.target;
-    let val = name === 'gender' || name === 'goal' ? value : parseFloat(value);
+    let val = (name === 'gender' || name === 'goal' || name === 'algoModel') ? value : parseFloat(value);
     
     // Handle empty/invalid numeric inputs
     if (typeof val === 'number' && isNaN(val)) {
@@ -596,6 +597,23 @@ const DietPlanner = () => {
                       );
                     })}
                   </div>
+
+                  <hr className="my-4" />
+
+                  <h3 className="h5 mb-3 d-flex align-items-center fw-bold">
+                    <Activity className="me-2 text-info" size={20} /> Optimization Model
+                  </h3>
+                  <div className="mb-3">
+                    <Form.Select name="algoModel" value={formData.algoModel} onChange={handleInputChange}>
+                      <option value="beast">Beast Mode (Fast, 1000 trials)</option>
+                      <option value="titan">Titan Mode (Balanced, 5000 trials)</option>
+                      <option value="olympian">Olympian Mode (Deep, 10000 trials)</option>
+                      <option value="god">God Mode (Exhaustive, 20000 trials)</option>
+                    </Form.Select>
+                    <Form.Text className="text-muted small mt-2 d-block">
+                      Higher modes run more simulations to find better nutrient coverage but take longer to complete.
+                    </Form.Text>
+                  </div>
                 </Form>
               </Card.Body>
             </Card>
@@ -629,8 +647,8 @@ const DietPlanner = () => {
               <p className="text-muted mb-2">Phase: <span className="text-primary fw-bold">{progress.generation < 500 ? 'Nutrient Saturation' : progress.generation < 20000 ? 'Evolutionary Search' : 'Molecular Refinement'}</span></p>
               <p className="text-info fw-bold mb-5" style={{ letterSpacing: '0.1em' }}>{progress.telemetry.trialInfo || 'Trial 1/5'}</p>
               <div className="mx-auto my-4" style={{ maxWidth: '650px' }}>
-                <div className="d-flex justify-content-between text-muted small mb-2 fw-bold"><span>GENETIC OPTIMIZATION</span><span>{Math.round((progress.generation / 24000) * 100)}% COMPLETE</span></div>
-                <ProgressBar animated now={(progress.generation / 24000) * 100} className="mb-5 shadow-sm" style={{ height: '10px' }} />
+                <div className="d-flex justify-content-between text-muted small mb-2 fw-bold"><span>GENETIC OPTIMIZATION</span><span>{Math.round(progress.generation)}% COMPLETE</span></div>
+                <ProgressBar animated now={progress.generation} className="mb-5 shadow-sm" style={{ height: '10px' }} />
                 <Card className="telemetry-card shadow-lg text-start font-monospace mb-4" style={{ background: '#121212', border: '1px solid rgba(255,255,255,0.1)' }}>
                     <Card.Header className="bg-transparent border-secondary border-opacity-25 small text-uppercase text-info fw-bold py-3 px-4"><div className="d-flex align-items-center"><Activity size={16} className="me-2" />Real-time AI Telemetry</div></Card.Header>
                     <Card.Body className="p-4">

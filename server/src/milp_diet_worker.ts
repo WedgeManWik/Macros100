@@ -7,13 +7,14 @@ function log(msg: string) {
     console.log(`[MILP Worker] ${msg}`);
 }
 
-log("Worker process starting in TITAN MODE...");
-
 const { 
   FOOD_DATABASE, details, targetCalories, 
   proteinTarget, fatTarget, carbTarget, 
   essentialKeys, nutrientNames, nutrientConfig 
 } = workerData;
+
+const modelType = details.algoModel || 'titan';
+log(`Worker starting in ${modelType.toUpperCase()} mode...`);
 
 const foodMap = new Map<string, Food>();
 FOOD_DATABASE.forEach((f: Food) => foodMap.set(f.name, f));
@@ -58,7 +59,7 @@ function getTotalsFromVars(vars: any, pool: Food[]) {
     return totals;
 }
 
-async function solveGLPK(foods: Food[], isMILP: boolean) {
+async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number) {
     const glp = await GLPK_PROMISE;
     
     const vars: any[] = [];
@@ -147,7 +148,7 @@ async function solveGLPK(foods: Food[], isMILP: boolean) {
         name: 'DietPlanner',
         objective: { direction: glp.GLP_MAX, name: 'score', vars: objectiveVars },
         subjectTo: constraints, bounds: vars, binaries: binaries,
-        options: { presol: true, tmlim: 15 } // 15s per complex solve
+        options: { presol: true, tmlim: timeLimit }
     });
 }
 
@@ -171,12 +172,21 @@ function evaluateDiet(genome: Record<string, number>) {
 }
 
 async function run() {
-    log("Starting TITAN MODE (5000 Trials)...");
+    // Mode Configuration
+    const configs: Record<string, any> = {
+        beast: { specs: 15, trials: 1000, subset: 35, refinements: 15, milpLimit: 10, timeout: 120000 },
+        titan: { specs: 25, trials: 5000, subset: 50, refinements: 40, milpLimit: 15, timeout: 240000 },
+        olympian: { specs: 35, trials: 10000, subset: 60, refinements: 60, milpLimit: 20, timeout: 480000 },
+        god: { specs: 50, trials: 20000, subset: 80, refinements: 100, milpLimit: 30, timeout: 900000 }
+    };
+    
+    const cfg = configs[modelType] || configs.titan;
+
     const totalTimeout = setTimeout(() => {
         log("Worker Global Safety Timeout Triggered!");
         parentPort?.postMessage({ type: 'result', result: null });
         process.exit(1);
-    }, 240000); // 4 minutes
+    }, cfg.timeout);
 
     try {
         const likedFoodsPool = FOOD_DATABASE.filter((f: Food) => {
@@ -186,7 +196,8 @@ async function run() {
             return liked.some((l: string) => {
                 const lLower = l.toLowerCase();
                 if (nameLower === lLower) return true;
-                const regex = new RegExp(`\\b${lLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+                const escapedL = lLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`\\b${escapedL}\\b`, 'i');
                 return regex.test(nameLower);
             });
         });
@@ -195,7 +206,7 @@ async function run() {
         log(`User Selection Pool: ${likedFoodsPool.length} foods.`);
 
         // 1. Identify Specialist Pool
-        parentPort?.postMessage({ type: 'progress', gen: 2, accuracy: 0, telemetry: { trialInfo: "Deep Ranking User Selections..." } });
+        parentPort?.postMessage({ type: 'progress', gen: 2, accuracy: 0, telemetry: { trialInfo: "Ranking User Selections..." } });
         
         const specialistsPool: Food[] = [];
         const seenSpecialists = new Set<string>();
@@ -211,8 +222,7 @@ async function run() {
                 };
                 return (getVal(b) / (b.calories || 1)) - (getVal(a) / (a.calories || 1));
             });
-            // Take top 25 specialists per nutrient
-            for (let i = 0; i < 25; i++) {
+            for (let i = 0; i < cfg.specs; i++) {
                 if (sorted[i] && !seenSpecialists.has(sorted[i].name)) {
                     specialistsPool.push(sorted[i]);
                     seenSpecialists.add(sorted[i].name);
@@ -220,37 +230,37 @@ async function run() {
             }
         });
 
-        // 2. 5000 Randomized LP Trials
+        // 2. Randomized LP Trials
         const trials: { pool: Food[], z: number }[] = [];
-        const numTrials = 5000;
-        const subsetSize = Math.min(50, specialistsPool.length); 
+        const subsetSize = Math.min(cfg.subset, specialistsPool.length); 
         
-        parentPort?.postMessage({ type: 'progress', gen: 5, accuracy: 0, telemetry: { trialInfo: `Testing ${numTrials} Combinations...` } });
+        parentPort?.postMessage({ type: 'progress', gen: 5, accuracy: 0, telemetry: { trialInfo: `Testing ${cfg.trials} Combinations...` } });
 
-        for (let i = 0; i < numTrials; i++) {
+        const trialInterval = Math.max(1, Math.floor(cfg.trials / 20));
+        for (let i = 0; i < cfg.trials; i++) {
             const shuffled = [...specialistsPool].sort(() => 0.5 - Math.random());
             const randomSubset = shuffled.slice(0, subsetSize);
             const trialPool = Array.from(new Set([...mustHaveFoods, ...randomSubset]));
             
-            const res = await solveGLPK(trialPool, false);
+            const res = await solveGLPK(trialPool, false, 5);
             if (res.result.status === 5 || res.result.status === 2) {
                 trials.push({ pool: trialPool, z: res.result.z });
             }
 
-            if (i % 500 === 0) {
-                parentPort?.postMessage({ type: 'progress', gen: 5 + (i/125), accuracy: 0, telemetry: { trialInfo: `Combo Analysis ${i}/${numTrials}...` } });
+            if (i % trialInterval === 0) {
+                parentPort?.postMessage({ type: 'progress', gen: 5 + (i/cfg.trials * 40), accuracy: 0, telemetry: { trialInfo: `Analysing Combos ${i}/${cfg.trials}...` } });
             }
         }
 
-        // 3. Take Top 40 Finalists for full MILP Refinement
+        // 3. Take Top Finalists for full MILP Refinement
         trials.sort((a, b) => b.z - a.z);
-        const finalists = trials.slice(0, 40);
+        const finalists = trials.slice(0, cfg.refinements);
 
-        // 4. Run MILP on the top 40 finalists
+        // 4. Run MILP Refinements
         const results: any[] = [];
         for (let i = 0; i < finalists.length; i++) {
-            parentPort?.postMessage({ type: 'progress', gen: 45 + (i*1.25), accuracy: 0, telemetry: { trialInfo: `Final Refinement ${i+1}/${finalists.length}...` } });
-            const res = await solveGLPK(finalists[i].pool, true);
+            parentPort?.postMessage({ type: 'progress', gen: 45 + (i/finalists.length * 50), accuracy: 0, telemetry: { trialInfo: `Optimizing Top Combo ${i+1}/${finalists.length}...` } });
+            const res = await solveGLPK(finalists[i].pool, true, cfg.milpLimit);
             if (res.result.vars) {
                 const genome: Record<string, number> = {};
                 finalists[i].pool.forEach((f, idx) => {
