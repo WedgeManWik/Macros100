@@ -16,6 +16,12 @@ const nutrientNames: Record<string, string> = {
     cystine: 'Cystine', histidine: 'Histidine', isoleucine: 'Isoleucine', leucine: 'Leucine', lysine: 'Lysine', methionine: 'Methionine', phenylalanine: 'Phenylalanine', threonine: 'Threonine', tryptophan: 'Tryptophan', tyrosine: 'Tyrosine', valine: 'Valine'
 };
 
+// Pre-process foods to ensure caloric consistency
+const CONSISTENT_FOOD_DATABASE = FOOD_DATABASE.map((f: Food) => {
+    const recalculatedCals = (f.protein * 4) + (f.carbs * 4) + (f.fat * 9);
+    return { ...f, calories: recalculatedCals };
+});
+
 export function generateDietAsync(details: any, onProgress: (msg: any) => void) {
   let targetCalories: number;
   if (details.maintenanceCalories !== undefined && details.calorieOffset !== undefined) {

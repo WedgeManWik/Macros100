@@ -15,7 +15,7 @@ const {
 } = workerData;
 
 const modelType = details.algoModel || 'beast';
-log(`Worker starting in ${modelType.toUpperCase()} mode (STRICT MIN-AMOUNT)...`);
+log(`Worker starting in ${modelType.toUpperCase()} mode (HARD MACROS)...`);
 
 const foodMap = new Map<string, Food>();
 FOOD_DATABASE.forEach((f: Food) => foodMap.set(f.name, f));
@@ -34,29 +34,6 @@ function calculateNutrientScore(totals: any) {
         score += Math.min(1.0, pct);
     });
     return score;
-}
-
-/**
- * Checks if a genome respects ALL food boundaries (min/max)
- * Crucial for preventing LP "crumbs" from entering results.
- */
-function isValidGenome(genome: Record<string, number>) {
-    for (const [name, amt] of Object.entries(genome)) {
-        if (amt <= 0) continue;
-        const f = foodMap.get(name);
-        if (!f) continue;
-
-        const mustHave = details.mustHaveFoods?.find((m: any) => m.name === f.name);
-        const customMax = details.customMaxAmounts?.[f.name];
-        
-        const minVal = (mustHave ? (mustHave.min || f.minAmount || 0) : (f.minAmount || 0));
-        const maxVal = (mustHave && mustHave.max !== undefined) ? mustHave.max : 
-                     (customMax !== undefined ? customMax : (f.maxAmount || 10000));
-        
-        // Use a small epsilon for float comparison (0.1g)
-        if (amt < minVal - 0.1 || amt > maxVal + 0.1) return false;
-    }
-    return true;
 }
 
 function getTotalsFromVars(vars: any, pool: Food[]) {
@@ -81,25 +58,35 @@ function getTotalsFromVars(vars: any, pool: Food[]) {
 
 async function solveGLPK(foods: Food[], isMILP: boolean, weightMode: 'scout' | 'strict', timeLimit: number) {
     const glp = await GLPK_PROMISE;
+    
     const vars: any[] = [];
     const constraints: any[] = [];
     const binaries: string[] = [];
     const objectiveVars: any[] = [];
 
-    const calWeight = weightMode === 'strict' ? 1000000000000 : 10000000;
-    const macroWeight = weightMode === 'strict' ? 1000000000 : 1000000;
-    const nutrientWeight = 100000; 
-
+    // --- 1. SLACK VARIABLES (Only for non-strict or Scout mode) ---
+    // Calorie slack (Always present to prevent hard failure, but extreme penalty)
     vars.push({ name: 'cal_def', lb: 0, ub: 10000, type: glp.GLP_DB });
-    objectiveVars.push({ name: 'cal_def', coef: -calWeight });
+    objectiveVars.push({ name: 'cal_def', coef: -1000000000000 });
 
     ['protein', 'fat', 'carbs'].forEach(m => {
-        vars.push({ name: `${m}_def`, lb: 0, ub: 1000, type: glp.GLP_DB });
-        vars.push({ name: `${m}_ex`, lb: 0, ub: 1000, type: glp.GLP_DB });
-        objectiveVars.push({ name: `${m}_def`, coef: -macroWeight });
-        objectiveVars.push({ name: `${m}_ex`, coef: -macroWeight });
+        const isStrict = (details.macros as any)[m]?.strict ?? true;
+        
+        // If it's strict AND we are in the final refinement phase, we DO NOT use slacks.
+        // We use hard bounds on the constraint instead (+/- 2g).
+        if (isStrict && weightMode === 'strict') {
+            // No slack added to vars or objective
+        } else {
+            // Use slacks for Scout mode OR non-strict macros
+            const penalty = isStrict ? 1000000000 : 1000000;
+            vars.push({ name: `${m}_def`, lb: 0, ub: 1000, type: glp.GLP_DB });
+            vars.push({ name: `${m}_ex`, lb: 0, ub: 1000, type: glp.GLP_DB });
+            objectiveVars.push({ name: `${m}_def`, coef: -penalty });
+            objectiveVars.push({ name: `${m}_ex`, coef: -penalty });
+        }
     });
 
+    // Max limit slacks (Always present in scout, optional in strict)
     essentialKeys.forEach((k: string) => {
         if (nutrientConfig[k].max) {
             vars.push({ name: `max_slack_${k}`, lb: 0, ub: 1000000, type: glp.GLP_DB });
@@ -107,14 +94,16 @@ async function solveGLPK(foods: Food[], isMILP: boolean, weightMode: 'scout' | '
         }
     });
 
+    // --- 2. NUTRIENT VARIABLES ---
     essentialKeys.forEach((k: string) => {
         vars.push({ name: `cov_${k}`, lb: 0, ub: 1.0, type: glp.GLP_DB });
-        objectiveVars.push({ name: `cov_${k}`, coef: nutrientWeight }); 
+        objectiveVars.push({ name: `cov_${k}`, coef: 100000 }); 
     });
 
     vars.push({ name: 'min_coverage', lb: 0, ub: 1.0, type: glp.GLP_DB });
-    objectiveVars.push({ name: 'min_coverage', coef: nutrientWeight * 10 }); 
+    objectiveVars.push({ name: 'min_coverage', coef: 1000000 });
 
+    // --- 3. FOOD VARIABLES ---
     foods.forEach((f, i) => {
         const mustHave = details.mustHaveFoods?.find((m: any) => m.name === f.name);
         const customMax = details.customMaxAmounts?.[f.name];
@@ -136,12 +125,41 @@ async function solveGLPK(foods: Food[], isMILP: boolean, weightMode: 'scout' | '
         }
     });
 
-    constraints.push({ name: 'cal_min', vars: [...foods.map((f, i) => ({ name: `f_${i}`, coef: f.calories })), { name: 'cal_def', coef: 1 }], bnds: { type: glp.GLP_LO, lb: targetCalories, ub: 0 } });
-    constraints.push({ name: 'cal_max', vars: foods.map((f, i) => ({ name: `f_${i}`, coef: f.calories })), bnds: { type: glp.GLP_UP, lb: 0, ub: targetCalories + 50 } });
+    // --- 4. CONSTRAINTS ---
+    
+    // Calories
+    constraints.push({
+        name: 'cal_min',
+        vars: [...foods.map((f, i) => ({ name: `f_${i}`, coef: f.calories })), { name: 'cal_def', coef: 1 }],
+        bnds: { type: glp.GLP_LO, lb: targetCalories, ub: 0 }
+    });
+    constraints.push({
+        name: 'cal_max',
+        vars: foods.map((f, i) => ({ name: `f_${i}`, coef: f.calories })),
+        bnds: { type: glp.GLP_UP, lb: 0, ub: targetCalories + 50 }
+    });
 
+    // Macros
     const macroTargets = [{ name: 'protein', val: proteinTarget }, { name: 'fat', val: fatTarget }, { name: 'carbs', val: carbTarget }];
     macroTargets.forEach(m => {
-        constraints.push({ name: `macro_${m.name}`, vars: [...foods.map((f, i) => ({ name: `f_${i}`, coef: (f as any)[m.name] })), { name: `${m.name}_def`, coef: 1 }, { name: `${m.name}_ex`, coef: -1 }], bnds: { type: glp.GLP_FX, lb: m.val, ub: m.val } });
+        const isStrict = (details.macros as any)[m.name]?.strict ?? true;
+        const constraintVars = foods.map((f, i) => ({ name: `f_${i}`, coef: (f as any)[m.name] }));
+        
+        if (isStrict && weightMode === 'strict') {
+            // HARD CONSTRAINT: +/- 2g
+            constraints.push({
+                name: `macro_${m.name}`,
+                vars: constraintVars,
+                bnds: { type: glp.GLP_DB, lb: m.val - 2, ub: m.val + 2 }
+            });
+        } else {
+            // SOFT CONSTRAINT with slacks
+            constraints.push({
+                name: `macro_${m.name}`,
+                vars: [...constraintVars, { name: `${m.name}_def`, coef: 1 }, { name: `${m.name}_ex`, coef: -1 }],
+                bnds: { type: glp.GLP_FX, lb: m.val, ub: m.val }
+            });
+        }
     });
 
     essentialKeys.forEach((k: string) => {
@@ -150,11 +168,18 @@ async function solveGLPK(foods: Food[], isMILP: boolean, weightMode: 'scout' | '
         constraints.push({ name: `link_cov_${k}`, vars: [...foodCoeffs, { name: `cov_${k}`, coef: -1 }], bnds: { type: glp.GLP_LO, lb: 0, ub: 0 } });
         constraints.push({ name: `link_min_${k}`, vars: [{ name: 'min_coverage', coef: 1 }, { name: `cov_${k}`, coef: -1 }], bnds: { type: glp.GLP_UP, lb: 0, ub: 0 } });
         if (config.max) {
-            constraints.push({ name: `max_${k}`, vars: [...foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) })), { name: `max_slack_${k}`, coef: -1 }], bnds: { type: glp.GLP_UP, lb: 0, ub: config.max } });
+            const varsList = foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) }));
+            varsList.push({ name: `max_slack_${k}`, coef: -1 });
+            constraints.push({ name: `max_${k}`, vars: varsList, bnds: { type: glp.GLP_UP, lb: 0, ub: config.max } });
         }
     });
 
-    return await glp.solve({ name: 'DietPlanner', objective: { direction: glp.GLP_MAX, name: 'score', vars: objectiveVars }, subjectTo: constraints, bounds: vars, binaries: binaries, options: { presol: true, tmlim: timeLimit } });
+    return await glp.solve({
+        name: 'DietPlanner',
+        objective: { direction: glp.GLP_MAX, name: 'score', vars: objectiveVars },
+        subjectTo: constraints, bounds: vars, binaries: binaries,
+        options: { presol: true, tmlim: timeLimit }
+    });
 }
 
 function evaluateDiet(genome: Record<string, number>) {
@@ -185,9 +210,6 @@ async function run() {
         god: { specs: 20, trials: 40000, subset: 25, refinements: 50, milpLimit: 40, timeout: 900000 }
     };
     let cfg = configs[modelType] || configs.beast;
-    if (details.benchConfig) {
-        cfg = { specs: details.benchConfig.specs, trials: details.benchConfig.trials, subset: details.benchConfig.subset, refinements: details.benchConfig.refinements, milpLimit: 15, timeout: 300000 };
-    }
 
     const totalTimeout = setTimeout(() => {
         log("Worker Global Safety Timeout Triggered!");
@@ -196,13 +218,10 @@ async function run() {
     }, cfg.timeout);
 
     try {
-        const likedPool = FOOD_DATABASE.filter((f: Food) => {
-            const liked = details.likedFoods || [];
-            if (liked.length === 0) return true;
-            const nameLower = f.name.toLowerCase();
-            return liked.some((l: string) => nameLower.includes(l.toLowerCase()));
-        });
-        const mustHavePool = FOOD_DATABASE.filter((f: Food) => (details.mustHaveFoods || []).some((m: any) => m.name === f.name));
+        const likedSet = new Set(details.likedFoods || []);
+        const mustHaveSet = new Set((details.mustHaveFoods || []).map((m: any) => m.name));
+        const likedPool = FOOD_DATABASE.filter((f: Food) => likedSet.has(f.name) || mustHaveSet.has(f.name));
+        const mustHavePool = likedPool.filter((f: Food) => mustHaveSet.has(f.name));
 
         const specialistMap = new Map<string, Food[]>();
         essentialKeys.forEach((k: string) => {
@@ -224,7 +243,7 @@ async function run() {
                     randomSpecs.add(options[idx].name);
                 }
             });
-            const trialNames = new Set([...Array.from(randomSpecs), ...mustHavePool.map((f: Food) => f.name)]);
+            const trialNames = new Set([...Array.from(randomSpecs), ...mustHaveSet]);
             const shuffledLiked = [...likedPool].sort(() => 0.5 - Math.random());
             for (let j = 0; j < shuffledLiked.length && trialNames.size < cfg.subset; j++) trialNames.add(shuffledLiked[j].name);
             const trialPool = FOOD_DATABASE.filter((f: Food) => trialNames.has(f.name));
@@ -245,12 +264,6 @@ async function run() {
         const finalists = trials.slice(0, cfg.refinements);
         
         let bestOverall: any = null;
-        // CRITICAL FIX: Only seed the leaderboard if the LP result is VALID (respects min amounts)
-        // Since LP almost NEVER respects min amounts, we usually skip this and wait for MILP.
-        if (finalists.length > 0 && isValidGenome(finalists[0].genome)) {
-            bestOverall = { accuracy: Math.round((finalists[0].score / essentialKeys.length) * 1000) / 10, totals: finalists[0].totals, genome: finalists[0].genome, score: finalists[0].score };
-        }
-
         for (let i = 0; i < finalists.length; i++) {
             parentPort?.postMessage({ type: 'progress', gen: 45 + (i/finalists.length * 50), accuracy: bestOverall?.accuracy || 0, telemetry: { trialInfo: `Refining Top Winner ${i+1}/${finalists.length}...` } });
             const res = await solveGLPK(finalists[i].pool, true, 'strict', cfg.milpLimit);
@@ -260,10 +273,8 @@ async function run() {
                     const val = res.result.vars[`f_${idx}`] || 0;
                     if (val > 0.001) genome[f.name] = Math.round(val * 100);
                 });
-                if (isValidGenome(genome)) {
-                    const evalResult = evaluateDiet(genome);
-                    if (!bestOverall || evalResult.score > bestOverall.score) bestOverall = evalResult;
-                }
+                const evalResult = evaluateDiet(genome);
+                if (!bestOverall || evalResult.score > bestOverall.score) bestOverall = evalResult;
             }
         }
 

@@ -47,9 +47,9 @@ const DietPlanner = () => {
     likedFoods: [] as string[],
     mustHaveFoods: [] as Array<{ name: string, min?: number, max?: number, amount?: number }>,
     macros: {
-      protein: { mode: 'g/kg', value: 2.2 },
-      fat: { mode: '%', value: 35 },
-      carbs: { mode: 'remainder', value: 0 }
+      protein: { mode: 'g/kg', value: 2.2, strict: true },
+      fat: { mode: '%', value: 35, strict: true },
+      carbs: { mode: 'remainder', value: 0, strict: true }
     },
     customMacros: false,
     maintenanceCalories: 2111,
@@ -112,20 +112,20 @@ const DietPlanner = () => {
         const newMacros = { ...prev.macros };
         
         if (isLowCal) {
-            newMacros.protein = { mode: '%', value: 30 };
-            newMacros.fat = { mode: '%', value: 25 };
+            newMacros.protein = { ...newMacros.protein, mode: '%', value: 30 };
+            newMacros.fat = { ...newMacros.fat, mode: '%', value: 25 };
         } else if (isGain) {
-            newMacros.protein = { mode: 'g/kg', value: 2.2 };
-            newMacros.fat = { mode: '%', value: 30 };
+            newMacros.protein = { ...newMacros.protein, mode: 'g/kg', value: 2.2 };
+            newMacros.fat = { ...newMacros.fat, mode: '%', value: 30 };
         } else if (isLoss) {
-            newMacros.protein = { mode: 'g/kg', value: 1.8 };
-            newMacros.fat = { mode: '%', value: 25 };
+            newMacros.protein = { ...newMacros.protein, mode: 'g/kg', value: 1.8 };
+            newMacros.fat = { ...newMacros.fat, mode: '%', value: 25 };
         } else {
             // Maintenance
-            newMacros.protein = { mode: 'g/kg', value: 1.6 };
-            newMacros.fat = { mode: '%', value: 30 };
+            newMacros.protein = { ...newMacros.protein, mode: 'g/kg', value: 1.6 };
+            newMacros.fat = { ...newMacros.fat, mode: '%', value: 30 };
         }
-        newMacros.carbs = { mode: 'remainder', value: 0 };
+        newMacros.carbs = { ...newMacros.carbs, mode: 'remainder', value: 0 };
 
         // Check if actually changed to avoid infinite loop
         if (JSON.stringify(prev.macros) === JSON.stringify(newMacros)) return prev;
@@ -253,7 +253,7 @@ const DietPlanner = () => {
     });
   };
 
-  const handleMacroChange = (macro: 'protein'|'fat'|'carbs', field: 'mode'|'value', val: any) => {
+  const handleMacroChange = (macro: 'protein'|'fat'|'carbs', field: 'mode'|'value'|'strict', val: any) => {
     setFormData(prev => ({
       ...prev,
       macros: {
@@ -703,7 +703,6 @@ const DietPlanner = () => {
                       const calc = { protein: 0, fat: 0, carbs: 0 };
                       const targetCals = formData.targetCalories;
                       
-                      // Pre-calculate all for remainders
                       ['protein', 'fat', 'carbs'].forEach(m => {
                         const macro = (formData.macros as any)[m];
                         if (macro.mode === 'g/kg') calc[m as keyof typeof calc] = macro.value * formData.weight;
@@ -716,31 +715,54 @@ const DietPlanner = () => {
                         calc[remainderMacro as keyof typeof calc] = Math.max(0, targetCals - usedCals) / (remainderMacro === 'fat' ? 9 : 4);
                       }
 
-                      return ['protein', 'fat', 'carbs'].map(macroName => (
-                        <Row key={macroName} className="mb-3 align-items-center g-2">
-                          <Col xs={2} className="text-capitalize fw-bold small text-muted">{macroName}</Col>
-                          <Col xs={4}>
-                            <Form.Control size="sm" type="number" step="any" disabled={(formData.macros as any)[macroName].mode === 'remainder'} value={(formData.macros as any)[macroName].value} onChange={(e) => handleMacroChange(macroName as any, 'value', e.target.value)} />
-                          </Col>
-                          <Col xs={4}>
-                            <Form.Select size="sm" value={(formData.macros as any)[macroName].mode} onChange={(e) => handleMacroChange(macroName as any, 'mode', e.target.value)}>
-                              <option value="g/kg">g/kg</option>
-                              <option value="%">%</option>
-                              <option value="g">g</option>
-                              <option value="remainder">Remainder</option>
-                            </Form.Select>
-                          </Col>
-                          <Col xs={2} className="text-end">
-                            <span className="fw-bold" style={{ 
-                                color: macroName === 'protein' ? 'var(--accent-danger)' : macroName === 'carbs' ? 'var(--accent-primary)' : 'var(--accent-warn)',
-                                fontSize: '0.85rem',
-                                whiteSpace: 'nowrap'
-                            }}>
-                              {Math.round(calc[macroName as keyof typeof calc])}g
-                            </span>
-                          </Col>
+                      return (
+                        <Row className="g-3">
+                          {['protein', 'fat', 'carbs'].map(macroName => {
+                            const mData = (formData.macros as any)[macroName];
+                            const color = macroName === 'protein' ? 'var(--accent-danger)' : macroName === 'carbs' ? 'var(--accent-primary)' : 'var(--accent-warn)';
+                            return (
+                              <Col key={macroName} xs={4}>
+                                <div className="text-center p-2 rounded-3 border bg-light bg-opacity-5">
+                                  <div className="text-capitalize fw-bold small mb-2" style={{ color, letterSpacing: '0.05em' }}>{macroName}</div>
+                                  <div className="h4 fw-bold mb-3" style={{ color }}>{Math.round(calc[macroName as keyof typeof calc])}g</div>
+                                  
+                                  <Form.Control 
+                                    size="sm" 
+                                    type="number" 
+                                    step="any" 
+                                    className="mb-2 text-center"
+                                    disabled={mData.mode === 'remainder'} 
+                                    value={mData.value} 
+                                    onChange={(e) => handleMacroChange(macroName as any, 'value', e.target.value)} 
+                                  />
+                                  
+                                  <Form.Select 
+                                    size="sm" 
+                                    className="mb-3 text-center"
+                                    value={mData.mode} 
+                                    onChange={(e) => handleMacroChange(macroName as any, 'mode', e.target.value)}
+                                  >
+                                    <option value="g/kg">g/kg</option>
+                                    <option value="%">%</option>
+                                    <option value="g">g</option>
+                                    <option value="remainder">Rem.</option>
+                                  </Form.Select>
+
+                                  <Form.Check 
+                                    type="switch"
+                                    reverse
+                                    id={`strict-${macroName}`}
+                                    className="small-switch"
+                                    label={<div style={{ fontSize: '0.6rem', color: '#888', fontWeight: 'bold' }}>STRICT</div>}
+                                    checked={mData.strict}
+                                    onChange={(e) => handleMacroChange(macroName as any, 'strict', e.target.checked)}
+                                  />
+                                </div>
+                              </Col>
+                            );
+                          })}
                         </Row>
-                      ));
+                      );
                     })()}
                   </div>
 
