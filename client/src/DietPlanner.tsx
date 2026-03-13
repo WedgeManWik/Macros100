@@ -432,7 +432,7 @@ const DietPlanner = () => {
                 setLoading(false);
             } else if (status.status === 'failed' || status.status === 'cancelled') {
                 clearInterval(interval);
-                setError('Generation ' + status.status);
+                setError(status.error || 'The optimization algorithm could not find a valid diet passing all quality checks. Please adjust your constraints or select more foods.');
                 setLoading(false);
             }
         } catch (err) { console.error(err); }
@@ -1032,7 +1032,20 @@ const DietPlanner = () => {
             <p className="lead text-secondary mx-auto" style={{ maxWidth: '700px', fontSize: '1.1rem' }}>Experience professional-grade mathematical optimization. Your perfect health targets, calculated with scientific accuracy.</p>
           </header>
 
-          {error && <Alert variant="danger" className="border-0 shadow-sm">{error}</Alert>}
+          {error && (
+            <div className="mb-5 fade-in">
+                <Alert variant="danger" className="border-0 shadow-lg p-4 d-flex align-items-start glass-panel" style={{ borderLeft: '5px solid #ff3131 !important' }}>
+                    <Info size={32} className="me-4 mt-1 text-danger flex-shrink-0" />
+                    <div className="flex-grow-1">
+                        <h4 className="fw-bold mb-2">Optimization Failed</h4>
+                        <p className="mb-3 opacity-75 lead" style={{ fontSize: '1rem' }}>{error}</p>
+                        <div className="d-flex gap-2">
+                            <Button variant="danger" size="sm" className="fw-bold px-4" onClick={() => setError(null)}>Dismiss & Reconfigure</Button>
+                        </div>
+                    </div>
+                </Alert>
+            </div>
+          )}
           
           {loading ? (
             <div className="text-center py-5 fade-in">

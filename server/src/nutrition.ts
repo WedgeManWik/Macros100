@@ -286,10 +286,11 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
         if (trialBest) {
             finish(trialBest.genome, trialBest.res);
         } else {
-            onProgress({ done: true, result: null });
+            onProgress({ done: true, result: null, error: "The algorithm could not find a diet that satisfies all constraints (calories, strict macros, and minimum food amounts) with your current food selection." });
         }
-    } catch (err) {
-        onProgress({ done: true, result: null });
+    } catch (err: any) {
+        console.error('Fatal Phase Error:', err);
+        onProgress({ done: true, result: null, error: "A fatal error occurred during optimization: " + err.message });
         stopAll();
     }
   };

@@ -42,8 +42,9 @@ app.post('/api/start-generation', (req, res) => {
       try {
         if (progress.done) {
             console.log(`[Server] Job ${jobId} finished. Success: ${!!progress.result}`);
-            jobs[jobId].status = 'completed';
+            jobs[jobId].status = progress.result ? 'completed' : 'failed';
             jobs[jobId].result = progress.result;
+            if (progress.error) jobs[jobId].error = progress.error;
         } else {
             jobs[jobId].generation = progress.generation;
             jobs[jobId].currentAccuracy = progress.accuracy;
