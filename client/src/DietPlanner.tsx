@@ -432,7 +432,9 @@ const DietPlanner = () => {
                 setLoading(false);
             } else if (status.status === 'failed' || status.status === 'cancelled') {
                 clearInterval(interval);
-                setError(status.error || 'The optimization algorithm could not find a valid diet passing all quality checks. Please adjust your constraints or select more foods.');
+                // USE THE SERVER ERROR IF PROVIDED, OTHERWISE FALLBACK
+                const finalError = status.error || 'The optimization algorithm could not find a valid diet passing all quality checks. Please adjust your constraints or select more foods.';
+                setError(finalError);
                 setLoading(false);
             }
         } catch (err) { console.error(err); }

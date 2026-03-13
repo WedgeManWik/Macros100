@@ -17,7 +17,6 @@ const {
 const foodMap = new Map<string, Food>();
 FOOD_DATABASE.forEach((f: Food) => foodMap.set(f.name, f));
 
-log("Awaiting GLPK module initialization...");
 const GLPK_PROMISE = (glpkModule as any)();
 
 function calculateNutrientScore(totals: any) {
@@ -30,42 +29,36 @@ function calculateNutrientScore(totals: any) {
     return score;
 }
 
-function checkDietQuality(result: any, strictness: 'high' | 'low' = 'high'): { valid: boolean, reason?: string } {
+function checkDietQuality(result: any, strictness: 'high' | 'low' | 'ultra' = 'high'): { valid: boolean, reason?: string } {
     if (!result || !result.genome || Object.keys(result.genome).length <= 1) {
         return { valid: false, reason: "Too few foods." };
     }
     const totals = result.totals;
     const cals = totals.energy;
     
-    // 1. Calorie Check
-    if (cals < targetCalories * 0.7 || cals > (targetCalories + 300)) {
-        return { valid: false, reason: `Cals (${Math.round(cals)}) way off.` };
+    // Generous Calorie Bounds for failure recovery
+    if (cals < targetCalories * 0.5 || cals > (targetCalories * 1.5)) {
+        return { valid: false, reason: `Calories (${Math.round(cals)}) are too far from target.` };
     }
 
-    // 2. Macro Check (Adaptive strictness)
-    const limit = strictness === 'high' ? 15 : 40; 
+    let limit = 20;
+    if (strictness === 'low') limit = 60;
+    if (strictness === 'ultra') limit = 200;
+
     const pDiff = Math.abs(totals.protein - proteinTarget);
     const fDiff = Math.abs(totals.fat - fatTarget);
     const cDiff = Math.abs(totals.carbs - carbTarget);
     if (pDiff > limit || fDiff > limit || cDiff > limit) {
-        return { valid: false, reason: `Macro drift too large (P:${Math.round(pDiff)}g, F:${Math.round(fDiff)}g, C:${Math.round(cDiff)}g).` };
+        return { valid: false, reason: `Macro drift too large. Limit: ${limit}g` };
     }
 
-    // 3. Nutrient Max Check: Strictly enforce upper limits
-    for (const k of essentialKeys) {
-        if (nutrientConfig[k].max && totals[k] > (nutrientConfig[k].max + 0.1)) {
-            return { valid: false, reason: `${nutrientNames[k] || k} exceeds max limit.` };
-        }
-    }
-
-    // 4. Min Amount Check
     for (const [name, amt] of Object.entries(result.genome)) {
-        if (amt as number <= 0) continue;
+        if ((amt as number) <= 0) continue;
         const f = foodMap.get(name);
         if (!f) continue;
         const mustHave = details.mustHaveFoods?.find((m: any) => m.name === f.name);
         const minVal = (mustHave ? (mustHave.min || f.minAmount || 0) : (f.minAmount || 0));
-        if ((amt as number) < minVal - 1.0) return { valid: false, reason: `${name} (${amt}g) below min (${minVal}g).` };
+        if ((amt as number) < minVal - 5.0) return { valid: false, reason: `${name} below min.` };
     }
 
     return { valid: true };
@@ -74,6 +67,7 @@ function checkDietQuality(result: any, strictness: 'high' | 'low' = 'high'): { v
 function getTotalsFromVars(vars: any, pool: Food[]) {
     const totals: any = { energy: 0, protein: 0, carbs: 0, fat: 0 };
     Object.keys(nutrientConfig).forEach(k => totals[k] = 0);
+    if (!vars) return totals;
     pool.forEach((f, i) => {
         const amt = vars[`f_${i}`] || 0;
         if (amt <= 0) return;
@@ -87,92 +81,83 @@ function getTotalsFromVars(vars: any, pool: Food[]) {
 }
 
 async function solveGLPK(foods: Food[], isMILP: boolean, weightMode: 'scout' | 'strict', timeLimit: number) {
-    const glp = await GLPK_PROMISE;
-    const vars: any[] = [];
-    const constraints: any[] = [];
-    const binaries: string[] = [];
-    const objectiveVars: any[] = [];
+    try {
+        const glp = await GLPK_PROMISE;
+        const vars: any[] = [];
+        const constraints: any[] = [];
+        const binaries: string[] = [];
+        const objectiveVars: any[] = [];
 
-    const calWeight = 1000000000000;
-    const nutrientWeight = 100000; 
+        const macroTargets = [{ name: 'protein', val: proteinTarget }, { name: 'fat', val: fatTarget }, { name: 'carbs', val: carbTarget }];
+        const calWeight = 1000000000000;
+        const nutrientWeight = 100000; 
 
-    vars.push({ name: 'cal_def', lb: 0, ub: 10000, type: glp.GLP_DB });
-    objectiveVars.push({ name: 'cal_def', coef: -calWeight });
+        vars.push({ name: 'cal_def', lb: 0, type: glp.GLP_LO });
+        vars.push({ name: 'cal_ex', lb: 0, type: glp.GLP_LO });
+        objectiveVars.push({ name: 'cal_def', coef: -calWeight });
+        objectiveVars.push({ name: 'cal_ex', coef: -calWeight });
 
-    ['protein', 'fat', 'carbs'].forEach(m => {
-        const isStrict = (details.macros as any)[m]?.strict ?? true;
-        // In BEAST mode we still need some slack or MILP fails immediately.
-        // Penalty: Strict=10^9, Non-Strict=10^4
-        const penalty = isStrict ? 1000000000 : 10000;
-        vars.push({ name: `${m}_def`, lb: 0, ub: isStrict ? 5 : 50, type: glp.GLP_DB });
-        vars.push({ name: `${m}_ex`, lb: 0, ub: isStrict ? 5 : 50, type: glp.GLP_DB });
-        objectiveVars.push({ name: `${m}_def`, coef: -penalty });
-        objectiveVars.push({ name: `${m}_ex`, coef: -penalty });
-    });
+        macroTargets.forEach(m => {
+            const isStrict = (details.macros as any)[m.name]?.strict ?? true;
+            const penalty = isStrict ? 1000000000 : 10000;
+            vars.push({ name: `${m.name}_def`, lb: 0, type: glp.GLP_LO });
+            vars.push({ name: `${m.name}_ex`, lb: 0, type: glp.GLP_LO });
+            objectiveVars.push({ name: `${m.name}_def`, coef: -penalty });
+            objectiveVars.push({ name: `${m.name}_ex`, coef: -penalty });
+        });
 
-    essentialKeys.forEach((k: string) => {
-        if (nutrientConfig[k].max) {
-            vars.push({ name: `max_slack_${k}`, lb: 0, ub: 1000000, type: glp.GLP_DB });
-            objectiveVars.push({ name: `max_slack_${k}`, coef: -1000000000 });
-        }
-    });
+        essentialKeys.forEach((k: string) => {
+            if (nutrientConfig[k].max) {
+                vars.push({ name: `max_slack_${k}`, lb: 0, type: glp.GLP_LO });
+                objectiveVars.push({ name: `max_slack_${k}`, coef: -1000000000 });
+            }
+            vars.push({ name: `cov_${k}`, lb: 0, ub: 1.0, type: glp.GLP_DB });
+            objectiveVars.push({ name: `cov_${k}`, coef: nutrientWeight }); 
+        });
 
-    essentialKeys.forEach((k: string) => {
-        vars.push({ name: `cov_${k}`, lb: 0, ub: 1.0, type: glp.GLP_DB });
-        objectiveVars.push({ name: `cov_${k}`, coef: nutrientWeight }); 
-    });
+        vars.push({ name: 'min_coverage', lb: 0, ub: 1.0, type: glp.GLP_DB });
+        objectiveVars.push({ name: 'min_coverage', coef: nutrientWeight * 10 }); 
 
-    vars.push({ name: 'min_coverage', lb: 0, ub: 1.0, type: glp.GLP_DB });
-    objectiveVars.push({ name: 'min_coverage', coef: nutrientWeight * 10 }); 
+        foods.forEach((f, i) => {
+            const mustHave = details.mustHaveFoods?.find((m: any) => m.name === f.name);
+            const customMax = details.customMaxAmounts?.[f.name];
+            let minVal = (mustHave ? (mustHave.min || f.minAmount || 0) : (f.minAmount || 0)) / 100;
+            let maxVal = (mustHave && mustHave.max !== undefined) ? (mustHave.max / 100) : (customMax !== undefined ? (customMax / 100) : (f.maxAmount / 100));
+            vars.push({ name: `f_${i}`, lb: (!isMILP && mustHave) ? minVal : 0, ub: Math.max(minVal, maxVal, 50), type: glp.GLP_DB });
+            objectiveVars.push({ name: `f_${i}`, coef: -0.0001 }); 
 
-    foods.forEach((f, i) => {
-        const mustHave = details.mustHaveFoods?.find((m: any) => m.name === f.name);
-        const customMax = details.customMaxAmounts?.[f.name];
-        let minVal = (mustHave ? (mustHave.min || f.minAmount || 0) : (f.minAmount || 0)) / 100;
-        let maxVal = (mustHave && mustHave.max !== undefined) ? (mustHave.max / 100) : (customMax !== undefined ? (customMax / 100) : (f.maxAmount / 100));
-        vars.push({ name: `f_${i}`, lb: (!isMILP && mustHave) ? minVal : 0, ub: Math.max(minVal, maxVal), type: glp.GLP_DB });
-        objectiveVars.push({ name: `f_${i}`, coef: f.calories * 0.001 }); 
-        if (isMILP) {
-            vars.push({ name: `u_${i}`, lb: 0, ub: 1, type: glp.GLP_DB });
-            binaries.push(`u_${i}`);
-            constraints.push({ name: `min_b_${i}`, vars: [{ name: `f_${i}`, coef: 1 }, { name: `u_${i}`, coef: -minVal }], bnds: { type: glp.GLP_LO, lb: 0, ub: 0 } });
-            constraints.push({ name: `max_b_${i}`, vars: [{ name: `f_${i}`, coef: 1 }, { name: `u_${i}`, coef: -maxVal }], bnds: { type: glp.GLP_UP, lb: 0, ub: 0 } });
-            if (mustHave) constraints.push({ name: `force_${i}`, vars: [{ name: `u_${i}`, coef: 1 }], bnds: { type: glp.GLP_FX, lb: 1, ub: 1 } });
-        }
-    });
-// --- 4. CONSTRAINTS ---
+            if (isMILP) {
+                vars.push({ name: `u_${i}`, lb: 0, ub: 1, type: glp.GLP_DB });
+                binaries.push(`u_${i}`);
+                constraints.push({ name: `min_b_${i}`, vars: [{ name: `f_${i}`, coef: 1 }, { name: `u_${i}`, coef: -minVal }], bnds: { type: glp.GLP_LO, lb: 0, ub: 0 } });
+                constraints.push({ name: `max_b_${i}`, vars: [{ name: `f_${i}`, coef: 1 }, { name: `u_${i}`, coef: -maxVal }], bnds: { type: glp.GLP_UP, lb: 0, ub: 0 } });
+                if (mustHave) constraints.push({ name: `force_${i}`, vars: [{ name: `u_${i}`, coef: 1 }], bnds: { type: glp.GLP_FX, lb: 1, ub: 1 } });
+            }
+        });
 
-// Calories: Standard [target, target + 50] or Strict [target - 20, target + 20]
-const isStrictCal = details.strictCalories ?? false;
-const calLB = isStrictCal ? (targetCalories - 20) : targetCalories;
-const calUB = isStrictCal ? (targetCalories + 20) : (targetCalories + 50);
+        constraints.push({ name: 'c_cal', vars: [...foods.map((f, i) => ({ name: `f_${i}`, coef: f.calories })), { name: 'cal_def', coef: 1 }, { name: 'cal_ex', coef: -1 }], bnds: { type: glp.GLP_FX, lb: targetCalories, ub: targetCalories } });
 
-constraints.push({ 
-    name: 'cal_range', 
-    vars: [...foods.map((f, i) => ({ name: `f_${i}`, coef: f.calories })), { name: 'cal_def', coef: 1 }], 
-    bnds: { type: glp.GLP_DB, lb: calLB, ub: calUB } 
-});
+        macroTargets.forEach(m => {
+            const constraintVars = foods.map((f, i) => ({ name: `f_${i}`, coef: (f as any)[m.name] }));
+            constraints.push({ name: `macro_${m.name}`, vars: [...constraintVars, { name: `${m.name}_def`, coef: 1 }, { name: `${m.name}_ex`, coef: -1 }], bnds: { type: glp.GLP_FX, lb: m.val, ub: m.val } });
+        });
 
+        essentialKeys.forEach((k: string) => {
+            const config = nutrientConfig[k];
+            const foodCoeffs = foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) / (config.target || 1) }));
+            constraints.push({ name: `lk_cov_${k}`, vars: [...foodCoeffs, { name: `cov_${k}`, coef: -1 }], bnds: { type: glp.GLP_LO, lb: 0, ub: 0 } });
+            constraints.push({ name: `lk_min_${k}`, vars: [{ name: 'min_coverage', coef: 1 }, { name: `cov_${k}`, coef: -1 }], bnds: { type: glp.GLP_UP, lb: 0, ub: 0 } });
+            if (config.max) {
+                const varsList = foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) }));
+                varsList.push({ name: `max_slack_${k}`, coef: -1 });
+                constraints.push({ name: `max_${k}`, vars: varsList, bnds: { type: glp.GLP_UP, lb: 0, ub: config.max } });
+            }
+        });
 
-    const macroTargets = [{ name: 'protein', val: proteinTarget }, { name: 'fat', val: fatTarget }, { name: 'carbs', val: carbTarget }];
-    macroTargets.forEach(m => {
-        const constraintVars = foods.map((f, i) => ({ name: `f_${i}`, coef: (f as any)[m.name] }));
-        constraints.push({ name: `macro_${m.name}`, vars: [...constraintVars, { name: `${m.name}_def`, coef: 1 }, { name: `${m.name}_ex`, coef: -1 }], bnds: { type: glp.GLP_FX, lb: m.val, ub: m.val } });
-    });
-
-    essentialKeys.forEach((k: string) => {
-        const config = nutrientConfig[k];
-        const foodCoeffs = foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) / (config.target || 1) }));
-        constraints.push({ name: `lk_cov_${k}`, vars: [...foodCoeffs, { name: `cov_${k}`, coef: -1 }], bnds: { type: glp.GLP_LO, lb: 0, ub: 0 } });
-        constraints.push({ name: `lk_min_${k}`, vars: [{ name: 'min_coverage', coef: 1 }, { name: `cov_${k}`, coef: -1 }], bnds: { type: glp.GLP_UP, lb: 0, ub: 0 } });
-        if (config.max) {
-            const varsList = foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) }));
-            varsList.push({ name: `max_slack_${k}`, coef: -1 });
-            constraints.push({ name: `max_${k}`, vars: varsList, bnds: { type: glp.GLP_UP, lb: 0, ub: config.max } });
-        }
-    });
-
-    return await glp.solve({ name: 'DietPlanner', objective: { direction: glp.GLP_MAX, name: 'score', vars: objectiveVars }, subjectTo: constraints, bounds: vars, binaries: binaries, options: { presol: true, tmlim: timeLimit } });
+        return await glp.solve({ name: 'DietPlanner', objective: { direction: glp.GLP_MAX, name: 'score', vars: objectiveVars }, subjectTo: constraints, bounds: vars, binaries: binaries, options: { presol: true, tmlim: timeLimit } });
+    } catch (err: any) {
+        return { result: { status: 0, error: err.message } };
+    }
 }
 
 function evaluateDiet(genome: Record<string, number>) {
@@ -195,6 +180,51 @@ function evaluateDiet(genome: Record<string, number>) {
     return { accuracy, totals, genome, score: totalPct };
 }
 
+async function diagnoseFailure(allPool: Food[]) {
+    try {
+        const glp = await GLPK_PROMISE;
+        const vars: any[] = [];
+        const constraints: any[] = [];
+        const objectiveVars: any[] = [];
+
+        vars.push({ name: 'diag_cal_def', lb: 0, ub: 5000, type: glp.GLP_DB });
+        vars.push({ name: 'diag_cal_ex', lb: 0, ub: 5000, type: glp.GLP_DB });
+        objectiveVars.push({ name: 'diag_cal_def', coef: -1000000 });
+        objectiveVars.push({ name: 'diag_cal_ex', coef: -1000000 });
+
+        ['protein', 'fat', 'carbs'].forEach(m => {
+            vars.push({ name: `diag_${m}_def`, lb: 0, ub: 500, type: glp.GLP_DB });
+            vars.push({ name: `diag_${m}_ex`, lb: 0, ub: 500, type: glp.GLP_DB });
+            objectiveVars.push({ name: `diag_${m}_def`, coef: -1000000 });
+            objectiveVars.push({ name: `diag_${m}_ex`, coef: -1000000 });
+        });
+
+        allPool.forEach((f, i) => {
+            const mustHave = details.mustHaveFoods?.find((m: any) => m.name === f.name);
+            const minVal = (mustHave ? (mustHave.min || 0) : 0) / 100;
+            vars.push({ name: `f_${i}`, lb: minVal, ub: 50, type: glp.GLP_DB });
+            objectiveVars.push({ name: `f_${i}`, coef: 1 }); 
+        });
+
+        constraints.push({ name: 'c_cal', vars: [...allPool.map((f, i) => ({ name: `f_${i}`, coef: f.calories })), { name: 'diag_cal_def', coef: 1 }, { name: 'diag_cal_ex', coef: -1 }], bnds: { type: glp.GLP_FX, lb: targetCalories, ub: targetCalories } });
+        constraints.push({ name: 'c_p', vars: [...allPool.map((f, i) => ({ name: `f_${i}`, coef: f.protein })), { name: 'diag_protein_def', coef: 1 }, { name: 'diag_protein_ex', coef: -1 }], bnds: { type: glp.GLP_FX, lb: proteinTarget, ub: proteinTarget } });
+        constraints.push({ name: 'c_f', vars: [...allPool.map((f, i) => ({ name: `f_${i}`, coef: f.fat })), { name: 'diag_fat_def', coef: 1 }, { name: 'diag_fat_ex', coef: -1 }], bnds: { type: glp.GLP_FX, lb: fatTarget, ub: fatTarget } });
+        constraints.push({ name: 'c_c', vars: [...allPool.map((f, i) => ({ name: `f_${i}`, coef: f.carbs })), { name: 'diag_carbs_def', coef: 1 }, { name: 'diag_carbs_ex', coef: -1 }], bnds: { type: glp.GLP_FX, lb: carbTarget, ub: carbTarget } });
+
+        const res = await glp.solve({ name: 'Diagnosis', objective: { direction: glp.GLP_MAX, name: 'obj', vars: objectiveVars }, subjectTo: constraints, bounds: vars });
+        
+        if (res.result.vars) {
+            const v = res.result.vars;
+            if (v.diag_cal_def > 10) return `Must-have foods + selected ingredients cannot reach your calorie target (${targetCalories} kcal). They are short by ~${Math.round(v.diag_cal_def)} kcal.`;
+            if (v.diag_cal_ex > 10) return `Must-have foods already exceed your calorie target by ~${Math.round(v.diag_cal_ex)} kcal.`;
+            if (v.diag_protein_def > 5) return `Your protein target (${Math.round(proteinTarget)}g) is too high for the selected foods. Try adding more lean protein sources.`;
+            if (v.diag_fat_ex > 5) return `Must-have foods (like Avocado/Eggs) already exceed your fat target (${Math.round(fatTarget)}g).`;
+            if (v.diag_carbs_def > 10) return `Your carbohydrate target is too high for the selected foods. Try adding more rice, potatoes or fruit.`;
+        }
+    } catch (e) {}
+    return "The combination of strict macros, food minimums, and nutrient limits is mathematically impossible. Try relaxing 'Strict' toggles or selecting more diverse foods.";
+}
+
 async function run() {
     const modelType = details.algoModel || 'beast';
     const configs: Record<string, any> = {
@@ -212,9 +242,8 @@ async function run() {
     }, cfg.timeout);
 
     try {
-        const likedSet = new Set(details.likedFoods || []);
-        const mustHaveSet = new Set((details.mustHaveFoods || []).map((m: any) => m.name));
-        const likedPool = FOOD_DATABASE.filter((f: Food) => likedSet.has(f.name) || mustHaveSet.has(f.name));
+        const likedPool = FOOD_DATABASE.filter((f: Food) => details.likedFoods.includes(f.name) || details.mustHaveFoods.find((m:any)=>m.name===f.name));
+        const mustHaveSet = new Set(details.mustHaveFoods.map((m: any) => m.name));
 
         const specialistMap = new Map<string, Food[]>();
         essentialKeys.forEach((k: string) => {
@@ -226,22 +255,19 @@ async function run() {
         });
 
         let trialLeaderboard: { pool: Food[], score: number }[] = [];
-        const trialInterval = Math.max(1, Math.floor(cfg.trials/20));
+        const trialInterval = Math.max(1, Math.floor(cfg.trials / 20));
         for (let i = 0; i < cfg.trials; i++) {
             const randomSpecs = new Set<string>();
             essentialKeys.forEach((k: string) => {
                 const options = specialistMap.get(k)!;
-                if (options.length > 0) {
-                    const idx = Math.random() < 0.8 ? Math.floor(Math.random() * Math.min(5, options.length)) : Math.floor(Math.random() * options.length);
-                    randomSpecs.add(options[idx].name);
-                }
+                if (options.length > 0) randomSpecs.add(options[Math.floor(Math.random() * options.length)].name);
             });
             const trialNames = new Set([...Array.from(randomSpecs), ...mustHaveSet]);
             const shuffledLiked = [...likedPool].sort(() => 0.5 - Math.random());
             for (let j = 0; j < shuffledLiked.length && trialNames.size < cfg.subset; j++) trialNames.add(shuffledLiked[j].name);
             const trialPool = FOOD_DATABASE.filter((f: Food) => trialNames.has(f.name));
             const res = await solveGLPK(trialPool, false, 'scout', 5);
-            if (res.result.status === 5 || res.result.status === 2) {
+            if (res.result && (res.result.status === 5 || res.result.status === 2)) {
                 const totals = getTotalsFromVars(res.result.vars, trialPool);
                 trialLeaderboard.push({ pool: trialPool, score: calculateNutrientScore(totals) });
                 trialLeaderboard.sort((a, b) => b.score - a.score);
@@ -254,53 +280,32 @@ async function run() {
         for (let i = 0; i < trialLeaderboard.length; i++) {
             parentPort?.postMessage({ type: 'progress', gen: 45 + (i/trialLeaderboard.length * 50), accuracy: finalCandidates[0]?.accuracy || 0, telemetry: { trialInfo: `Refining Combo ${i+1}/${trialLeaderboard.length}...` } });
             const res = await solveGLPK(trialLeaderboard[i].pool, true, 'strict', cfg.milpLimit);
-            if (res.result.vars) {
+            if (res.result && res.result.vars) {
                 const genome: Record<string, number> = {};
                 trialLeaderboard[i].pool.forEach((f: Food, idx: number) => {
                     const val = res.result.vars[`f_${idx}`] || 0;
                     if (val > 0.001) genome[f.name] = Math.round(val * 100);
                 });
                 const evalResult = evaluateDiet(genome);
-                const quality = checkDietQuality(evalResult, 'high');
-                if (quality.valid) {
-                    finalCandidates.push(evalResult);
-                    finalCandidates.sort((a, b) => b.score - a.score);
-                } else {
-                    log(`Rejected: ${quality.reason}`);
-                }
+                if (checkDietQuality(evalResult, 'high').valid) finalCandidates.push(evalResult);
+                else if (checkDietQuality(evalResult, 'low').valid) finalCandidates.push(evalResult);
+                else if (checkDietQuality(evalResult, 'ultra').valid) finalCandidates.push(evalResult);
             }
-        }
-
-        if (finalCandidates.length === 0) {
-            log("No high-quality diets. Retrying with lower strictness...");
-            for (let i = 0; i < trialLeaderboard.length; i++) {
-                const res = await solveGLPK(trialLeaderboard[i].pool, true, 'strict', cfg.milpLimit);
-                if (res.result.vars) {
-                    const genome: Record<string, number> = {};
-                    trialLeaderboard[i].pool.forEach((f: Food, idx: number) => {
-                        const val = res.result.vars[`f_${idx}`] || 0;
-                        if (val > 0.001) genome[f.name] = Math.round(val * 100);
-                    });
-                    const evalResult = evaluateDiet(genome);
-                    if (checkDietQuality(evalResult, 'low').valid) {
-                        finalCandidates.push(evalResult);
-                    }
-                }
-            }
-            finalCandidates.sort((a, b) => b.score - a.score);
         }
 
         if (finalCandidates.length > 0) {
+            finalCandidates.sort((a, b) => b.score - a.score);
             const best = finalCandidates[0];
             clearTimeout(totalTimeout);
             parentPort?.postMessage({ type: 'result', result: { genome: best.genome, targetCalories, actualCalories: Math.round(best.totals.energy), accuracy: best.accuracy, macros: { protein: Math.round(best.totals.protein), carbs: Math.round(best.totals.carbs), fat: Math.round(best.totals.fat) } } });
         } else {
-            log("CRITICAL: Failed to find any valid diet.");
-            parentPort?.postMessage({ type: 'result', result: null });
+            log("CRITICAL: Failed to find valid diet. Running diagnosis...");
+            const reason = await diagnoseFailure(likedPool);
+            parentPort?.postMessage({ type: 'result', result: null, error: reason });
         }
     } catch (err: any) {
         log(`FATAL ERROR: ${err.message}`);
-        parentPort?.postMessage({ type: 'result', result: null });
+        parentPort?.postMessage({ type: 'result', result: null, error: "System Error: " + err.message });
     }
 }
 

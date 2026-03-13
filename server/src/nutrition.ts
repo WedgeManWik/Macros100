@@ -174,10 +174,24 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
             }
           } else if (msg.type === 'result') {
             completedWorkers++;
-            console.log(`Worker reported result. Success: ${!!msg.result}`);
-            if (msg.result && (!currentPhaseBest || msg.result.accuracy > (currentPhaseBest.accuracy || -Infinity))) {
-                currentPhaseBest = { genome: msg.result.genome || {}, score: msg.result.score || 0, res: msg.result, accuracy: msg.result.accuracy };
+            console.log(`[Server] Worker result received. Success: ${!!msg.result}, Error: ${msg.error || 'none'}`);
+            
+            if (msg.result) {
+                if (!currentPhaseBest || (msg.result.accuracy > (currentPhaseBest.accuracy || -Infinity))) {
+                    currentPhaseBest = { 
+                        genome: msg.result.genome || {}, 
+                        score: msg.result.score || 0, 
+                        res: msg.result, 
+                        accuracy: msg.result.accuracy 
+                    };
+                }
+            } else if (msg.error) {
+                // If no valid result exists yet, capture the error
+                if (!currentPhaseBest) {
+                    currentPhaseBest = { error: msg.error };
+                }
             }
+
             if (completedWorkers === workerCount) {
                 phaseWorkers.forEach(w => w.terminate());
                 activeWorkers = activeWorkers.filter(w => !phaseWorkers.includes(w));
@@ -268,8 +282,14 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
         }
 
         let totalSaturation = 0;
-        essentialKeys.forEach(k => { totalSaturation += Math.min(1.0, breakdown[k].total / 100); });
-        totalSaturation += Math.min(1.0, breakdown.water.total / 100);
+        essentialKeys.forEach(k => { 
+            if (breakdown[k]) {
+                totalSaturation += Math.min(1.0, (breakdown[k].total || 0) / 100); 
+            }
+        });
+        if (breakdown.water) {
+            totalSaturation += Math.min(1.0, (breakdown.water.total || 0) / 100);
+        }
         const finalAccuracy = Math.round((totalSaturation / (essentialKeys.length + 1)) * 1000) / 10;
 
         onProgress({ done: true, result: { targetCalories: Math.round(targetCalories), actualCalories: Math.round(breakdown.energy.amount), accuracy: finalAccuracy, macros: { protein: Math.round(breakdown.protein.amount), carbs: Math.round(breakdown.carbs.amount), fat: Math.round(breakdown.fat.amount) }, sectionedIngredients, micronutrients: breakdown } });
@@ -283,10 +303,13 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
     try {
         onProgress({ done: false, generation: 0, accuracy: 0, telemetry: { trialInfo: 'Starting MILP Solver...' } });
         const trialBest = await runPhase(1, "MILP Optimization");
-        if (trialBest) {
+        
+        if (trialBest && trialBest.genome && Object.keys(trialBest.genome).length > 0) {
             finish(trialBest.genome, trialBest.res);
         } else {
-            onProgress({ done: true, result: null, error: "The algorithm could not find a diet that satisfies all constraints (calories, strict macros, and minimum food amounts) with your current food selection." });
+            // Use the specific diagnostic reason if available, otherwise the generic fallback
+            const reason = trialBest?.error || "The algorithm could not find a diet that satisfies all constraints (calories, strict macros, and minimum food amounts) with your current food selection.";
+            onProgress({ done: true, result: null, error: reason });
         }
     } catch (err: any) {
         console.error('Fatal Phase Error:', err);
