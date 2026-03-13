@@ -140,9 +140,19 @@ async function solveGLPK(foods: Food[], isMILP: boolean, weightMode: 'scout' | '
             if (mustHave) constraints.push({ name: `force_${i}`, vars: [{ name: `u_${i}`, coef: 1 }], bnds: { type: glp.GLP_FX, lb: 1, ub: 1 } });
         }
     });
+// --- 4. CONSTRAINTS ---
 
-    constraints.push({ name: 'cal_min', vars: [...foods.map((f, i) => ({ name: `f_${i}`, coef: f.calories })), { name: 'cal_def', coef: 1 }], bnds: { type: glp.GLP_LO, lb: targetCalories, ub: 0 } });
-    constraints.push({ name: 'cal_max', vars: foods.map((f, i) => ({ name: `f_${i}`, coef: f.calories })), bnds: { type: glp.GLP_UP, lb: 0, ub: targetCalories + 50 } });
+// Calories: Standard [target, target + 50] or Strict [target - 20, target + 20]
+const isStrictCal = details.strictCalories ?? false;
+const calLB = isStrictCal ? (targetCalories - 20) : targetCalories;
+const calUB = isStrictCal ? (targetCalories + 20) : (targetCalories + 50);
+
+constraints.push({ 
+    name: 'cal_range', 
+    vars: [...foods.map((f, i) => ({ name: `f_${i}`, coef: f.calories })), { name: 'cal_def', coef: 1 }], 
+    bnds: { type: glp.GLP_DB, lb: calLB, ub: calUB } 
+});
+
 
     const macroTargets = [{ name: 'protein', val: proteinTarget }, { name: 'fat', val: fatTarget }, { name: 'carbs', val: carbTarget }];
     macroTargets.forEach(m => {

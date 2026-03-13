@@ -58,6 +58,7 @@ const DietPlanner = () => {
     customMaxAmounts: {} as Record<string, number>,
     algoModel: 'beast' as 'beast' | 'titan' | 'olympian' | 'god',
     advancedSettings: false,
+    strictCalories: false,
     customRDAs: {} as Record<string, { target?: number, max?: number }>
   });
 
@@ -682,7 +683,17 @@ const DietPlanner = () => {
                   </div>
 
                   <div className="mb-4">
-                    <Form.Label>Target Calories</Form.Label>
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <Form.Label className="mb-0">Target Calories</Form.Label>
+                      <Form.Check 
+                        type="switch"
+                        reverse
+                        id="strict-calories-switch"
+                        label={<small className="text-muted fw-bold" style={{ fontSize: '0.65rem' }}>STRICT</small>}
+                        checked={formData.strictCalories}
+                        onChange={(e) => setFormData(prev => ({ ...prev, strictCalories: e.target.checked }))}
+                      />
+                    </div>
                     <Form.Control type="number" name="targetCalories" value={formData.targetCalories} onChange={handleInputChange} />
                   </div>
 
@@ -748,15 +759,17 @@ const DietPlanner = () => {
                                     <option value="remainder">Rem.</option>
                                   </Form.Select>
 
-                                  <Form.Check 
-                                    type="switch"
-                                    reverse
-                                    id={`strict-${macroName}`}
-                                    className="small-switch"
-                                    label={<div style={{ fontSize: '0.6rem', color: '#888', fontWeight: 'bold' }}>STRICT</div>}
-                                    checked={mData.strict}
-                                    onChange={(e) => handleMacroChange(macroName as any, 'strict', e.target.checked)}
-                                  />
+                                  <div className="d-flex justify-content-center">
+                                    <Form.Check 
+                                      type="switch"
+                                      reverse
+                                      id={`strict-${macroName}`}
+                                      className="small-switch centered-switch"
+                                      label={<div style={{ fontSize: '0.6rem', color: '#888', fontWeight: 'bold' }}>STRICT</div>}
+                                      checked={mData.strict}
+                                      onChange={(e) => handleMacroChange(macroName as any, 'strict', e.target.checked)}
+                                    />
+                                  </div>
                                 </div>
                               </Col>
                             );
