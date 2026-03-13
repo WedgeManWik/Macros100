@@ -1214,7 +1214,7 @@ const DietPlanner = () => {
                                     variant="danger" 
                                     size="sm" 
                                     className="position-absolute rounded-circle p-0 d-flex align-items-center justify-content-center" 
-                                    style={{ top: '-10px', right: '-10px', width: '24px', height: '24px', zIndex: 10, border: '2px solid var(--bg-card)' }}
+                                    style={{ top: '8px', right: '8px', width: '20px', height: '20px', zIndex: 10, fontSize: '0.7rem', border: 'none', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}
                                     onClick={() => removeIngredient(section, idx)}
                                 >
                                     ✕
