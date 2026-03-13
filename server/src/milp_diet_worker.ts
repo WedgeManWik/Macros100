@@ -70,6 +70,13 @@ function checkDietQuality(result: any): { valid: boolean, reason?: string } {
         }
     }
 
+    // 4. Nutrient Max Check: Strictly enforce upper limits
+    for (const k of essentialKeys) {
+        if (nutrientConfig[k].max && totals[k] > (nutrientConfig[k].max + 0.1)) {
+            return { valid: false, reason: `${nutrientNames[k] || k} (${Math.round(totals[k])}) exceeds max limit (${nutrientConfig[k].max}).` };
+        }
+    }
+
     return { valid: true };
 }
 

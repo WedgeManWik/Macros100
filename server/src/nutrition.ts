@@ -125,12 +125,10 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
     const isDefaultEssential = nutrientConfig[k].essential;
     const hasCustomTarget = details.customRDAs?.[k]?.target !== undefined && !isNaN(details.customRDAs[k].target);
     const hasCustomMax = details.customRDAs?.[k]?.max !== undefined && !isNaN(details.customRDAs[k].max);
-    
-    // A nutrient is prioritized if it's default essential OR has user-provided custom settings
     return isDefaultEssential || hasCustomTarget || hasCustomMax;
   });
-  const workerCount = 1; 
 
+  const workerCount = 1; 
   let activeWorkers: Worker[] = [];
 
   const stopAll = () => {
@@ -147,11 +145,10 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
       let lastProgressUpdate = 0;
 
       for (let i = 0; i < workerCount; i++) {
-        // Use .js extension for the worker path as it will be compiled
         const workerPath = path.join(__dirname, 'milp_diet_worker.js');
         const worker = new Worker(workerPath, {
           workerData: {
-            FOOD_DATABASE,
+            FOOD_DATABASE: CONSISTENT_FOOD_DATABASE,
             details, targetCalories,
             proteinTarget, fatTarget, carbTarget, essentialKeys, nutrientNames, nutrientConfig,
             seedGenome: seed
@@ -164,18 +161,6 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
           if (msg.type === 'progress') {
             const telemetry = msg.telemetry || {};
             workerStates[i] = { gen: msg.gen || 0, islands: telemetry.islands || [] };
-            
-            if (telemetry.genome && Object.keys(telemetry.genome).length > 0) {
-                if (!currentPhaseBest || (msg.accuracy || 0) > (currentPhaseBest.accuracy || -Infinity)) {
-                    currentPhaseBest = { 
-                        score: telemetry.score || 0, 
-                        accuracy: msg.accuracy || 0, 
-                        telemetry: telemetry, 
-                        genome: telemetry.genome 
-                    };
-                }
-            }
-
             const now = Date.now();
             if (now - lastProgressUpdate > 100) { 
                 const allIslands = workerStates.flatMap(s => s.islands || []);
@@ -189,8 +174,8 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
             }
           } else if (msg.type === 'result') {
             completedWorkers++;
-            console.log(`Worker reported result. Accuracy: \${msg.result ? msg.result.accuracy : 'N/A'}`);
-            if (!currentPhaseBest || (msg.result && msg.result.accuracy > (currentPhaseBest.accuracy || -Infinity))) {
+            console.log(`Worker reported result. Success: ${!!msg.result}`);
+            if (msg.result && (!currentPhaseBest || msg.result.accuracy > (currentPhaseBest.accuracy || -Infinity))) {
                 currentPhaseBest = { genome: msg.result.genome || {}, score: msg.result.score || 0, res: msg.result, accuracy: msg.result.accuracy };
             }
             if (completedWorkers === workerCount) {
@@ -201,7 +186,7 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
           }
         });
         worker.on('error', (err: Error) => {
-            console.error(`Worker Phase \${label} ERROR: ` + err.stack);
+            console.error(`Worker Phase ${label} ERROR: ` + err.stack);
             completedWorkers++;
             if (completedWorkers === workerCount) resolve(currentPhaseBest);
         });
@@ -212,7 +197,6 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
   const finish = (bestPlan: any, bestResult: any) => {
     try {
         console.log("Nutrition: starting finish()");
-        console.log("RAW PLAN:", JSON.stringify(bestPlan));
         const breakdown: any = {};
         const aminoAcids = ['cystine', 'histidine', 'isoleucine', 'leucine', 'lysine', 'methionine', 'phenylalanine', 'threonine', 'tryptophan', 'tyrosine', 'valine'];
         Object.keys(nutrientConfig).forEach(n => {
@@ -225,7 +209,7 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
                 max: config.max
             };
             Object.entries(bestPlan || {}).forEach(([name, amount]: [string, any]) => {
-                const food = FOOD_DATABASE.find((f: Food) => f.name === name);
+                const food = CONSISTENT_FOOD_DATABASE.find((f: Food) => f.name === name);
                 if (!food) return;
                 const factor = amount / 100;
                 let val = (n === 'energy' ? food.calories : n === 'protein' ? food.protein : n === 'carbs' ? food.carbs : n === 'fat' ? food.fat : (food.nutrients[n] || 0));
@@ -247,48 +231,30 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
         
         const sectionOrder = ['Proteins', 'Carbs', 'Fruits', 'Vegetables', 'Fiber and Vegetables', 'Nuts', 'Seeds', 'Fats and Oils', 'Dairy', 'Other'];
         const sectionedIngredients: any = {};
-        
-        // Initialize sections in correct order
-        sectionOrder.forEach(s => {
-            sectionedIngredients[s] = [];
-        });
+        sectionOrder.forEach(s => { sectionedIngredients[s] = []; });
 
         Object.entries(bestPlan || {}).forEach(([name, amount]: [string, any]) => {
             if (amount > 0) {
-                const food = FOOD_DATABASE.find((f: Food) => f.name === name);
+                const food = CONSISTENT_FOOD_DATABASE.find((f: Food) => f.name === name);
                 if (!food) return;
-                
                 const section = food.section || 'Other';
                 if (!sectionedIngredients[section]) sectionedIngredients[section] = [];
-                
-                sectionedIngredients[section].push({ 
-                    name, 
-                    icon: food.icon, 
-                    amount: Math.round(amount), 
-                    calories: Math.round((amount/100)*food.calories) 
-                });
+                sectionedIngredients[section].push({ name, icon: food.icon, amount: Math.round(amount), calories: Math.round((amount/100)*food.calories) });
             }
         });
 
-        // Remove empty sections
-        Object.keys(sectionedIngredients).forEach(key => {
-            if (sectionedIngredients[key].length === 0) delete sectionedIngredients[key];
-        });
+        Object.keys(sectionedIngredients).forEach(key => { if (sectionedIngredients[key].length === 0) delete sectionedIngredients[key]; });
 
-        // ADD MINERAL WATER TO HIT TARGET
         const waterTarget = nutrientConfig.water.target || 0;
         const currentWater = breakdown.water.amount;
         if (currentWater < waterTarget) {
             const deficit = waterTarget - currentWater;
-            const waterFood = FOOD_DATABASE.find((f: Food) => f.name === 'Mineral Water');
+            const waterFood = CONSISTENT_FOOD_DATABASE.find((f: Food) => f.name === 'Mineral Water');
             if (waterFood) {
                 const addedAmount = deficit; 
                 bestPlan['Mineral Water'] = (bestPlan['Mineral Water'] || 0) + addedAmount;
-                
                 breakdown.water.amount += addedAmount;
                 breakdown.water.total = 100;
-                breakdown.water.sources.push({ food: 'Mineral Water', amount: Math.round((addedAmount / waterTarget) * 100) });
-                
                 const section = waterFood.section || 'Other';
                 if (!sectionedIngredients[section]) sectionedIngredients[section] = [];
                 const existing = sectionedIngredients[section].find((i: any) => i.name === 'Mineral Water');
@@ -296,26 +262,16 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
                     existing.amount = Math.round(bestPlan['Mineral Water']);
                     existing.calories = Math.round((existing.amount/100)*waterFood.calories);
                 } else {
-                    sectionedIngredients[section].push({
-                        name: 'Mineral Water',
-                        icon: waterFood.icon,
-                        amount: Math.round(addedAmount),
-                        calories: Math.round((addedAmount/100)*waterFood.calories)
-                    });
+                    sectionedIngredients[section].push({ name: 'Mineral Water', icon: waterFood.icon, amount: Math.round(addedAmount), calories: Math.round((addedAmount/100)*waterFood.calories) });
                 }
             }
         }
 
         let totalSaturation = 0;
-        essentialKeys.forEach(k => {
-            totalSaturation += Math.min(1.0, breakdown[k].total / 100);
-        });
-        // Include water in saturation calculation
+        essentialKeys.forEach(k => { totalSaturation += Math.min(1.0, breakdown[k].total / 100); });
         totalSaturation += Math.min(1.0, breakdown.water.total / 100);
-        
         const finalAccuracy = Math.round((totalSaturation / (essentialKeys.length + 1)) * 1000) / 10;
 
-        console.log("Nutrition: sending final progress update (done: true)");
         onProgress({ done: true, result: { targetCalories: Math.round(targetCalories), actualCalories: Math.round(breakdown.energy.amount), accuracy: finalAccuracy, macros: { protein: Math.round(breakdown.protein.amount), carbs: Math.round(breakdown.carbs.amount), fat: Math.round(breakdown.fat.amount) }, sectionedIngredients, micronutrients: breakdown } });
     } catch (e: any) { 
         console.error('Finish Error: ' + e.stack); 
@@ -325,22 +281,14 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
 
   const runAllPhases = async () => {
     try {
-        onProgress({ 
-            done: false, 
-            generation: 0, 
-            accuracy: 0, 
-            telemetry: { calories: 0, fat: 0, score: 0, worstNutrient: 'Waiting...', worstPct: 0, metCount: 0, totalEssential: essentialKeys.length, islands: [], trialInfo: 'Starting MILP Solver...' } 
-        });
-
+        onProgress({ done: false, generation: 0, accuracy: 0, telemetry: { trialInfo: 'Starting MILP Solver...' } });
         const trialBest = await runPhase(1, "MILP Optimization");
         if (trialBest) {
             finish(trialBest.genome, trialBest.res);
         } else {
-            console.warn("MILP Solver returned no trial best.");
             onProgress({ done: true, result: null });
         }
     } catch (err) {
-        console.error('Fatal Phase Error:', err);
         onProgress({ done: true, result: null });
         stopAll();
     }
