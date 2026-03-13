@@ -1208,13 +1208,13 @@ const DietPlanner = () => {
                     <Row className="g-3">
                       {items.map((ing, idx) => (
                         <Col md={6} lg={4} key={idx}>
-                          <Card className="shadow-sm h-100 border-0 hover-lift glass-panel position-relative">
+                          <Card className="shadow-sm h-100 border-0 hover-lift glass-panel position-relative" style={{ overflow: 'visible' }}>
                             {isEditing && (
                                 <Button 
                                     variant="danger" 
                                     size="sm" 
-                                    className="position-absolute rounded-circle p-0 d-flex align-items-center justify-content-center" 
-                                    style={{ top: '8px', right: '8px', width: '20px', height: '20px', zIndex: 10, fontSize: '0.7rem', border: 'none', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}
+                                    className="position-absolute p-0 d-flex align-items-center justify-content-center fw-bold shadow-sm" 
+                                    style={{ top: '0', right: '0', transform: 'translate(25%, -25%)', width: '16px', height: '16px', zIndex: 100, fontSize: '0.5rem', border: '2px solid var(--bg-card)', borderRadius: '50%' }}
                                     onClick={() => removeIngredient(section, idx)}
                                 >
                                     ✕
