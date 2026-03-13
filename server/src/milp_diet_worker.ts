@@ -51,7 +51,14 @@ function checkDietQuality(result: any, strictness: 'high' | 'low' = 'high'): { v
         return { valid: false, reason: `Macro drift too large (P:${Math.round(pDiff)}g, F:${Math.round(fDiff)}g, C:${Math.round(cDiff)}g).` };
     }
 
-    // 3. Min Amount Check
+    // 3. Nutrient Max Check: Strictly enforce upper limits
+    for (const k of essentialKeys) {
+        if (nutrientConfig[k].max && totals[k] > (nutrientConfig[k].max + 0.1)) {
+            return { valid: false, reason: `${nutrientNames[k] || k} exceeds max limit.` };
+        }
+    }
+
+    // 4. Min Amount Check
     for (const [name, amt] of Object.entries(result.genome)) {
         if (amt as number <= 0) continue;
         const f = foodMap.get(name);

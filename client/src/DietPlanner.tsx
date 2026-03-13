@@ -1089,7 +1089,7 @@ const DietPlanner = () => {
                               const data = diet.micronutrients[name];
                               if (!data) return null;
                               const pct = Math.round(data.total || 0);
-                              const isOverMax = data.max && data.amount > data.max;
+                              const isOverMax = data.max && data.amount > (data.max + 0.1);
                               
                               let statusClass = 'text-danger-vibrant';
                               let variant = 'danger';
