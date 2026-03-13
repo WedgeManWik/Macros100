@@ -550,6 +550,48 @@ const DietPlanner = () => {
     recalculateDiet(flatIngredients);
   };
 
+  const [showAddIngredientModal, setShowAddIngredientModal] = useState<{ section: string } | null>(null);
+
+  const removeIngredient = (section: string, index: number) => {
+    if (!diet) return;
+    const newSectioned = { ...diet.sectionedIngredients };
+    newSectioned[section].splice(index, 1);
+    if (newSectioned[section].length === 0) delete newSectioned[section];
+
+    const flatIngredients: Record<string, number> = {};
+    Object.values(newSectioned).flat().forEach(i => {
+        flatIngredients[i.name] = (flatIngredients[i.name] || 0) + i.amount;
+    });
+
+    setDiet({ ...diet, sectionedIngredients: newSectioned });
+    recalculateDiet(flatIngredients);
+  };
+
+  const addIngredient = (section: string, foodName: string, amount: number) => {
+    if (!diet) return;
+    const food = foods.find(f => f.name === foodName);
+    if (!food) return;
+
+    const newSectioned = { ...diet.sectionedIngredients };
+    if (!newSectioned[section]) newSectioned[section] = [];
+    
+    newSectioned[section].push({
+        name: food.name,
+        icon: food.icon,
+        amount: amount,
+        calories: Math.round((amount / 100) * food.calories)
+    });
+
+    const flatIngredients: Record<string, number> = {};
+    Object.values(newSectioned).flat().forEach(i => {
+        flatIngredients[i.name] = (flatIngredients[i.name] || 0) + i.amount;
+    });
+
+    setDiet({ ...diet, sectionedIngredients: newSectioned });
+    recalculateDiet(flatIngredients);
+    setShowAddIngredientModal(null);
+  };
+
   const getConversion = (name: string, amount: number) => {
     const n = name.toLowerCase();
     if (n.includes('egg') && !n.includes('white')) return `~${(amount / 50).toFixed(1)} units`;
@@ -1160,11 +1202,24 @@ const DietPlanner = () => {
               <div className="mb-5">
                 {diet.sectionedIngredients && Object.entries(diet.sectionedIngredients).map(([section, items]) => (
                   <div key={section} className="mb-5">
-                    <h5 className="text-uppercase fw-bold text-muted mb-4 pb-2 border-bottom" style={{ fontSize: '0.75rem', letterSpacing: '0.1em' }}>{section}</h5>
+                    <h5 className="text-uppercase fw-bold text-muted mb-4 pb-2 border-bottom d-flex justify-content-between align-items-center" style={{ fontSize: '0.75rem', letterSpacing: '0.1em' }}>
+                        {section}
+                    </h5>
                     <Row className="g-3">
                       {items.map((ing, idx) => (
                         <Col md={6} lg={4} key={idx}>
-                          <Card className="shadow-sm h-100 border-0 hover-lift glass-panel">
+                          <Card className="shadow-sm h-100 border-0 hover-lift glass-panel position-relative">
+                            {isEditing && (
+                                <Button 
+                                    variant="danger" 
+                                    size="sm" 
+                                    className="position-absolute rounded-circle p-0 d-flex align-items-center justify-content-center" 
+                                    style={{ top: '-10px', right: '-10px', width: '24px', height: '24px', zIndex: 10, border: '2px solid var(--bg-card)' }}
+                                    onClick={() => removeIngredient(section, idx)}
+                                >
+                                    ✕
+                                </Button>
+                            )}
                             <Card.Body className="d-flex align-items-center p-3">
                               <div className="rounded-circle p-3 me-3 fs-3 d-flex align-items-center justify-content-center" style={{ width: '64px', height: '64px', background: 'rgba(255,255,255,0.05)' }}>{ing.icon}</div>
                               <div className="min-width-0">
@@ -1195,9 +1250,72 @@ const DietPlanner = () => {
                           </Card>
                         </Col>
                       ))}
+                      {isEditing && (
+                        <Col md={6} lg={4}>
+                          <Card 
+                            className="shadow-sm h-100 border-0 glass-panel d-flex align-items-center justify-content-center border-dashed border-2" 
+                            style={{ minHeight: '100px', cursor: 'pointer', borderColor: 'rgba(255,255,255,0.1) !important' }}
+                            onClick={() => setShowAddIngredientModal({ section })}
+                          >
+                            <div className="text-muted d-flex flex-column align-items-center">
+                                <div className="fs-2 mb-1">+</div>
+                                <div className="small fw-bold">Add to {section}</div>
+                            </div>
+                          </Card>
+                        </Col>
+                      )}
                     </Row>
                   </div>
                 ))}
+              </div>
+
+              {/* ADD INGREDIENT MODAL */}
+              <div className={`modal-blur-overlay ${showAddIngredientModal ? 'active' : ''}`} />
+              <div className={`custom-modal-container ${showAddIngredientModal ? 'active' : ''}`} onClick={() => setShowAddIngredientModal(null)}>
+                <div className="custom-modal-content glass-panel p-4" onClick={e => e.stopPropagation()} style={{ width: '60%', maxHeight: '80%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                    <div className="d-flex justify-content-between align-items-center mb-4">
+                        <h2 className="h4 mb-0 fw-bold">Add Ingredient to {showAddIngredientModal?.section}</h2>
+                        <Button variant="outline-light" className="rounded-circle border-0" onClick={() => setShowAddIngredientModal(null)}>✕</Button>
+                    </div>
+                    <div className="flex-grow-1 overflow-y-auto pr-3 custom-scrollbar">
+                        <Row className="g-3">
+                            {foods
+                                .filter(f => f.section === showAddIngredientModal?.section)
+                                .sort((a,b) => a.name.localeCompare(b.name))
+                                .map(f => (
+                                <Col xs={12} key={f.name}>
+                                    <div className="p-3 rounded-3 border bg-light bg-opacity-5 d-flex align-items-center justify-content-between hover-lift">
+                                        <div className="d-flex align-items-center">
+                                            <span className="fs-4 me-3">{f.icon}</span>
+                                            <div>
+                                                <div className="fw-bold">{f.name}</div>
+                                                <div className="small text-muted">{f.calories} kcal / 100g</div>
+                                            </div>
+                                        </div>
+                                        <div className="d-flex align-items-center gap-2">
+                                            <Form.Control 
+                                                size="sm" 
+                                                type="number" 
+                                                placeholder="Amount (g)" 
+                                                id={`add-amt-${f.name}`} 
+                                                style={{ width: '100px' }}
+                                                defaultValue={100}
+                                            />
+                                            <Button 
+                                                variant="primary" 
+                                                size="sm" 
+                                                onClick={() => {
+                                                    const amt = parseFloat((document.getElementById(`add-amt-${f.name}`) as HTMLInputElement).value) || 100;
+                                                    addIngredient(showAddIngredientModal!.section, f.name, amt);
+                                                }}
+                                            >Add</Button>
+                                        </div>
+                                    </div>
+                                </Col>
+                            ))}
+                        </Row>
+                    </div>
+                </div>
               </div>
 
               {/* COMPREHENSIVE NUTRIENT ANALYSIS */}
