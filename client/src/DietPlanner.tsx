@@ -8,6 +8,10 @@ interface Food {
   section: string;
   icon: string;
   calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  nutrients: Record<string, number>;
   maxAmount?: number;
 }
 
@@ -34,6 +38,7 @@ const DietPlanner = () => {
   const [diet, setDiet] = useState<DietPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   const [formData, setFormData] = useState({
     weight: 70,
@@ -439,6 +444,111 @@ const DietPlanner = () => {
   };
 
   const cancelGeneration = () => { setLoading(false); };
+
+  const recalculateDiet = (updatedIngredients: Record<string, number>) => {
+    if (!diet) return;
+
+    const newMicros: any = JSON.parse(JSON.stringify(diet.micronutrients));
+    // Reset all amounts to 0 before recalculating
+    Object.keys(newMicros).forEach(k => {
+        newMicros[k].amount = 0;
+        newMicros[k].total = 0;
+    });
+
+    const isMale = formData.gender === 'male';
+    const nutrientConfig = {
+        energy: { target: formData.targetCalories },
+        water: { target: isMale ? 3700 : 2700 },
+        // ... (targets are used for % calculation below)
+    };
+
+    // Recalculate totals from all foods
+    Object.entries(updatedIngredients).forEach(([name, amount]) => {
+        const food = foods.find(f => f.name === name);
+        if (!food) return;
+        const r = amount / 100;
+        
+        // Update Energy
+        newMicros.energy.amount += r * food.calories;
+        // Update Macros
+        newMicros.protein.amount += r * food.protein;
+        newMicros.carbs.amount += r * food.carbs;
+        newMicros.fat.amount += r * food.fat;
+
+        // Update all other nutrients
+        if (food.nutrients) {
+            Object.entries(food.nutrients).forEach(([k, val]) => {
+                if (newMicros[k]) {
+                    newMicros[k].amount += r * (val || 0);
+                }
+            });
+        }
+    });
+
+    // Finalize percentages and units
+    const aminoAcids = ['cystine', 'histidine', 'isoleucine', 'leucine', 'lysine', 'methionine', 'phenylalanine', 'threonine', 'tryptophan', 'tyrosine', 'valine'];
+    Object.keys(newMicros).forEach(k => {
+        const config = getDefaultNutrientConfig(k);
+        const isAmino = aminoAcids.includes(k);
+        
+        if (isAmino) newMicros[k].amount = Math.round(newMicros[k].amount) / 1000;
+        else newMicros[k].amount = Math.round(newMicros[k].amount * 100) / 100;
+
+        if (config.target > 0) {
+            newMicros[k].total = Math.round(((isAmino ? newMicros[k].amount * 1000 : newMicros[k].amount) / config.target) * 100);
+        } else {
+            newMicros[k].total = 100;
+        }
+    });
+
+    // Recalculate Saturation Score
+    const essentialKeys = Object.keys(newMicros).filter(k => {
+        const isDefaultEssential = (diet.micronutrients[k] as any)?.essential || false; // Approximation
+        return isDefaultEssential || formData.customRDAs[k]?.target !== undefined;
+    });
+    
+    // Fallback: use all keys currently in micronutrients if essential tracking is lost
+    const scoreKeys = essentialKeys.length > 0 ? essentialKeys : Object.keys(newMicros).filter(k => !['energy','water'].includes(k));
+    
+    let totalSat = 0;
+    scoreKeys.forEach(k => { totalSat += Math.min(1.0, newMicros[k].total / 100); });
+    totalSat += Math.min(1.0, newMicros.water.total / 100);
+    const finalAccuracy = Math.round((totalSat / (scoreKeys.length + 1)) * 1000) / 10;
+
+    setDiet({
+        ...diet,
+        actualCalories: Math.round(newMicros.energy.amount),
+        accuracy: finalAccuracy,
+        macros: {
+            protein: Math.round(newMicros.protein.amount),
+            carbs: Math.round(newMicros.carbs.amount),
+            fat: Math.round(newMicros.fat.amount)
+        },
+        micronutrients: newMicros
+    });
+  };
+
+  const handleAmountChange = (section: string, index: number, newAmount: string) => {
+    if (!diet) return;
+    const amt = parseFloat(newAmount) || 0;
+    
+    const newSectioned = { ...diet.sectionedIngredients };
+    newSectioned[section][index].amount = amt;
+    
+    // Update calories for this specific food item
+    const food = foods.find(f => f.name === newSectioned[section][index].name);
+    if (food) {
+        newSectioned[section][index].calories = Math.round((amt / 100) * food.calories);
+    }
+
+    const flatIngredients: Record<string, number> = {};
+    Object.values(newSectioned).flat().forEach(i => {
+        flatIngredients[i.name] = (flatIngredients[i.name] || 0) + i.amount;
+    });
+
+    setDiet({ ...diet, sectionedIngredients: newSectioned });
+    recalculateDiet(flatIngredients);
+  };
 
   const getConversion = (name: string, amount: number) => {
     const n = name.toLowerCase();
@@ -1043,6 +1153,7 @@ const DietPlanner = () => {
                     alert('Detailed analysis copied to clipboard!');
                   }}>Export Analysis</Button>
                   <Button variant="outline-primary" size="sm" className="fw-bold px-3" onClick={() => { const text = Object.values(diet.sectionedIngredients).flat().map(i => `${i.amount}g ${i.name}`).join('\n'); navigator.clipboard.writeText(text); alert('Copied to clipboard!'); }}>Export for Cronometer</Button>
+                  <Button variant={isEditing ? "success" : "outline-primary"} size="sm" className="fw-bold px-3" onClick={() => setIsEditing(!isEditing)}>{isEditing ? 'Save Edits' : 'Edit Diet'}</Button>
                 </div>
               </div>
               
@@ -1058,7 +1169,21 @@ const DietPlanner = () => {
                               <div className="rounded-circle p-3 me-3 fs-3 d-flex align-items-center justify-content-center" style={{ width: '64px', height: '64px', background: 'rgba(255,255,255,0.05)' }}>{ing.icon}</div>
                               <div className="min-width-0">
                                 <div className="fw-bold text-white mb-1" style={{ fontSize: '0.9rem', lineHeight: '1.2' }}>{ing.name}</div>
-                                <div className="h4 mb-0 fw-bold text-primary">{ing.amount}<small className="fs-6 fw-normal text-muted ms-1">g</small></div>
+                                {isEditing ? (
+                                    <div className="d-flex align-items-center gap-1">
+                                        <Form.Control 
+                                            size="sm" 
+                                            type="number" 
+                                            className="bg-transparent border-primary text-white fw-bold h4 mb-0" 
+                                            style={{ width: '100px', border: 'none', borderBottom: '2px solid var(--accent-primary)', borderRadius: 0, padding: 0 }}
+                                            value={ing.amount} 
+                                            onChange={(e) => handleAmountChange(section, idx, e.target.value)} 
+                                        />
+                                        <small className="fs-6 fw-normal text-muted">g</small>
+                                    </div>
+                                ) : (
+                                    <div className="h4 mb-0 fw-bold text-primary">{ing.amount}<small className="fs-6 fw-normal text-muted ms-1">g</small></div>
+                                )}
                                 {getConversion(ing.name, ing.amount) && (
                                     <div className="text-success-vibrant fw-bold mt-1" style={{ fontSize: '0.7rem' }}>
                                         {getConversion(ing.name, ing.amount)}
