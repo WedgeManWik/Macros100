@@ -34,9 +34,11 @@ export interface DietDetails {
 
 export interface NutrientConfig {
   target: number;
-  max?: number;
+  max: number;
   essential?: boolean;
+  unit?: string;
 }
+
 
 export interface MacroConfig {
   mode: 'g/kg' | 'g' | '%' | 'remainder';

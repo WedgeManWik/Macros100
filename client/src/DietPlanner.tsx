@@ -316,7 +316,7 @@ const DietPlanner = () => {
         folate: { target: 400, max: 1000 },
         a: { target: isMale ? 900 : 700, max: 3000 },
         c: { target: isMale ? 90 : 75, max: 2000 },
-        d: { target: 20, max: 100 },
+        d: { target: 800, max: 4000 },
         e: { target: 15, max: 1000 },
         k: { target: isMale ? 120 : 90, max: 1000 },
         calcium: { target: 1000, max: 2500 },
@@ -358,7 +358,7 @@ const DietPlanner = () => {
     { title: "Carbohydrates", keys: ["fiber", "sugars"] },
     { title: "Lipids", keys: ["cholesterol", "fatMono", "fatPoly", "omega3", "omega6", "fatSat", "fatTrans"] },
     { title: "Protein (Amino Acids)", keys: ["cystine", "histidine", "isoleucine", "leucine", "lysine", "methionine", "phenylalanine", "threonine", "tryptophan", "tyrosine", "valine"] },
-    { title: "Vitamins", keys: ["b1", "b2", "b3", "b5", "b6", "b12", "folate", "a", "c", "e", "k"] },
+    { title: "Vitamins", keys: ["b1", "b2", "b3", "b5", "b6", "b12", "folate", "a", "c", "d", "e", "k"] },
     { title: "Minerals", keys: ["calcium", "copper", "iron", "magnesium", "manganese", "phosphorus", "potassium", "selenium", "sodium", "zinc"] }
   ];
 
@@ -1346,7 +1346,7 @@ const DietPlanner = () => {
                       { title: "Carbohydrates", keys: ["carbs", "fiber", "sugars"] },
                       { title: "Lipids", keys: ["fat", "cholesterol", "fatMono", "fatPoly", "omega3", "omega6", "fatSat", "fatTrans"] },
                       { title: "Protein (Amino Acids)", keys: ["protein", "cystine", "histidine", "isoleucine", "leucine", "lysine", "methionine", "phenylalanine", "threonine", "tryptophan", "tyrosine", "valine"] },
-                      { title: "Vitamins", keys: ["b1", "b2", "b3", "b5", "b6", "b12", "folate", "a", "c", "e", "k"] },
+                      { title: "Vitamins", keys: ["b1", "b2", "b3", "b5", "b6", "b12", "folate", "a", "c", "d", "e", "k"] },
                       { title: "Minerals", keys: ["calcium", "copper", "iron", "magnesium", "manganese", "phosphorus", "potassium", "selenium", "sodium", "zinc"] }
                     ].map(group => {
                       const visibleKeys = group.keys.filter(k => diet.micronutrients[k]);
@@ -1380,7 +1380,7 @@ const DietPlanner = () => {
                                 <Col md={6} xl={4} key={name}>
                                   <div className="mb-1 d-flex justify-content-between align-items-center">
                                     <span className="text-uppercase fw-bold text-white opacity-75" style={{ fontSize: '0.65rem', letterSpacing: '0.05em' }}>
-                                      {name === 'fatMono' ? 'Monounsaturated Fat' : name === 'fatPoly' ? 'Polyunsaturated Fat' : name === 'fatSat' ? 'Saturated Fat' : name === 'fatTrans' ? 'Trans Fat' : name === 'energy' ? 'Energy' : name.replace(/([A-Z])/g, ' $1')} 
+                                      {name === 'fatMono' ? 'Monounsaturated Fat' : name === 'fatPoly' ? 'Polyunsaturated Fat' : name === 'fatSat' ? 'Saturated Fat' : name === 'fatTrans' ? 'Trans Fat' : name === 'energy' ? 'Energy' : name === 'd' ? 'Vitamin D' : name.replace(/([A-Z])/g, ' $1')} 
                                     </span>
                                     <span className={`small fw-bold ${statusClass}`} style={isOverMax ? { color: '#ff8c00' } : {}}>
                                       {(data.amount || 0).toFixed(1)}{data.unit} ({pct}%)
