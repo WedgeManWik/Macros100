@@ -1075,12 +1075,12 @@ const DietPlanner = () => {
                         </div>
                         <div className="text-muted small mb-3 text-uppercase fw-bold letter-spacing-1">Distributed Evolution Islands</div>
                         <Row className="g-2">
-                            {progress.telemetry.islands.map((island, idx) => (
+                            {progress.telemetry?.islands?.map((island, idx) => (
                                 <Col xs={6} key={idx}>
                                     <div className="p-2 rounded-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                        <div className="small text-muted mb-2 d-flex justify-content-between px-1"><span>Node {idx + 1}</span><span className="text-info fw-bold">{Math.round(island.reduce((a,b)=>a+b,0)/island.length)}%</span></div>
+                                        <div className="small text-muted mb-2 d-flex justify-content-between px-1"><span>Node {idx + 1}</span><span className="text-info fw-bold">{Math.round((island?.reduce((a,b)=>a+b,0) || 0) / (island?.length || 1))}%</span></div>
                                         <div className="d-flex flex-wrap gap-1">
-                                            {island.map((acc, i) => (
+                                            {island?.map((acc, i) => (
                                                 <div key={i} style={{ width: '20px', height: '16px', fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '3px', backgroundColor: acc > 95 ? '#10b981' : acc > 80 ? '#3b82f6' : '#334155' }} className="fw-bold text-white">{Math.floor(acc)}</div>
                                             ))}
                                         </div>
@@ -1221,7 +1221,7 @@ const DietPlanner = () => {
                         {section}
                     </h5>
                     <Row className="g-3">
-                      {items.map((ing, idx) => (
+                      {items?.map((ing, idx) => (
                         <Col md={6} lg={4} key={idx}>
                           <Card className="shadow-sm h-100 border-0 hover-lift glass-panel position-relative" style={{ overflow: 'visible' }}>
                             {isEditing && (
