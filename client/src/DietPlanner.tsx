@@ -36,6 +36,7 @@ interface DietPlan {
 const DietPlanner = () => {
   const [foods, setFoods] = useState<Food[]>([]);
   const [diet, setDiet] = useState<DietPlan | null>(null);
+  const [originalDiet, setOriginalDiet] = useState<DietPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -429,8 +430,10 @@ const DietPlanner = () => {
             if (status.status === 'completed') {
                 clearInterval(interval);
                 setDiet(status.result);
+                setOriginalDiet(JSON.parse(JSON.stringify(status.result)));
                 setLoading(false);
-            } else if (status.status === 'failed' || status.status === 'cancelled') {
+            }
+ else if (status.status === 'failed' || status.status === 'cancelled') {
                 clearInterval(interval);
                 // USE THE SERVER ERROR IF PROVIDED, OTHERWISE FALLBACK
                 const finalError = status.error || 'The optimization algorithm could not find a valid diet passing all quality checks. Please adjust your constraints or select more foods.';
@@ -567,6 +570,30 @@ const DietPlanner = () => {
 
     setDiet({ ...diet, sectionedIngredients: newSectioned });
     recalculateDiet(flatIngredients);
+  };
+
+  const revertFood = (section: string, index: number) => {
+    if (!originalDiet || !diet) return;
+    const originalItem = originalDiet.sectionedIngredients[section]?.[index];
+    if (!originalItem) return;
+
+    const newSectioned = { ...diet.sectionedIngredients };
+    newSectioned[section][index].amount = originalItem.amount;
+    
+    const flatIngredients: Record<string, number> = {};
+    Object.values(newSectioned).flat().forEach(i => {
+        flatIngredients[i.name] = (flatIngredients[i.name] || 0) + i.amount;
+    });
+
+    setDiet({ ...diet, sectionedIngredients: newSectioned });
+    recalculateDiet(flatIngredients);
+  };
+
+  const revertToOriginal = () => {
+    if (originalDiet) {
+        setDiet(JSON.parse(JSON.stringify(originalDiet)));
+        setIsEditing(false);
+    }
   };
 
   const addIngredient = (section: string, foodName: string, amount: number) => {
@@ -1210,7 +1237,14 @@ const DietPlanner = () => {
                     alert('Detailed analysis copied to clipboard!');
                   }}>Export Analysis</Button>
                   <Button variant="outline-primary" size="sm" className="fw-bold px-3" onClick={() => { const text = Object.values(diet.sectionedIngredients).flat().map(i => `${i.amount}g ${i.name}`).join('\n'); navigator.clipboard.writeText(text); alert('Copied to clipboard!'); }}>Export for Cronometer</Button>
-                  <Button variant={isEditing ? "success" : "outline-primary"} size="sm" className="fw-bold px-3" onClick={() => setIsEditing(!isEditing)}>{isEditing ? 'Save Edits' : 'Edit Diet'}</Button>
+                  <div className="d-flex gap-2">
+                    {isEditing && (
+                        <Button variant="outline-danger" size="sm" className="fw-bold px-3 d-flex align-items-center" onClick={revertToOriginal}>
+                            <RotateCcw size={14} className="me-2" /> Revert to Original
+                        </Button>
+                    )}
+                    <Button variant={isEditing ? "success" : "outline-primary"} size="sm" className="fw-bold px-3" onClick={() => setIsEditing(!isEditing)}>{isEditing ? 'Save Edits' : 'Edit Diet'}</Button>
+                  </div>
                 </div>
               </div>
               
@@ -1250,6 +1284,16 @@ const DietPlanner = () => {
                                             onChange={(e) => handleAmountChange(section, idx, e.target.value)} 
                                         />
                                         <small className="fs-6 fw-normal text-muted">g</small>
+                                        {originalDiet?.sectionedIngredients[section]?.[idx] && originalDiet.sectionedIngredients[section][idx].amount !== ing.amount && (
+                                            <Button 
+                                                variant="link" 
+                                                className="p-0 text-muted hover-text-primary ms-2" 
+                                                onClick={() => revertFood(section, idx)}
+                                                title="Revert to original"
+                                            >
+                                                <RotateCcw size={14} />
+                                            </Button>
+                                        )}
                                     </div>
                                 ) : (
                                     <div className="h4 mb-0 fw-bold text-primary">{ing.amount}<small className="fs-6 fw-normal text-muted ms-1">g</small></div>
