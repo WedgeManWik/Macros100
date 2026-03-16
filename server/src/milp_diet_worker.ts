@@ -54,10 +54,10 @@ function checkDietQuality(result: any, pass: 'strict' | 'relaxed' = 'strict'): {
         return { valid: false, reason: `Macros missed targets.` };
     }
 
-    // SAFETY: Hard Priority #3
+    // SAFETY: Hard Priority #3 (80% Ceiling)
     for (const k of essentialKeys) {
-        if (nutrientConfig[k].max && totals[k] > (nutrientConfig[k].max + 0.5)) {
-            return { valid: false, reason: `${nutrientNames[k] || k} exceeded.` };
+        if (nutrientConfig[k].max && totals[k] > (nutrientConfig[k].max * 0.8 + 0.1)) {
+            return { valid: false, reason: `${nutrientNames[k] || k} exceeded 80% ceiling.` };
         }
     }
 
@@ -147,7 +147,7 @@ async function solveGLPK(foods: Food[], isMILP: boolean, weightMode: 'scout' | '
                 constraints.push({ 
                     name: `max_${k}`, 
                     vars: foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) })), 
-                    bnds: { type: glp.GLP_UP, lb: 0, ub: config.max } 
+                    bnds: { type: glp.GLP_UP, lb: 0, ub: config.max * 0.8 } 
                 });
             }
         });
