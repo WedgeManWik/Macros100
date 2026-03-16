@@ -218,7 +218,7 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
             const isAmino = aminoAcids.includes(n);
             breakdown[n] = {
                 amount: 0, total: 0,
-                unit: isAmino ? 'g' : (n==='energy'?'kcal':n==='protein'||n==='carbs'||n==='fat'||n==='fiber'||n==='sugars'||n==='water'||n==='omega3'||n==='omega6'||n==='fatSat'||n==='fatPoly'||n==='fatMono'?'g' : ['b12','folate','a','k','selenium'].includes(n)?'mcg':'mg'),
+                unit: config.unit || (isAmino ? 'g' : (n==='energy'?'kcal':n==='protein'||n==='carbs'||n==='fat'||n==='fiber'||n==='sugars'||n==='water'||n==='omega3'||n==='omega6'||n==='fatSat'||n==='fatPoly'||n==='fatMono'?'g' : ['b12','folate','a','k','selenium'].includes(n)?'mcg':'mg')),
                 sources: [],
                 max: config.max
             };

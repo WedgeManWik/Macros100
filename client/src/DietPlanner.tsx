@@ -301,7 +301,7 @@ const DietPlanner = () => {
     const targetCals = formData.targetCalories;
     
     // Logic mirrored from nutrition.ts
-    const configs: Record<string, { target: number, max: number }> = {
+    const configs: Record<string, { target: number, max: number, unit?: string }> = {
         energy: { target: targetCals, max: targetCals + 50 },
         water: { target: isMale ? 3700 : 2700, max: 10000 },
         fiber: { target: isMale ? 38 : 25, max: 100 },
@@ -316,10 +316,10 @@ const DietPlanner = () => {
         b6: { target: 1.7, max: 100 },
         b12: { target: 2.4, max: 100 },
         folate: { target: 400, max: 1000 },
-        a: { target: isMale ? 900 : 700, max: 3000 },
-        c: { target: isMale ? 90 : 75, max: 2000 },
-        d: { target: 800, max: 4000 },
-        e: { target: 15, max: 1000 },
+        a: { target: isMale ? 900 : 700, max: 3000, unit: 'mcg' },
+        c: { target: isMale ? 90 : 75, max: 2000, unit: 'mg' },
+        d: { target: 800, max: 4000, unit: 'IU' },
+        e: { target: 15, max: 1000, unit: 'mg' },
         k: { target: isMale ? 120 : 90, max: 1000 },
         calcium: { target: 1000, max: 2500 },
         copper: { target: 0.9, max: 10 },
@@ -497,6 +497,7 @@ const DietPlanner = () => {
         const config = getDefaultNutrientConfig(k);
         const isAmino = aminoAcids.includes(k);
         
+        newMicros[k].unit = config.unit || (isAmino ? 'g' : (['energy'].includes(k) ? 'kcal' : ['protein', 'carbs', 'fat', 'fiber', 'sugars', 'water', 'omega3', 'omega6', 'fatSat', 'fatPoly', 'fatMono'].includes(k) ? 'g' : ['b12', 'folate', 'a', 'k', 'selenium'].includes(k) ? 'mcg' : 'mg'));
         if (isAmino) newMicros[k].amount = Math.round(newMicros[k].amount) / 1000;
         else newMicros[k].amount = Math.round(newMicros[k].amount * 100) / 100;
 
@@ -1428,7 +1429,7 @@ const DietPlanner = () => {
                                       {name === 'fatMono' ? 'Monounsaturated Fat' : name === 'fatPoly' ? 'Polyunsaturated Fat' : name === 'fatSat' ? 'Saturated Fat' : name === 'fatTrans' ? 'Trans Fat' : name === 'energy' ? 'Energy' : name.replace(/([A-Z])/g, ' $1')} 
                                     </span>
                                     <span className={`small fw-bold ${statusClass}`} style={isOverMax ? { color: '#ff8c00' } : {}}>
-                                      {(data.amount || 0).toFixed(1)}{data.unit} ({pct}%)
+                                      {(data.amount || 0).toFixed(1)} {data.unit} ({pct}%)
                                     </span>
                                   </div>
                                   <div className="nutrient-progress-wrapper" style={{ position: 'relative' }}>
