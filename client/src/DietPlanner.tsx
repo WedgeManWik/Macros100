@@ -181,6 +181,7 @@ const DietPlanner = () => {
         const data = JSON.parse(text);
         setFormData(prev => ({ 
             ...prev, 
+            customRDAs: {}, // RESET FIRST
             ...data,
             macros: { ...prev.macros, ...(data.macros || {}) },
             mustHaveFoods: data.mustHaveFoods || [],
@@ -1424,7 +1425,7 @@ const DietPlanner = () => {
                                 <Col md={6} xl={4} key={name}>
                                   <div className="mb-1 d-flex justify-content-between align-items-center">
                                     <span className="text-uppercase fw-bold text-white opacity-75" style={{ fontSize: '0.65rem', letterSpacing: '0.05em' }}>
-                                      {name === 'fatMono' ? 'Monounsaturated Fat' : name === 'fatPoly' ? 'Polyunsaturated Fat' : name === 'fatSat' ? 'Saturated Fat' : name === 'fatTrans' ? 'Trans Fat' : name === 'energy' ? 'Energy' : name === 'd' ? 'Vitamin D' : name.replace(/([A-Z])/g, ' $1')} 
+                                      {name === 'fatMono' ? 'Monounsaturated Fat' : name === 'fatPoly' ? 'Polyunsaturated Fat' : name === 'fatSat' ? 'Saturated Fat' : name === 'fatTrans' ? 'Trans Fat' : name === 'energy' ? 'Energy' : name.replace(/([A-Z])/g, ' $1')} 
                                     </span>
                                     <span className={`small fw-bold ${statusClass}`} style={isOverMax ? { color: '#ff8c00' } : {}}>
                                       {(data.amount || 0).toFixed(1)}{data.unit} ({pct}%)
