@@ -66,8 +66,10 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
     fatSat: { target: targetCalories * 0.1 / 9, essential: true, max: targetCalories * 0.15 / 9 },
     fatPoly: { target: targetCalories * 0.08 / 9, essential: true, max: targetCalories * 0.15 / 9 },
     fatMono: { target: targetCalories * 0.12 / 9, essential: true, max: targetCalories * 0.20 / 9 },
-    fiber: { target: isMale ? 38 : 25, essential: true, max: 100 },
-    sugars: { target: 50, max: 100 },
+    fiber: { target: isMale ? 38 : 25, essential: true, max: isMale ? 60 : 50 },
+    sugars: { target: (targetCalories * 0.05) / 4, // 5% of calories
+              max: (targetCalories * 0.10) / 4    // 10% hard ceiling
+            },
     omega3: { target: isMale ? 1.6 : 1.1, essential: true, max: 10 },
     omega6: { target: isMale ? 17 : 12, essential: true, max: 40 },
     cholesterol: { target: 300, essential: true, max: 600 },
@@ -83,7 +85,7 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
     d: { target: 800, max: 4000, unit: 'IU' },
     e: { target: 15, essential: true, max: 1000, unit: 'mg' },
     k: { target: isMale ? 120 : 90, essential: true, max: 625 },
-    calcium: { target: 1000, essential: true, max: 2500 },
+    calcium: { target: (details.age > 70 || (!isMale && details.age > 50)) ? 1200 : 1000, essential: true, max: 2500 },
     copper: { target: 0.9, essential: true, max: 3.75 },
     iron: { target: isMale ? 8 : 18, essential: true, max: 45 },
     magnesium: { target: isMale ? 420 : 320, essential: true, max: 1000 },
@@ -91,19 +93,19 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
     phosphorus: { target: 700, essential: true, max: 4000 },
     potassium: { target: isMale ? 3400 : 2600, essential: true, max: 10000 },
     selenium: { target: 55, essential: true, max: 400 },
-    sodium: { target: 2300, essential: true, max: 3000 },
+    sodium: { target: details.age > 60 ? 1500 : 2300, essential: true, max: details.age > 60 ? 2300 : 3000 },
     zinc: { target: isMale ? 11 : 8, essential: true, max: 40 },
     cystine: { target: 500, essential: true, max: 5000 },
     histidine: { target: 700, essential: true, max: 5000 },
     isoleucine: { target: 1400, essential: true, max: 10000 },
-    leucine: { target: 2700, essential: true, max: 20000 },
+    leucine: { target: details.weight * 42, essential: true, max: 20000 },
     lysine: { target: 2100, essential: true, max: 15000 },
     methionine: { target: 700, essential: true, max: 5000 },
     phenylalanine: { target: 1100, essential: true, max: 10000 },
     threonine: { target: 1000, essential: true, max: 10000 },
     tryptophan: { target: 280, essential: true, max: 2000 },
     tyrosine: { target: 800, essential: true, max: 10000 },
-    valine: { target: 1600, essential: true, max: 12000 }
+    valine: { target: details.weight * 24, essential: true, max: 12000 },
   };
 
   // Merge custom RDAs/limits
