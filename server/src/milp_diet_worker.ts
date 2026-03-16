@@ -54,7 +54,9 @@ function checkDietQuality(result: any, pass: 'strict' | 'relaxed' = 'strict'): {
         return { valid: false, reason: `Macros missed targets.` };
     }
 
-    // SAFETY: Hard Priority #3 (80% Ceiling)
+    // SAFETY: Hard Priority #3 (80% Ceiling + Water Limit)
+    if (totals.water > 3500.5) return { valid: false, reason: `Water (${Math.round(totals.water)}g) exceeds 3500g limit.` };
+    
     for (const k of essentialKeys) {
         if (nutrientConfig[k].max && totals[k] > (nutrientConfig[k].max * 0.8 + 0.1)) {
             return { valid: false, reason: `${nutrientNames[k] || k} exceeded 80% ceiling.` };
