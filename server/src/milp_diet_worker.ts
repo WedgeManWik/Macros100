@@ -29,7 +29,7 @@ function calculateNutrientScore(totals: any) {
     return score;
 }
 
-function checkDietQuality(result: any, pass: 'strict' | 'relaxed' = 'strict'): { valid: boolean, reason?: string } {
+function checkDietQuality(result: any): { valid: boolean, reason?: string } {
     if (!result || !result.genome || Object.keys(result.genome).length <= 1) {
         return { valid: false, reason: "Too few foods." };
     }
@@ -37,29 +37,30 @@ function checkDietQuality(result: any, pass: 'strict' | 'relaxed' = 'strict'): {
     const cals = totals.energy;
     
     // CALORIES: Hard Priority #1
-    const calLB = details.strictCalories ? (targetCalories - 20) : targetCalories;
-    const calUB = details.strictCalories ? (targetCalories + 20) : (targetCalories + 55);
-    if (cals < calLB - 1 || cals > calUB + 1) return { valid: false, reason: `Calories (${Math.round(cals)}) outside budget.` };
+    const calLB = details.strictCalories ? (targetCalories - 21) : (targetCalories - 21);
+    const calUB = details.strictCalories ? (targetCalories + 21) : (targetCalories + 56);
+    if (cals < calLB || cals > calUB) return { valid: false, reason: `Calories (${Math.round(cals)}) outside budget.` };
 
     // MACROS: Hard Priority #2
     const pDiff = Math.abs(totals.protein - proteinTarget);
     const fDiff = Math.abs(totals.fat - fatTarget);
     const cDiff = Math.abs(totals.carbs - carbTarget);
     
-    const pLimit = details.macros.protein.strict ? 2.5 : 6;
-    const fLimit = details.macros.fat.strict ? 2.5 : 6;
-    const cLimit = details.macros.carbs.strict ? 2.5 : 6;
+    const pLimit = details.macros.protein.strict ? 2.1 : 5.6;
+    const fLimit = details.macros.fat.strict ? 2.1 : 5.6;
+    const cLimit = details.macros.carbs.strict ? 2.1 : 5.6;
 
     if (pDiff > pLimit || fDiff > fLimit || cDiff > cLimit) {
-        return { valid: false, reason: `Macros missed targets.` };
+        return { valid: false, reason: `Macros missed targets (P:${Math.round(pDiff)}g, C:${Math.round(cDiff)}g, F:${Math.round(fDiff)}g).` };
     }
 
-    // SAFETY: Hard Priority #3 (80% Ceiling + Water Limit)
-    if (totals.water > 3500.5) return { valid: false, reason: `Water (${Math.round(totals.water)}g) exceeds 3500g limit.` };
+    // SAFETY: Hard Priority #3 (100% Ceiling + Water Limit)
+    // We use a 95% ceiling for the final validity check to ensure a "buffer" of health.
+    if (totals.water > 4000) return { valid: false, reason: `Water (${Math.round(totals.water)}g) exceeds limit.` };
     
     for (const k of essentialKeys) {
-        if (nutrientConfig[k].max && totals[k] > (nutrientConfig[k].max * 0.8 + 0.1)) {
-            return { valid: false, reason: `${nutrientNames[k] || k} exceeded 80% ceiling.` };
+        if (nutrientConfig[k].max && totals[k] > (nutrientConfig[k].max * 1.0 + 0.1)) {
+            return { valid: false, reason: `${nutrientNames[k] || k} exceeded safety limit.` };
         }
     }
 
@@ -82,7 +83,7 @@ function getTotalsFromVars(vars: any, pool: Food[]) {
     return totals;
 }
 
-async function solveGLPK(foods: Food[], isMILP: boolean, weightMode: 'scout' | 'strict', timeLimit: number) {
+async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number) {
     try {
         const glp = await GLPK_PROMISE;
         const vars: any[] = [];
@@ -90,28 +91,43 @@ async function solveGLPK(foods: Food[], isMILP: boolean, weightMode: 'scout' | '
         const binaries: string[] = [];
         const objectiveVars: any[] = [];
 
-        const macroTargets = [
-            { name: 'protein', val: proteinTarget, strict: details.macros.protein.strict },
-            { name: 'fat', val: fatTarget, strict: details.macros.fat.strict },
-            { name: 'carbs', val: carbTarget, strict: details.macros.carbs.strict }
+        // 1. MACRO/CALORIE SLACKS (Highest Penalty)
+        const macroList = [
+            { name: 'protein', target: proteinTarget },
+            { name: 'fat', target: fatTarget },
+            { name: 'carbs', target: carbTarget }
         ];
-        
-        // 1. NUTRIENT SCORE (Objective)
+
+        // Slacks for deviations
+        vars.push({ name: 'cal_p_dev', lb: 0, ub: 500, type: glp.GLP_DB });
+        vars.push({ name: 'cal_n_dev', lb: 0, ub: 500, type: glp.GLP_DB });
+        objectiveVars.push({ name: 'cal_p_dev', coef: -1000000 });
+        objectiveVars.push({ name: 'cal_n_dev', coef: -1000000 });
+
+        macroList.forEach(m => {
+            vars.push({ name: `dev_p_${m.name}`, lb: 0, ub: 100, type: glp.GLP_DB });
+            vars.push({ name: `dev_n_${m.name}`, lb: 0, ub: 100, type: glp.GLP_DB });
+            objectiveVars.push({ name: `dev_p_${m.name}`, coef: -500000 });
+            objectiveVars.push({ name: `dev_n_${m.name}`, coef: -500000 });
+        });
+
+        // 2. NUTRIENT SCORE (Secondary Objective)
         essentialKeys.forEach((k: string) => {
             vars.push({ name: `cov_${k}`, lb: 0, ub: 1.0, type: glp.GLP_DB });
             objectiveVars.push({ name: `cov_${k}`, coef: 1000 }); 
         });
         vars.push({ name: 'min_cov', lb: 0, ub: 1.0, type: glp.GLP_DB });
-        objectiveVars.push({ name: 'min_cov', coef: 5000 });
+        objectiveVars.push({ name: 'min_cov', coef: 2000 });
 
-        // 2. FOODS
+        // 3. FOODS
         foods.forEach((f, i) => {
             const mustHave = details.mustHaveFoods?.find((m: any) => m.name === f.name);
             const customMax = details.customMaxAmounts?.[f.name];
             let minVal = (mustHave ? (mustHave.min || f.minAmount || 0) : (f.minAmount || 0)) / 100;
             let maxVal = (mustHave && mustHave.max !== undefined) ? (mustHave.max / 100) : (customMax !== undefined ? (customMax / 100) : (f.maxAmount / 100));
-            vars.push({ name: `f_${i}`, lb: (!isMILP && mustHave) ? minVal : 0, ub: Math.max(minVal, maxVal), type: glp.GLP_DB });
-            objectiveVars.push({ name: `f_${i}`, coef: -0.0001 }); // Density bias
+            
+            vars.push({ name: `f_${i}`, lb: (isMILP || !mustHave) ? 0 : minVal, ub: Math.max(minVal, maxVal), type: glp.GLP_DB });
+            objectiveVars.push({ name: `f_${i}`, coef: -0.01 }); 
 
             if (isMILP) {
                 vars.push({ name: `u_${i}`, lb: 0, ub: 1, type: glp.GLP_DB });
@@ -122,22 +138,27 @@ async function solveGLPK(foods: Food[], isMILP: boolean, weightMode: 'scout' | '
             }
         });
 
-        // 3. HARD CONSTRAINTS (Locking Priorities)
-        const calLB = details.strictCalories ? (targetCalories - 20) : targetCalories;
-        const calUB = details.strictCalories ? (targetCalories + 20) : (targetCalories + 50);
+        // 4. CONSTRAINTS
+        const calVars = foods.map((f, i) => ({ name: `f_${i}`, coef: f.calories }));
         constraints.push({ 
-            name: 'c_cal', 
-            vars: foods.map((f, i) => ({ name: `f_${i}`, coef: f.calories })), 
-            bnds: { type: glp.GLP_DB, lb: calLB, ub: calUB } 
+            name: 'c_cal_goal', 
+            vars: [...calVars, { name: 'cal_p_dev', coef: -1 }, { name: 'cal_n_dev', coef: 1 }], 
+            bnds: { type: glp.GLP_FX, lb: targetCalories, ub: targetCalories } 
         });
+        
+        const calLB = details.strictCalories ? (targetCalories - 20) : (targetCalories - 20);
+        const calUB = details.strictCalories ? (targetCalories + 20) : (targetCalories + 55);
+        constraints.push({ name: 'c_cal_hard', vars: calVars, bnds: { type: glp.GLP_DB, lb: calLB, ub: calUB } });
 
-        macroTargets.forEach(m => {
-            const limit = m.strict ? 2.0 : 5.5;
+        macroList.forEach(m => {
+            const mVars = foods.map((f, i) => ({ name: `f_${i}`, coef: (f as any)[m.name] }));
             constraints.push({ 
-                name: `macro_${m.name}`, 
-                vars: foods.map((f, i) => ({ name: `f_${i}`, coef: (f as any)[m.name] })), 
-                bnds: { type: glp.GLP_DB, lb: m.val - limit, ub: m.val + limit } 
+                name: `macro_goal_${m.name}`, 
+                vars: [...mVars, { name: `dev_p_${m.name}`, coef: -1 }, { name: `dev_n_${m.name}`, coef: 1 }], 
+                bnds: { type: glp.GLP_FX, lb: m.target, ub: m.target } 
             });
+            const limit = details.macros[m.name as 'protein'|'carbs'|'fat'].strict ? 2.0 : 5.5;
+            constraints.push({ name: `macro_hard_${m.name}`, vars: mVars, bnds: { type: glp.GLP_DB, lb: m.target - limit, ub: m.target + limit } });
         });
 
         essentialKeys.forEach((k: string) => {
@@ -149,7 +170,7 @@ async function solveGLPK(foods: Food[], isMILP: boolean, weightMode: 'scout' | '
                 constraints.push({ 
                     name: `max_${k}`, 
                     vars: foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) })), 
-                    bnds: { type: glp.GLP_UP, lb: 0, ub: config.max * 0.8 } 
+                    bnds: { type: glp.GLP_UP, lb: 0, ub: config.max } 
                 });
             }
         });
@@ -158,26 +179,6 @@ async function solveGLPK(foods: Food[], isMILP: boolean, weightMode: 'scout' | '
     } catch (err: any) {
         return { result: { status: 0, error: err.message } };
     }
-}
-
-function evaluateDiet(genome: Record<string, number>) {
-    const totals: any = { energy: 0, protein: 0, carbs: 0, fat: 0 };
-    Object.keys(nutrientConfig).forEach(k => totals[k] = 0);
-    for (const name in genome) {
-        const amt = genome[name];
-        const f = foodMap.get(name);
-        if (!f || amt <= 0) continue;
-        const r = amt / 100;
-        totals.energy += r * f.calories;
-        totals.protein += r * f.protein;
-        totals.carbs += r * f.carbs;
-        totals.fat += r * f.fat;
-        if (f.nutrients) for (const n in f.nutrients) if (totals[n] !== undefined) totals[n] += r * (f.nutrients[n] || 0);
-    }
-    let totalPct = 0;
-    essentialKeys.forEach((k: string) => { totalPct += Math.min(1.0, (totals[k] / (nutrientConfig[k].target || 1))); });
-    const accuracy = Math.round((totalPct / essentialKeys.length) * 1000) / 10;
-    return { accuracy, totals, genome, score: totalPct };
 }
 
 async function diagnoseFailure(allPool: Food[]) {
@@ -227,118 +228,86 @@ async function diagnoseFailure(allPool: Food[]) {
         });
 
         const res = await glp.solve({ name: 'Diagnosis', objective: { direction: glp.GLP_MAX, name: 'obj', vars: objectiveVars }, subjectTo: constraints, bounds: vars });
-        
         if (res.result.vars) {
             const v = res.result.vars;
             for (const k of essentialKeys) {
-                if (v[`diag_max_${k}`] > 0.1) {
-                    return `SAFETY LIMIT EXCEEDED: Your must-have foods already exceed the ${nutrientNames[k] || k} limit by ~${Math.round(v[`diag_max_${k}`])}${nutrientConfig[k].unit || ''}. Try removing some must-have items or increasing the limit in Advanced Settings.`;
-                }
+                if (v[`diag_max_${k}`] > 0.1) return `SAFETY LIMIT EXCEEDED: Your must-have foods already exceed the ${nutrientNames[k] || k} limit by ~${Math.round(v[`diag_max_${k}`])}${nutrientConfig[k].unit || ''}.`;
             }
-            if (v.diag_cal_def > 10) return `CALORIE DEFICIT: Selected foods cannot reach your target. They are short by ~${Math.round(v.diag_cal_def)} kcal. Add more calorie-dense foods.`;
-            if (v.diag_cal_ex > 10) return `CALORIE OVERFLOW: Your must-have foods already exceed your calorie target by ~${Math.round(v.diag_cal_ex)} kcal.`;
-            if (v.diag_protein_def > 5) return `PROTEIN IMPOSSIBLE: Your protein target (${Math.round(proteinTarget)}g) is too high for the selected foods. Add more lean protein sources.`;
-            if (v.diag_protein_ex > 5) return `PROTEIN OVERFLOW: Must-have foods already exceed your protein target.`;
-            if (v.diag_fat_ex > 5) return `FAT OVERFLOW: Must-have foods already exceed your fat target (${Math.round(fatTarget)}g).`;
-            if (v.diag_carbs_def > 10) return `CARB IMPOSSIBLE: Your carb target is too high for the selected foods. Add more rice, potatoes or fruit.`;
+            if (v.diag_cal_def > 10) return `CALORIE DEFICIT: Foods cannot reach target. Short by ~${Math.round(v.diag_cal_def)} kcal.`;
+            if (v.diag_cal_ex > 10) return `CALORIE OVERFLOW: Must-haves exceed target by ~${Math.round(v.diag_cal_ex)} kcal.`;
+            if (v.diag_protein_def > 5) return `PROTEIN IMPOSSIBLE: Protein target too high. Add more lean protein.`;
+            if (v.diag_carbs_def > 10) return `CARB IMPOSSIBLE: Carb target too high. Add more rice/potatoes.`;
         }
     } catch (e) {}
-    return "The combination of must-have foods, safety limits, and macro targets is mathematically impossible. Try relaxing 'Strict' toggles or reducing must-have amounts.";
+    return "Mathematically impossible combination. Try relaxing 'Strict' toggles.";
 }
 
 async function run() {
-    const configs: Record<string, any> = {
-        beast: { specs: 5, trials: 1000, subset: 25, refinements: 10, milpLimit: 15, timeout: 120000 },
-        titan: { specs: 10, trials: 5000, subset: 25, refinements: 20, milpLimit: 20, timeout: 240000 },
-        olympian: { specs: 15, trials: 15000, subset: 25, refinements: 30, milpLimit: 30, timeout: 480000 },
-        god: { specs: 20, trials: 40000, subset: 25, refinements: 50, milpLimit: 40, timeout: 900000 }
-    };
-    let cfg = configs[details.algoModel || 'beast'] || configs.beast;
-
-    const totalTimeout = setTimeout(() => {
-        log("Worker Global Safety Timeout Triggered!");
-        parentPort?.postMessage({ type: 'result', result: null });
-        process.exit(1);
-    }, cfg.timeout);
-
     try {
-        const likedPool = FOOD_DATABASE.filter((f: Food) => details.likedFoods.includes(f.name) || details.mustHaveFoods.find((m:any)=>m.name===f.name));
-        const mustHaveSet = new Set(details.mustHaveFoods.map((m: any) => m.name));
+        const mustHaveNames = (details.mustHaveFoods || []).map((m: any) => m.name);
+        const likedPool = FOOD_DATABASE.filter((f: Food) => details.likedFoods.includes(f.name) || mustHaveNames.includes(f.name));
+        
+        log(`Analyzing ${likedPool.length} foods...`);
 
-        const specialistMap = new Map<string, Food[]>();
-        essentialKeys.forEach((k: string) => {
-            const sorted = [...likedPool].sort((a, b) => {
-                const getVal = (f: Food) => (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0));
-                return (getVal(b) / (b.calories || 1)) - (getVal(a) / (a.calories || 1));
-            });
-            specialistMap.set(k, sorted.slice(0, cfg.specs));
-        });
-
-        let trialPools: { pool: Food[], score: number }[] = [];
-        const trialInterval = Math.max(1, Math.floor(cfg.trials / 20));
-        for (let i = 0; i < cfg.trials; i++) {
-            const trialNames = new Set([...mustHaveSet]);
-            essentialKeys.forEach((k: string) => {
-                const options = specialistMap.get(k)!;
-                if (options.length > 0) trialNames.add(options[Math.floor(Math.random() * options.length)].name);
-            });
-            const shuffledLiked = [...likedPool].sort(() => 0.5 - Math.random());
-            for (let j = 0; j < shuffledLiked.length && trialNames.size < cfg.subset; j++) trialNames.add(shuffledLiked[j].name);
-            const trialPool = FOOD_DATABASE.filter((f: Food) => trialNames.has(f.name));
-            
-            const res = await solveGLPK(trialPool, false, 'scout', 5);
-            if (res.result && (res.result.status === 5 || res.result.status === 2)) {
-                const totals = getTotalsFromVars(res.result.vars, trialPool);
-                trialPools.push({ pool: trialPool, score: calculateNutrientScore(totals) });
-                trialPools.sort((a, b) => b.score - a.score);
-                trialPools = trialPools.slice(0, cfg.refinements);
-            }
-            if (i % trialInterval === 0) parentPort?.postMessage({ type: 'progress', gen: 5 + (i/cfg.trials * 40), accuracy: 0, telemetry: { trialInfo: `Searching Combos ${i}/${cfg.trials}...` } });
+        // 1. GLOBAL CONTINUOUS SOLVE (LP)
+        // This checks if a solution exists AT ALL using all liked foods.
+        const globalRes = await solveGLPK(likedPool, false, 500);
+        if (!globalRes.result || (globalRes.result.status !== 5 && globalRes.result.status !== 2)) {
+            const reason = await diagnoseFailure(likedPool);
+            parentPort?.postMessage({ type: 'result', result: null, error: reason });
+            return;
         }
 
+        // 2. EXTRACT "HERO" FOODS
+        // Foods that the solver picked in the continuous solve are our best candidates.
+        const heroFoods = new Set<string>(mustHaveNames);
+        Object.entries(globalRes.result.vars || {}).forEach(([name, val]: [string, any]) => {
+            if (name.startsWith('f_') && val > 0.01) {
+                const idx = parseInt(name.split('_')[1]);
+                heroFoods.add(likedPool[idx].name);
+            }
+        });
+
+        log(`Identified ${heroFoods.size} key foods. Refining...`);
+
+        // 3. REFINEMENT SUBSETS
+        // We create a few subsets centered around hero foods + random specialists.
         let finalCandidates: any[] = [];
-        for (let i = 0; i < trialPools.length; i++) {
-            parentPort?.postMessage({ type: 'progress', gen: 45 + (i/trialPools.length * 50), accuracy: finalCandidates[0]?.accuracy || 0, telemetry: { trialInfo: `Refining Combo ${i+1}/${trialPools.length}...` } });
-            const res = await solveGLPK(trialPools[i].pool, true, 'strict', cfg.milpLimit);
+        const subsetCount = details.algoModel === 'beast' ? 10 : details.algoModel === 'titan' ? 30 : 60;
+        
+        for (let i = 0; i < subsetCount; i++) {
+            const trialSet = new Set(heroFoods);
+            // Add some random variety
+            const shuffled = [...likedPool].sort(() => 0.5 - Math.random());
+            for (let j = 0; j < shuffled.length && trialSet.size < 40; j++) trialSet.add(shuffled[j].name);
+            
+            const trialPool = FOOD_DATABASE.filter((f: Food) => trialSet.has(f.name));
+            const res = await solveGLPK(trialPool, true, 1000); // MILP Refinement
+            
             if (res.result && res.result.vars) {
                 const genome: Record<string, number> = {};
-                trialPools[i].pool.forEach((f: Food, idx: number) => {
+                trialPool.forEach((f: Food, idx: number) => {
                     const val = res.result.vars[`f_${idx}`] || 0;
                     if (val > 0.001) genome[f.name] = Math.round(val * 100);
                 });
-                const evalResult = evaluateDiet(genome);
-                if (checkDietQuality(evalResult, 'strict').valid) finalCandidates.push(evalResult);
+                const totals = getTotalsFromVars(res.result.vars, trialPool);
+                const score = calculateNutrientScore(totals);
+                const evalRes = { totals, genome, score, accuracy: Math.round((score / essentialKeys.length) * 1000) / 10 };
+                
+                if (checkDietQuality(evalRes).valid) finalCandidates.push(evalRes);
             }
-        }
-
-        if (finalCandidates.length === 0) {
-            log("Retrying with relaxed pass...");
-            for (let i = 0; i < trialPools.length; i++) {
-                const res = await solveGLPK(trialPools[i].pool, true, 'strict', cfg.milpLimit);
-                if (res.result && res.result.vars) {
-                    const genome: Record<string, number> = {};
-                    trialPools[i].pool.forEach((f: Food, idx: number) => {
-                        const val = res.result.vars[`f_${idx}`] || 0;
-                        if (val > 0.001) genome[f.name] = Math.round(val * 100);
-                    });
-                    const evalResult = evaluateDiet(genome);
-                    if (checkDietQuality(evalResult, 'relaxed').valid) finalCandidates.push(evalResult);
-                }
-            }
+            if (i % 5 === 0) parentPort?.postMessage({ type: 'progress', gen: 10 + (i/subsetCount * 80), accuracy: finalCandidates[0]?.accuracy || 0 });
         }
 
         if (finalCandidates.length > 0) {
             finalCandidates.sort((a, b) => b.score - a.score);
             const best = finalCandidates[0];
-            clearTimeout(totalTimeout);
             parentPort?.postMessage({ type: 'result', result: { genome: best.genome, targetCalories, actualCalories: Math.round(best.totals.energy), accuracy: best.accuracy, macros: { protein: Math.round(best.totals.protein), carbs: Math.round(best.totals.carbs), fat: Math.round(best.totals.fat) } } });
         } else {
-            log("CRITICAL: Failed to find valid diet. Running diagnosis...");
             const reason = await diagnoseFailure(likedPool);
             parentPort?.postMessage({ type: 'result', result: null, error: reason });
         }
     } catch (err: any) {
-        log(`FATAL ERROR: ${err.message}`);
         parentPort?.postMessage({ type: 'result', result: null, error: "System Error: " + err.message });
     }
 }
