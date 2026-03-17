@@ -124,6 +124,7 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
 
   // Determine essential keys dynamically
   const essentialKeys = Object.keys(nutrientConfig).filter(k => {
+    if (k === 'sugars') return true; // Always track and enforce sugar limits
     const isDefaultEssential = nutrientConfig[k].essential;
     const hasCustomTarget = details.customRDAs?.[k]?.target !== undefined && !isNaN(details.customRDAs[k].target);
     const hasCustomMax = details.customRDAs?.[k]?.max !== undefined && !isNaN(details.customRDAs[k].max);

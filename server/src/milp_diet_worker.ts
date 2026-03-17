@@ -55,8 +55,11 @@ function checkDietQuality(result: any, ceiling: number): { valid: boolean, reaso
     if (totals.water > 4000) return { valid: false, reason: `Water exceeds limit.` };
     
     for (const k of essentialKeys) {
-        if (nutrientConfig[k].max && totals[k] > (nutrientConfig[k].max * ceiling + 0.1)) {
-            return { valid: false, reason: `${nutrientNames[k] || k} exceeded ${Math.round(ceiling*100)}% safety limit.` };
+        if (nutrientConfig[k].max) {
+            const actualCeiling = k === 'sugars' ? 1.0 : ceiling;
+            if (totals[k] > (nutrientConfig[k].max * actualCeiling + 0.1)) {
+                return { valid: false, reason: `${nutrientNames[k] || k} exceeded ${Math.round(actualCeiling*100)}% safety limit.` };
+            }
         }
     }
 
@@ -101,6 +104,10 @@ async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number, ceil
             objectiveVars.push({ name: `dev_n_${m.name}`, coef: -500000 });
         });
 
+        // Sugar Slack (Highest Penalty)
+        vars.push({ name: 'sugar_p_dev', lb: 0, ub: 500, type: glp.GLP_DB });
+        objectiveVars.push({ name: 'sugar_p_dev', coef: -2000000 }); // More penalized than macros
+
         essentialKeys.forEach((k: string) => {
             vars.push({ name: `cov_${k}`, lb: 0, ub: 1.0, type: glp.GLP_DB });
             objectiveVars.push({ name: `cov_${k}`, coef: 1000 }); 
@@ -142,9 +149,19 @@ async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number, ceil
             const foodCoeffs = foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) / (config.target || 1) }));
             constraints.push({ name: `lk_cov_${k}`, vars: [...foodCoeffs, { name: `cov_${k}`, coef: -1 }], bnds: { type: glp.GLP_LO, lb: 0, ub: 0 } });
             constraints.push({ name: `lk_min_${k}`, vars: [{ name: 'min_cov', coef: 1 }, { name: `cov_${k}`, coef: -1 }], bnds: { type: glp.GLP_UP, lb: 0, ub: 0 } });
+            
             if (config.max) {
-                constraints.push({ name: `max_${k}`, vars: foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) })), bnds: { type: glp.GLP_UP, lb: 0, ub: config.max * ceiling } });
+                const actualCeiling = k === 'sugars' ? 1.0 : ceiling;
+                constraints.push({ name: `max_${k}`, vars: foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) })), bnds: { type: glp.GLP_UP, lb: 0, ub: config.max * actualCeiling } });
             }
+        });
+
+        // Sugar hard goal constraint (uses the penalized slack)
+        const sugarVars = foods.map((f, i) => ({ name: `f_${i}`, coef: f.nutrients?.sugars || 0 }));
+        constraints.push({ 
+            name: 'c_sugar_goal', 
+            vars: [...sugarVars, { name: 'sugar_p_dev', coef: -1 }], 
+            bnds: { type: glp.GLP_UP, lb: 0, ub: nutrientConfig.sugars.max } 
         });
 
         return await glp.solve({ name: 'DietPlanner', objective: { direction: glp.GLP_MAX, name: 'score', vars: objectiveVars }, subjectTo: constraints, bounds: vars, binaries: binaries, options: { presol: true, tmlim: timeLimit } });
