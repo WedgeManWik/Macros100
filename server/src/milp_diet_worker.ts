@@ -173,10 +173,64 @@ async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number, ceil
 async function diagnoseFailure(allPool: Food[], ceiling: number) {
     try {
         const glp = await GLPK_PROMISE;
+        const mustHaves = details.mustHaveFoods || [];
+        
+        const getMustHaveTotals = () => {
+            const totals: any = { energy: 0, protein: 0, carbs: 0, fat: 0 };
+            Object.keys(nutrientConfig).forEach(k => totals[k] = 0);
+            mustHaves.forEach((m: any) => {
+                const f = foodMap.get(m.name);
+                if (f) {
+                    const r = m.min / 100;
+                    totals.energy += r * f.calories;
+                    totals.protein += r * f.protein;
+                    totals.carbs += r * f.carbs;
+                    totals.fat += r * f.fat;
+                    if (f.nutrients) for (const n in f.nutrients) if (totals[n] !== undefined) totals[n] += r * (f.nutrients[n] || 0);
+                }
+            });
+            return totals;
+        };
+
+        const findBestSources = (macro: string, mode: 'high'|'low' = 'high') => {
+            return allPool
+                .filter(f => (f as any)[macro] !== undefined)
+                .sort((a, b) => {
+                    const valA = (a as any)[macro] / (a.calories || 1);
+                    const valB = (b as any)[macro] / (b.calories || 1);
+                    return mode === 'high' ? valB - valA : valA - valB;
+                })
+                .slice(0, 3).map(f => f.name).join(", ");
+        };
+
+        const mTotals = getMustHaveTotals();
+
+        // PHASE 1: DIRECT MUST-HAVE CONTRADICTIONS
+        // Check if must-haves alone break the rules
+        if (mTotals.energy > targetCalories + 20) return `CALORIE CONTRADICTION: Your must-have foods alone total ~${Math.round(mTotals.energy)} kcal, exceeding your ${Math.round(targetCalories)} kcal target. Try reducing mandatory portions.`;
+        if (mTotals.protein > proteinTarget + 5) return `PROTEIN CONTRADICTION: Your must-have foods contain ~${Math.round(mTotals.protein)}g protein, already exceeding your ${Math.round(proteinTarget)}g goal.`;
+        if (mTotals.carbs > carbTarget + 5) return `CARB CONTRADICTION: Your must-have foods contain ~${Math.round(mTotals.carbs)}g carbs, already exceeding your ${Math.round(carbTarget)}g goal. This is common in Keto profiles with too many mandatory vegetables or fruit.`;
+        if (mTotals.fat > fatTarget + 5) return `FAT CONTRADICTION: Your must-have foods contain ~${Math.round(mTotals.fat)}g fat, already exceeding your ${Math.round(fatTarget)}g goal.`;
+
+        for (const k of essentialKeys) {
+            if (nutrientConfig[k].max && mTotals[k] > (nutrientConfig[k].max * ceiling + 0.1)) {
+                const name = nutrientNames[k] || k;
+                let topContrib = ""; let maxC = 0;
+                mustHaves.forEach((m:any) => {
+                    const f = foodMap.get(m.name);
+                    const val = (k==='energy'?f?.calories:k==='protein'?f?.protein:k==='carbs'?f?.carbs:k==='fat'?f?.fat:(f?.nutrients[k] as any)) || 0;
+                    if (val * (m.min/100) > maxC) { maxC = val * (m.min/100); topContrib = m.name; }
+                });
+                return `${name.toUpperCase()} SAFETY CONTRADICTION: Your must-have foods exceed the ${Math.round(ceiling*100)}% safety limit for ${name}. ${topContrib} is the biggest contributor.`;
+            }
+        }
+
+        // PHASE 2: SOLVER-BASED DEEP AUDIT
         const vars: any[] = [];
         const constraints: any[] = [];
         const objectiveVars: any[] = [];
 
+        // Diagnostic Slacks
         vars.push({ name: 'diag_cal_def', lb: 0, ub: 5000, type: glp.GLP_DB }, { name: 'diag_cal_ex', lb: 0, ub: 5000, type: glp.GLP_DB });
         objectiveVars.push({ name: 'diag_cal_def', coef: -1000000 }, { name: 'diag_cal_ex', coef: -1000000 });
 
@@ -193,8 +247,10 @@ async function diagnoseFailure(allPool: Food[], ceiling: number) {
         });
 
         allPool.forEach((f, i) => {
-            const mustHave = details.mustHaveFoods?.find((m: any) => m.name === f.name);
-            vars.push({ name: `f_${i}`, lb: (mustHave ? (mustHave.min || 0) : 0) / 100, ub: 50, type: glp.GLP_DB });
+            const mustHave = mustHaves.find((m: any) => m.name === f.name);
+            const customMax = details.customMaxAmounts?.[f.name];
+            let maxVal = (mustHave && mustHave.max !== undefined) ? (mustHave.max / 100) : (customMax !== undefined ? (customMax / 100) : (f.maxAmount / 100));
+            vars.push({ name: `f_${i}`, lb: (mustHave ? (mustHave.min || 0) : 0) / 100, ub: Math.max(50, maxVal), type: glp.GLP_DB });
             objectiveVars.push({ name: `f_${i}`, coef: 1 }); 
         });
 
@@ -214,16 +270,29 @@ async function diagnoseFailure(allPool: Food[], ceiling: number) {
         const res = await glp.solve({ name: 'Diagnosis', objective: { direction: glp.GLP_MAX, name: 'obj', vars: objectiveVars }, subjectTo: constraints, bounds: vars });
         if (res.result.vars) {
             const v = res.result.vars;
+            
+            // 1. Check if safety limit prevents hitting a macro
             for (const k of essentialKeys) {
-                if (v[`diag_max_${k}`] > 0.1) return `SAFETY LIMIT EXCEEDED: Your must-have foods already exceed the ${nutrientNames[k] || k} limit by ~${Math.round(v[`diag_max_${k}`])}${nutrientConfig[k].unit || ''} at ${Math.round(ceiling*100)}% ceiling.`;
+                if (v[`diag_max_${k}`] > 0.1) {
+                    const name = nutrientNames[k] || k;
+                    return `SAFETY BOTTLENECK: To hit your macro targets, the algorithm needs to pick foods that would exceed your ${name} safety limit. Try relaxing your macro goals or adding different types of foods to your liked list.`;
+                }
             }
-            if (v.diag_cal_def > 10) return `CALORIE DEFICIT: Foods cannot reach target. Short by ~${Math.round(v.diag_cal_def)} kcal.`;
-            if (v.diag_cal_ex > 10) return `CALORIE OVERFLOW: Must-haves exceed target by ~${Math.round(v.diag_cal_ex)} kcal.`;
-            if (v.diag_protein_def > 5) return `PROTEIN IMPOSSIBLE: Protein target too high. Add more lean protein.`;
-            if (v.diag_carbs_def > 10) return `CARB IMPOSSIBLE: Carb target too high. Add more rice/potatoes.`;
+
+            // 2. Complex Macro Deficits (The pool is insufficient)
+            if (v.diag_protein_def > 5) return `PROTEIN INFEASIBLE: Your selected foods don't have enough protein density to hit ${Math.round(proteinTarget)}g within your calorie budget. Add leaner protein like: ${findBestSources('protein')}.`;
+            if (v.diag_fat_def > 5) return `FAT INFEASIBLE: Your selected foods are too lean to hit ${Math.round(fatTarget)}g fat. Add fatty foods like: ${findBestSources('fat')}.`;
+            if (v.diag_carbs_def > 5) return `CARB INFEASIBLE: Your selected foods don't have enough carbs to hit ${Math.round(carbTarget)}g. Add carb-dense foods like: ${findBestSources('carbs')}.`;
+
+            // 3. Complex Macro Overflows (The pool is too dense)
+            if (v.diag_protein_ex > 5) return `PROTEIN OVERFLOW: Every possible combination of your liked foods that hits your other targets results in too much protein. Add more protein-free foods (fats/carbs) or reduce meat portions.`;
+            if (v.diag_fat_ex > 5) return `FAT OVERFLOW: Every possible combination exceeds your fat goal. Add leaner foods like: ${findBestSources('fat', 'low')}.`;
+            if (v.diag_carbs_ex > 5) return `CARB OVERFLOW: Every possible combination exceeds your carb goal. Add lower-carb options like: ${findBestSources('carbs', 'low')}.`;
+
+            if (v.diag_cal_def > 10) return `CALORIE DEFICIT: Even at maximum portions, your liked foods cannot reach ${Math.round(targetCalories)} kcal. Add calorie-dense foods.`;
         }
     } catch (e) {}
-    return "Mathematically impossible combination. Try relaxing 'Strict' toggles.";
+    return "Mathematically impossible combination. Try relaxing 'Strict' toggles, reducing must-have portions, or adding more variety to your liked foods list.";
 }
 
 async function run() {
