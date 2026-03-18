@@ -211,7 +211,7 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
     });
   };
 
-  const finish = (bestPlan: any, bestResult: any) => {
+  const finish = (bestPlan: any, bestResult: any, errorMessage?: string) => {
     try {
         console.log("Nutrition: starting finish()");
         const breakdown: any = {};
@@ -295,7 +295,18 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
         }
         const finalAccuracy = Math.round((totalSaturation / (essentialKeys.length + 1)) * 1000) / 10;
 
-        onProgress({ done: true, result: { targetCalories: Math.round(targetCalories), actualCalories: Math.round(breakdown.energy.amount), accuracy: finalAccuracy, macros: { protein: Math.round(breakdown.protein.amount), carbs: Math.round(breakdown.carbs.amount), fat: Math.round(breakdown.fat.amount) }, sectionedIngredients, micronutrients: breakdown } });
+        onProgress({ 
+            done: true, 
+            result: { 
+                targetCalories: Math.round(targetCalories), 
+                actualCalories: Math.round(breakdown.energy.amount), 
+                accuracy: finalAccuracy, 
+                macros: { protein: Math.round(breakdown.protein.amount), carbs: Math.round(breakdown.carbs.amount), fat: Math.round(breakdown.fat.amount) }, 
+                sectionedIngredients, 
+                micronutrients: breakdown,
+                error: errorMessage 
+            } 
+        });
     } catch (e: any) { 
         console.error('Finish Error: ' + e.stack); 
         onProgress({ done: true, result: null });
@@ -308,7 +319,7 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
         const trialBest = await runPhase(1, "MILP Optimization");
         
         if (trialBest && trialBest.genome && Object.keys(trialBest.genome).length > 0) {
-            finish(trialBest.genome, trialBest.res);
+            finish(trialBest.genome, trialBest.res, trialBest.error);
         } else {
             // Use the specific diagnostic reason if available, otherwise the generic fallback
             const reason = trialBest?.error || "The algorithm could not find a diet that satisfies all constraints (calories, strict macros, and minimum food amounts) with your current food selection.";

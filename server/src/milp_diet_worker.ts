@@ -82,7 +82,7 @@ function getTotalsFromVars(vars: any, pool: Food[]) {
     return totals;
 }
 
-async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number, ceiling: number) {
+async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number, ceiling: number, relaxed: boolean = false) {
     try {
         const glp = await GLPK_PROMISE;
         const vars: any[] = [];
@@ -133,15 +133,21 @@ async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number, ceil
 
         const calVars = foods.map((f, i) => ({ name: `f_${i}`, coef: f.calories }));
         constraints.push({ name: 'c_cal_goal', vars: [...calVars, { name: 'cal_p_dev', coef: -1 }, { name: 'cal_n_dev', coef: 1 }], bnds: { type: glp.GLP_FX, lb: targetCalories, ub: targetCalories } });
-        const calLB = details.strictCalories ? (targetCalories - 20) : (targetCalories - 20);
-        const calUB = details.strictCalories ? (targetCalories + 20) : (targetCalories + 55);
-        constraints.push({ name: 'c_cal_hard', vars: calVars, bnds: { type: glp.GLP_DB, lb: calLB, ub: calUB } });
+        
+        if (!relaxed) {
+            const calLB = details.strictCalories ? (targetCalories - 20) : (targetCalories - 20);
+            const calUB = details.strictCalories ? (targetCalories + 20) : (targetCalories + 55);
+            constraints.push({ name: 'c_cal_hard', vars: calVars, bnds: { type: glp.GLP_DB, lb: calLB, ub: calUB } });
+        }
 
         macroList.forEach(m => {
             const mVars = foods.map((f, i) => ({ name: `f_${i}`, coef: (f as any)[m.name] }));
             constraints.push({ name: `macro_goal_${m.name}`, vars: [...mVars, { name: `dev_p_${m.name}`, coef: -1 }, { name: `dev_n_${m.name}`, coef: 1 }], bnds: { type: glp.GLP_FX, lb: m.target, ub: m.target } });
-            const limit = details.macros[m.name as 'protein'|'carbs'|'fat'].strict ? 2.0 : 5.5;
-            constraints.push({ name: `macro_hard_${m.name}`, vars: mVars, bnds: { type: glp.GLP_DB, lb: m.target - limit, ub: m.target + limit } });
+            
+            if (!relaxed) {
+                const limit = details.macros[m.name as 'protein'|'carbs'|'fat'].strict ? 2.0 : 5.5;
+                constraints.push({ name: `macro_hard_${m.name}`, vars: mVars, bnds: { type: glp.GLP_DB, lb: m.target - limit, ub: m.target + limit } });
+            }
         });
 
         essentialKeys.forEach((k: string) => {
@@ -362,8 +368,36 @@ async function run() {
             const best = finalCandidates[0];
             parentPort?.postMessage({ type: 'result', result: { genome: best.genome, targetCalories, actualCalories: Math.round(best.totals.energy), accuracy: best.accuracy, macros: { protein: Math.round(best.totals.protein), carbs: Math.round(best.totals.carbs), fat: Math.round(best.totals.fat) } } });
         } else {
+            // BEST EFFORT FALLBACK
+            log("No perfect diet found. Generating best-effort plan...");
             const reason = await diagnoseFailure(likedPool, bestCeiling);
-            parentPort?.postMessage({ type: 'result', result: null, error: reason });
+            
+            // Re-solve the full pool in relaxed mode to get the absolute closest fit for the UI
+            const finalBestEffort = await solveGLPK(likedPool, false, 1000, 1.0, true);
+            if (finalBestEffort.result && finalBestEffort.result.vars) {
+                const genome: Record<string, number> = {};
+                likedPool.forEach((f: Food, idx: number) => {
+                    const val = finalBestEffort.result.vars[`f_${idx}`] || 0;
+                    if (val > 0.001) genome[f.name] = Math.round(val * 100);
+                });
+                const totals = getTotalsFromVars(finalBestEffort.result.vars, likedPool);
+                const score = calculateNutrientScore(totals);
+                const accuracy = Math.round((score / essentialKeys.length) * 1000) / 10;
+                
+                parentPort?.postMessage({ 
+                    type: 'result', 
+                    result: { 
+                        genome, 
+                        targetCalories, 
+                        actualCalories: Math.round(totals.energy), 
+                        accuracy, 
+                        macros: { protein: Math.round(totals.protein), carbs: Math.round(totals.carbs), fat: Math.round(totals.fat) } 
+                    },
+                    error: reason
+                });
+            } else {
+                parentPort?.postMessage({ type: 'result', result: null, error: reason });
+            }
         }
     } catch (err: any) {
         parentPort?.postMessage({ type: 'result', result: null, error: "System Error: " + err.message });

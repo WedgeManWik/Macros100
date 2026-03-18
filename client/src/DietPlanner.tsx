@@ -31,6 +31,7 @@ interface DietPlan {
     calories: number;
   }>>;
   micronutrients: Record<string, { amount: number; total: number; unit: string; sources: { food: string; amount: number }[]; max?: number }>;
+  error?: string;
 }
 
 const DietPlanner = () => {
@@ -430,8 +431,13 @@ const DietPlanner = () => {
 
             if (status.status === 'completed') {
                 clearInterval(interval);
-                setDiet(status.result);
-                setOriginalDiet(JSON.parse(JSON.stringify(status.result)));
+                if (status.result) {
+                    setDiet(status.result);
+                    setOriginalDiet(JSON.parse(JSON.stringify(status.result)));
+                    if (status.result.error) {
+                        setError(status.result.error);
+                    }
+                }
                 setLoading(false);
             }
  else if (status.status === 'failed' || status.status === 'cancelled') {
@@ -1124,6 +1130,15 @@ const DietPlanner = () => {
             </div>
           ) : diet ? (
             <div className="fade-in pb-5">
+              {diet.error && (
+                <Alert variant="warning" className="border-0 shadow-lg p-4 d-flex align-items-start glass-panel mb-4" style={{ borderLeft: '5px solid #ffea00 !important' }}>
+                    <Info size={32} className="me-4 mt-1 text-warning flex-shrink-0" />
+                    <div className="flex-grow-1">
+                        <h4 className="fw-bold mb-2">Optimization Constraint Notice</h4>
+                        <p className="mb-0 opacity-75 lead" style={{ fontSize: '1rem' }}>{diet.error}</p>
+                    </div>
+                </Alert>
+              )}
               <Row className="mb-4 g-4">
                 <Col md={4}>
                   <Card className="text-center shadow-sm h-100 p-2 border-0" style={{ background: 'rgba(61, 155, 255, 0.1)', border: '2px solid #3d9bff !important', borderRadius: 'var(--radius-lg)', boxShadow: '0 0 20px rgba(61, 155, 255, 0.2)' }}>
