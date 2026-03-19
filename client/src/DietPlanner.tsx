@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Container, Row, Col, Form, Button, Card, Alert, ProgressBar, Spinner } from 'react-bootstrap';
+import { Container, Row, Col, Form, Button, Card, Alert, ProgressBar, Spinner, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { Calculator, Utensils, Target, Activity, Heart, Info, RotateCcw } from 'lucide-react';
 
 interface Food {
@@ -30,7 +30,13 @@ interface DietPlan {
     amount: number;
     calories: number;
   }>>;
-  micronutrients: Record<string, { amount: number; total: number; unit: string; sources: { food: string; amount: number }[]; max?: number }>;
+  micronutrients: Record<string, { 
+    amount: number; 
+    total: number; 
+    unit: string; 
+    sources: { food: string; amount: number; pctOfTotal: number }[]; 
+    max?: number 
+  }>;
   error?: string;
 }
 
@@ -656,6 +662,32 @@ const DietPlanner = () => {
 
   return (
     <Container fluid className="vh-100 p-0 overflow-hidden animate-up" style={{ background: 'var(--bg-main)' }}>
+      <style>
+        {`
+          .tooltip-inner {
+            max-width: 450px !important;
+            width: 350px !important;
+            background-color: rgba(15, 15, 15, 0.95) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+            backdrop-filter: blur(8px) !important;
+            padding: 0 !important;
+          }
+          .tooltip.show {
+            opacity: 1 !important;
+          }
+          .nutrient-hover-zone {
+            cursor: pointer;
+            transition: all 0.2s ease;
+            padding: 4px;
+            margin: -4px;
+            border-radius: 8px;
+          }
+          .nutrient-hover-zone:hover {
+            background: rgba(255,255,255,0.05);
+          }
+        `}
+      </style>
       {/* LIKED FOODS MODAL */}
       <div className={`modal-blur-overlay ${showFoodModal ? 'active' : ''}`} />
       <div className={`custom-modal-container ${showFoodModal ? 'active' : ''}`} onClick={() => setShowFoodModal(false)}>
@@ -1442,37 +1474,69 @@ const DietPlanner = () => {
 
                               return (
                                 <Col md={6} xl={4} key={name}>
-                                  <div className="mb-1 d-flex justify-content-between align-items-center">
-                                    <span className="text-uppercase fw-bold text-white opacity-75" style={{ fontSize: '0.65rem', letterSpacing: '0.05em' }}>
-                                      {name === 'fatMono' ? 'Monounsaturated Fat' : name === 'fatPoly' ? 'Polyunsaturated Fat' : name === 'fatSat' ? 'Saturated Fat' : name === 'fatTrans' ? 'Trans Fat' : name === 'energy' ? 'Energy' : name.replace(/([A-Z])/g, ' $1')} 
-                                    </span>
-                                    <span className={`small fw-bold ${statusClass}`} style={isOverMax ? { color: '#ff8c00' } : {}}>
-                                      {(data.amount || 0).toFixed(1)} {data.unit} ({pct}%)
-                                    </span>
-                                  </div>
-                                  <div className="nutrient-progress-wrapper" style={{ position: 'relative' }}>
-                                    <ProgressBar 
-                                      now={pct} 
-                                      variant={isOverMax ? undefined : variant} 
-                                      className="nutrient-progress"
-                                      style={isOverMax ? { backgroundColor: 'rgba(255, 140, 0, 0.2)' } : {}}
-                                    />
-                                    {isOverMax && (
-                                      <div 
-                                        className="progress-bar" 
-                                        style={{ 
-                                          width: `${Math.min(pct, 100)}%`, 
-                                          backgroundColor: '#ff8c00',
-                                          position: 'absolute',
-                                          top: 0,
-                                          left: 0,
-                                          height: '100%',
-                                          borderRadius: '4px',
-                                          transition: 'width 0.6s ease'
-                                        }} 
-                                      />
-                                    )}
-                                  </div>
+                                  <OverlayTrigger
+                                    placement="top"
+                                    trigger={['hover', 'focus']}
+                                    delay={{ show: 100, hide: 0 }}
+                                    overlay={
+                                      <Tooltip id={`tooltip-${name}`} style={{ pointerEvents: 'none', maxWidth: '400px' }}>
+                                        <div className="p-3" style={{ textAlign: 'left', width: '320px' }}>
+                                          <div className="fw-bold border-bottom border-secondary border-opacity-25 pb-2 mb-3 text-uppercase" style={{ fontSize: '0.9rem', letterSpacing: '0.05em', color: '#3d9bff' }}>
+                                            {name === 'fatMono' ? 'Monounsaturated Fat' : name === 'fatPoly' ? 'Polyunsaturated Fat' : name === 'fatSat' ? 'Saturated Fat' : name === 'fatTrans' ? 'Trans Fat' : name === 'energy' ? 'Energy' : name.replace(/([A-Z])/g, ' $1')}
+                                          </div>
+                                          {data.sources && data.sources.length > 0 ? (
+                                            <div className="d-flex flex-column gap-2">
+                                              {data.sources.slice(0, 10).map((src, i) => (
+                                                <div key={i} className="d-flex justify-content-between align-items-center gap-4">
+                                                  <span className="text-white small fw-medium text-truncate" style={{ maxWidth: '180px', fontSize: '0.85rem' }}>{src.food}</span>
+                                                  <span className="fw-bold" style={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                                    {src.amount}{data.unit} <span className="text-info ms-1" style={{ fontSize: '0.75rem' }}>({src.pctOfTotal}%)</span>
+                                                  </span>
+                                                </div>
+                                              ))}
+                                              {data.sources.length > 10 && <div className="text-center text-muted small mt-2">+{data.sources.length - 10} more ingredients</div>}
+                                            </div>
+                                          ) : (
+                                            <div className="text-muted small italic">No specific sources identified.</div>
+                                          )}
+                                        </div>
+                                      </Tooltip>
+                                    }
+                                  >
+                                    <div className="nutrient-hover-zone">
+                                      <div className="mb-1 d-flex justify-content-between align-items-center">
+                                        <span className="text-uppercase fw-bold text-white opacity-75" style={{ fontSize: '0.65rem', letterSpacing: '0.05em' }}>
+                                          {name === 'fatMono' ? 'Monounsaturated Fat' : name === 'fatPoly' ? 'Polyunsaturated Fat' : name === 'fatSat' ? 'Saturated Fat' : name === 'fatTrans' ? 'Trans Fat' : name === 'energy' ? 'Energy' : name.replace(/([A-Z])/g, ' $1')} 
+                                        </span>
+                                        <span className={`small fw-bold ${statusClass}`} style={isOverMax ? { color: '#ff8c00' } : {}}>
+                                          {(data.amount || 0).toFixed(1)} {data.unit} ({pct}%)
+                                        </span>
+                                      </div>
+                                      <div className="nutrient-progress-wrapper" style={{ position: 'relative' }}>
+                                        <ProgressBar 
+                                          now={pct} 
+                                          variant={isOverMax ? undefined : variant} 
+                                          className="nutrient-progress"
+                                          style={isOverMax ? { backgroundColor: 'rgba(255, 140, 0, 0.2)' } : {}}
+                                        />
+                                        {isOverMax && (
+                                          <div 
+                                            className="progress-bar" 
+                                            style={{ 
+                                              width: `${Math.min(pct, 100)}%`, 
+                                              backgroundColor: '#ff8c00',
+                                              position: 'absolute',
+                                              top: 0,
+                                              left: 0,
+                                              height: '100%',
+                                              borderRadius: '4px',
+                                              transition: 'width 0.6s ease'
+                                            }} 
+                                          />
+                                        )}
+                                      </div>
+                                    </div>
+                                  </OverlayTrigger>
                                 </Col>
                               );
                             })}

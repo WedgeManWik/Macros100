@@ -234,10 +234,26 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
                 if (rawVal > 0.001) {
                     breakdown[n].amount += rawVal;
                     if (config.target && config.target > 0) {
-                        breakdown[n].sources.push({ food: name, amount: Math.round((rawVal / config.target) * 100) });
+                        breakdown[n].sources.push({ 
+                            food: name, 
+                            amount: rawVal, // Now absolute amount
+                            pctOfTotal: 0 // Will be calculated below
+                        });
                     }
                 }
             });
+            
+            // Finalize amounts and calculate % of total intake for each source
+            const totalRaw = breakdown[n].amount;
+            breakdown[n].sources.forEach((s: any) => {
+                s.pctOfTotal = totalRaw > 0 ? Math.round((s.amount / totalRaw) * 100) : 0;
+                // Format the amount based on unit type
+                if (isAmino) s.amount = Math.round(s.amount) / 1000;
+                else s.amount = Math.round(s.amount * 100) / 100;
+            });
+            // Sort sources by biggest contributor
+            breakdown[n].sources.sort((a: any, b: any) => b.pctOfTotal - a.pctOfTotal);
+
             breakdown[n].amount = Math.round((isAmino ? breakdown[n].amount/1000 : breakdown[n].amount) * 100) / 100;
             if (config.target && config.target > 0) {
                 breakdown[n].total = Math.round(((isAmino ? breakdown[n].amount * 1000 : breakdown[n].amount) / config.target) * 100);
