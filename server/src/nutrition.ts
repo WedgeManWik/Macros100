@@ -185,11 +185,11 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
                         genome: msg.result.genome || {}, 
                         score: msg.result.score || 0, 
                         res: msg.result, 
-                        accuracy: msg.result.accuracy 
+                        accuracy: msg.result.accuracy,
+                        error: msg.error // Capture error even with result
                     };
                 }
             } else if (msg.error) {
-                // If no valid result exists yet, capture the error
                 if (!currentPhaseBest) {
                     currentPhaseBest = { error: msg.error };
                 }

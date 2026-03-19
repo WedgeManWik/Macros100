@@ -434,15 +434,18 @@ const DietPlanner = () => {
                 if (status.result) {
                     setDiet(status.result);
                     setOriginalDiet(JSON.parse(JSON.stringify(status.result)));
+                    // If it's a best-effort result, the worker passes the error inside the result
                     if (status.result.error) {
-                        setError(status.result.error);
+                        // We don't set the main 'error' state here because that shows the big red box
+                        // and might hide the diet. The yellow notice inside the diet view will handle it.
+                        console.log("Optimization Notice:", status.result.error);
                     }
                 }
                 setLoading(false);
             }
- else if (status.status === 'failed' || status.status === 'cancelled') {
+            else if (status.status === 'failed' || status.status === 'cancelled') {
                 clearInterval(interval);
-                // USE THE SERVER ERROR IF PROVIDED, OTHERWISE FALLBACK
+                // This is a total failure (no diet generated at all)
                 const finalError = status.error || 'The optimization algorithm could not find a valid diet passing all quality checks. Please adjust your constraints or select more foods.';
                 setError(finalError);
                 setLoading(false);
