@@ -72,10 +72,32 @@ const DietPlanner = () => {
     algoModel: 'beast' as 'beast' | 'titan' | 'olympian' | 'god',
     advancedSettings: false,
     strictCalories: false,
+    isBfCustom: false,
     customRDAs: {} as Record<string, { target?: number, max?: number }>
   });
 
   const [showRDAModal, setShowRDAModal] = useState(false);
+
+  // Estimate Body Fat if not custom
+  useEffect(() => {
+    if (formData.isBfCustom) return;
+    
+    const heightM = formData.height / 100;
+    if (heightM <= 0) return;
+    
+    const bmi = formData.weight / (heightM * heightM);
+    const genderVal = formData.gender === 'male' ? 1 : 0;
+    // BF% = (1.20 × BMI) + (0.23 × Age) − (10.8 × gender) − 5.4
+    let estimatedBf = (1.20 * bmi) + (0.23 * formData.age) - (10.8 * genderVal) - 5.4;
+    
+    // Clamp to realistic ranges
+    estimatedBf = Math.max(formData.gender === 'male' ? 3 : 8, Math.min(estimatedBf, 60));
+    const roundedBf = Math.round(estimatedBf * 10) / 10;
+    
+    if (formData.bodyFat !== roundedBf) {
+      setFormData(prev => ({ ...prev, bodyFat: roundedBf }));
+    }
+  }, [formData.weight, formData.height, formData.age, formData.gender, formData.isBfCustom]);
 
   const getGoalFromOffset = (offset: number) => {
     if (offset <= -500) return 'fast-lose';
@@ -250,6 +272,7 @@ const DietPlanner = () => {
     
     setFormData(prev => {
       const updated = { ...prev, [name]: val };
+      if (name === 'bodyFat') updated.isBfCustom = true;
       
       if (name === 'goal') {
         updated.calorieOffset = getOffsetFromGoal(val as string);
@@ -676,6 +699,10 @@ const DietPlanner = () => {
           .tooltip.show {
             opacity: 1 !important;
           }
+          .best-effort-alert {
+            border: 2px solid #ffc107 !important;
+            background: rgba(255, 193, 7, 0.05) !important;
+          }
           .nutrient-hover-zone {
             cursor: pointer;
             transition: all 0.2s ease;
@@ -861,17 +888,30 @@ const DietPlanner = () => {
                       <Form.Control type="number" step="any" name="age" value={formData.age} onChange={handleInputChange} />
                     </Col>
                     <Col md={6} className="mb-3">
-                      <Form.Label>Body Fat %</Form.Label>
-                      <Form.Control type="number" step="any" name="bodyFat" value={formData.bodyFat} onChange={handleInputChange} />
+                      <Form.Label>Gender</Form.Label>
+                      <Form.Select name="gender" value={formData.gender} onChange={handleInputChange}>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                      </Form.Select>
                     </Col>
                   </Row>
 
                   <div className="mb-3">
-                    <Form.Label>Gender</Form.Label>
-                    <Form.Select name="gender" value={formData.gender} onChange={handleInputChange}>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                    </Form.Select>
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <Form.Label className="mb-0">Body Fat %</Form.Label>
+                      <Button 
+                        variant="link" 
+                        className={`p-0 text-decoration-none fw-bold ${formData.isBfCustom ? 'text-primary' : 'text-muted'}`}
+                        style={{ fontSize: '0.65rem', lineHeight: '1' }}
+                        onClick={() => setFormData(p => ({ ...p, isBfCustom: !p.isBfCustom }))}
+                      >
+                        {formData.isBfCustom ? 'LOCK (CUSTOM)' : 'AUTO (ESTIMATED)'}
+                      </Button>
+                    </div>
+                    <Form.Control type="number" step="any" name="bodyFat" value={formData.bodyFat} onChange={handleInputChange} />
+                    <Form.Text className="text-muted small" style={{ fontSize: '0.7rem' }}>
+                      {!formData.isBfCustom ? "Estimating based on BMI, Age, and Gender (+10.8% for women)." : "Custom value locked. Click AUTO to resume estimation."}
+                    </Form.Text>
                   </div>
 
                   <div className="mb-3">
@@ -1166,7 +1206,7 @@ const DietPlanner = () => {
           ) : diet ? (
             <div className="fade-in pb-5">
               {diet.error && (
-                <Alert variant="warning" className="border-0 shadow-lg p-4 d-flex align-items-start glass-panel mb-4" style={{ borderLeft: '5px solid #ffea00 !important' }}>
+                <Alert variant="warning" className="shadow-lg p-4 d-flex align-items-start glass-panel mb-4 best-effort-alert border-0">
                     <Info size={32} className="me-4 mt-1 text-warning flex-shrink-0" />
                     <div className="flex-grow-1">
                         <h4 className="fw-bold mb-2">Optimization Constraint Notice</h4>
