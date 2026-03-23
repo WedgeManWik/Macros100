@@ -16,7 +16,6 @@ const nutrientNames: Record<string, string> = {
     cystine: 'Cystine', histidine: 'Histidine', isoleucine: 'Isoleucine', leucine: 'Leucine', lysine: 'Lysine', methionine: 'Methionine', phenylalanine: 'Phenylalanine', threonine: 'Threonine', tryptophan: 'Tryptophan', tyrosine: 'Tyrosine', valine: 'Valine'
 };
 
-// Use original foods directly to ensure consistency with client-side label data
 const CONSISTENT_FOOD_DATABASE = FOOD_DATABASE;
 
 export function generateDietAsync(details: any, onProgress: (msg: any) => void) {
@@ -64,9 +63,7 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
     fatPoly: { target: targetCalories * 0.08 / 9, essential: true, max: targetCalories * 0.15 / 9 },
     fatMono: { target: targetCalories * 0.12 / 9, essential: true, max: targetCalories * 0.20 / 9 },
     fiber: { target: isMale ? 38 : 25, essential: true, max: isMale ? 60 : 50 },
-    sugars: { target: (targetCalories * 0.05) / 4, // 5% of calories
-              max: (targetCalories * 0.20) / 4    // 20% hard ceiling
-            },
+    sugars: { target: (targetCalories * 0.05) / 4, max: (targetCalories * 0.20) / 4 },
     omega3: { target: isMale ? 1.6 : 1.1, essential: true, max: 10 },
     omega6: { target: isMale ? 17 : 12, essential: true, max: 40 },
     cholesterol: { target: 300, essential: true, max: 600 },
@@ -105,23 +102,8 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
     valine: { target: details.weight * 24, essential: true, max: 12000 },
   };
 
-  // Merge custom RDAs/limits
-  if (details.customRDAs) {
-    Object.entries(details.customRDAs).forEach(([key, custom]: [string, any]) => {
-      if (nutrientConfig[key]) {
-        if (custom.target !== undefined && !isNaN(custom.target)) {
-          nutrientConfig[key].target = custom.target;
-        }
-        if (custom.max !== undefined && !isNaN(custom.max)) {
-          nutrientConfig[key].max = custom.max;
-        }
-      }
-    });
-  }
-
-  // Determine essential keys dynamically
   const essentialKeys = Object.keys(nutrientConfig).filter(k => {
-    if (k === 'sugars') return true; // Always track and enforce sugar limits
+    if (k === 'sugars' || k === 'water') return false; 
     const isDefaultEssential = nutrientConfig[k].essential;
     const hasCustomTarget = details.customRDAs?.[k]?.target !== undefined && !isNaN(details.customRDAs[k].target);
     const hasCustomMax = details.customRDAs?.[k]?.max !== undefined && !isNaN(details.customRDAs[k].max);
@@ -174,22 +156,12 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
             }
           } else if (msg.type === 'result') {
             completedWorkers++;
-            console.log(`[Server] Worker result received. Success: ${!!msg.result}, Error: ${msg.error || 'none'}`);
-            
             if (msg.result) {
                 if (!currentPhaseBest || (msg.result.accuracy > (currentPhaseBest.accuracy || -Infinity))) {
-                    currentPhaseBest = { 
-                        genome: msg.result.genome || {}, 
-                        score: msg.result.score || 0, 
-                        res: msg.result, 
-                        accuracy: msg.result.accuracy,
-                        error: msg.error // Capture error even with result
-                    };
+                    currentPhaseBest = { genome: msg.result.genome || {}, accuracy: msg.result.accuracy, error: msg.error };
                 }
             } else if (msg.error) {
-                if (!currentPhaseBest) {
-                    currentPhaseBest = { error: msg.error };
-                }
+                if (!currentPhaseBest) currentPhaseBest = { error: msg.error };
             }
 
             if (completedWorkers === workerCount) {
@@ -199,8 +171,7 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
             }
           }
         });
-        worker.on('error', (err: Error) => {
-            console.error(`Worker Phase ${label} ERROR: ` + err.stack);
+        worker.on('error', () => {
             completedWorkers++;
             if (completedWorkers === workerCount) resolve(currentPhaseBest);
         });
@@ -210,16 +181,13 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
 
   const finish = (bestPlan: any, bestResult: any, errorMessage?: string) => {
     try {
-        // 1. First, round all ingredients exactly as we will send them to the client
         const roundedPlan: any = {};
         Object.entries(bestPlan || {}).forEach(([name, amount]: [string, any]) => {
-            if (amount > 0) {
-                roundedPlan[name] = Math.round(amount);
-            }
+            if (amount > 0) roundedPlan[name] = Math.round(amount);
         });
 
-        // 2. Initial Water calculation from basic ingredients
-        const getWater = () => {
+        const waterTarget = nutrientConfig.water.target || 0;
+        const getWaterIntake = () => {
             let w = 0;
             Object.entries(roundedPlan).forEach(([name, amount]: [string, any]) => {
                 const food = CONSISTENT_FOOD_DATABASE.find((f: Food) => f.name === name);
@@ -228,18 +196,15 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
             return w;
         };
 
-        // 3. Add Mineral Water if needed (rounded)
-        const waterTarget = nutrientConfig.water.target || 0;
-        const currentWater = getWater();
-        if (currentWater < waterTarget) {
-            const deficit = waterTarget - currentWater;
+        const currentWater = getWaterIntake();
+        if (currentWater < waterTarget && details.likedFoods.includes('Mineral Water')) {
             const waterFood = CONSISTENT_FOOD_DATABASE.find((f: Food) => f.name === 'Mineral Water');
             if (waterFood) {
+                const deficit = waterTarget - currentWater;
                 roundedPlan['Mineral Water'] = Math.round((roundedPlan['Mineral Water'] || 0) + deficit);
             }
         }
 
-        // 4. Calculate final breakdown using these rounded amounts
         const breakdown: any = {};
         const aminoAcids = ['cystine', 'histidine', 'isoleucine', 'leucine', 'lysine', 'methionine', 'phenylalanine', 'threonine', 'tryptophan', 'tyrosine', 'valine'];
         
@@ -251,7 +216,7 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
                 unit: config.unit || (isAmino ? 'g' : (n==='energy'?'kcal':n==='protein'||n==='carbs'||n==='fat'||n==='fiber'||n==='sugars'||n==='water'||n==='omega3'||n==='omega6'||n==='fatSat'||n==='fatPoly'||n==='fatMono'?'g' : ['b12','folate','a','k','selenium'].includes(n)?'mcg':'mg')),
                 sources: [],
                 max: config.max,
-                essential: essentialKeys.includes(n), // CRITICAL: Use essentialKeys to be consistent with accuracy score
+                essential: essentialKeys.includes(n),
                 target: config.target
             };
 
@@ -261,26 +226,22 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
                 if (food) {
                     const val = (n === 'energy' ? food.calories : (n === 'protein' ? food.protein : (n === 'carbs' ? food.carbs : (n === 'fat' ? food.fat : (food.nutrients[n] || 0)))));
                     const contrib = r * val;
-                    if (contrib > 0) {
+                    if (contrib > 0.0001) {
                         breakdown[n].amount += contrib;
-                        if (contrib > 0.001) {
-                            breakdown[n].sources.push({ food: name, amount: contrib, pctOfTotal: 0 });
-                        }
+                        breakdown[n].sources.push({ food: name, amount: contrib, pctOfTotal: 0 });
                     }
                 }
             });
 
-            // Finalize sources and totals
-            const totalIntake = breakdown[n].amount;
+            const totalAmount = breakdown[n].amount;
             breakdown[n].sources.forEach((s: any) => {
-                s.pctOfTotal = totalIntake > 0 ? Math.round((s.amount / totalIntake) * 100) : 0;
-                if (isAmino) s.amount = Math.round(s.amount * 1000) / 1000; // Round to nearest mg
+                s.pctOfTotal = totalAmount > 0 ? Math.round((s.amount / totalAmount) * 100) : 0;
+                if (isAmino) s.amount = Math.round(s.amount) / 1000;
                 else s.amount = Math.round(s.amount * 100) / 100;
             });
             breakdown[n].sources.sort((a: any, b: any) => b.pctOfTotal - a.pctOfTotal);
 
-            // Total amount rounding
-            if (isAmino) breakdown[n].amount = Math.round(breakdown[n].amount) / 1000; // mg to g with mg precision
+            if (isAmino) breakdown[n].amount = Math.round(breakdown[n].amount) / 1000;
             else breakdown[n].amount = Math.round(breakdown[n].amount * 100) / 100;
 
             if (config.target && config.target > 0) {
@@ -290,37 +251,18 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
             }
         });
 
-        // 5. Create sectioned ingredients
-        const sectionOrder = ['Proteins', 'Carbs', 'Fruits', 'Vegetables', 'Fiber and Vegetables', 'Nuts', 'Seeds', 'Fats and Oils', 'Dairy', 'Other'];
         const sectionedIngredients: any = {};
-        sectionOrder.forEach(s => { sectionedIngredients[s] = []; });
-
         Object.entries(roundedPlan).forEach(([name, amount]: [string, any]) => {
             const food = CONSISTENT_FOOD_DATABASE.find((f: Food) => f.name === name);
             if (!food) return;
             const section = food.section || 'Other';
             if (!sectionedIngredients[section]) sectionedIngredients[section] = [];
-            sectionedIngredients[section].push({ 
-                name, 
-                icon: food.icon, 
-                amount: amount, 
-                calories: Math.round((amount/100)*food.calories) 
-            });
+            sectionedIngredients[section].push({ name, icon: food.icon, amount, calories: Math.round((amount/100)*food.calories) });
         });
 
-        Object.keys(sectionedIngredients).forEach(key => { if (sectionedIngredients[key].length === 0) delete sectionedIngredients[key]; });
-
-        // 6. Accuracy Score calculation
-        let totalSaturation = 0;
-        essentialKeys.forEach(k => { 
-            if (breakdown[k]) {
-                totalSaturation += Math.min(1.0, (breakdown[k].total || 0) / 100); 
-            }
-        });
-        if (breakdown.water) {
-            totalSaturation += Math.min(1.0, (breakdown.water.total || 0) / 100);
-        }
-        const finalAccuracy = Math.round((totalSaturation / (essentialKeys.length + 1)) * 1000) / 10;
+        let totalSat = 0;
+        essentialKeys.forEach(k => { totalSat += Math.min(1.0, (breakdown[k].total || 0) / 100); });
+        const finalAccuracy = essentialKeys.length > 0 ? Math.round((totalSat / essentialKeys.length) * 1000) / 10 : 100;
 
         onProgress({ 
             done: true, 
@@ -334,28 +276,16 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
                 error: errorMessage 
             } 
         });
-    } catch (e: any) { 
-        console.error('Finish Error: ' + e.stack); 
-        onProgress({ done: true, result: null });
-    } finally { stopAll(); }
+    } catch (e) { onProgress({ done: true, result: null }); }
+    finally { stopAll(); }
   };
 
   const runAllPhases = async () => {
     try {
-        onProgress({ done: false, generation: 0, accuracy: 0, telemetry: { trialInfo: 'Starting MILP Solver...' } });
         const trialBest = await runPhase(1, "MILP Optimization");
-        
-        if (trialBest && trialBest.genome && Object.keys(trialBest.genome).length > 0) {
-            finish(trialBest.genome, trialBest.res, trialBest.error);
-        } else {
-            const reason = trialBest?.error || "The algorithm could not find a diet that satisfies all constraints.";
-            onProgress({ done: true, result: null, error: reason });
-        }
-    } catch (err: any) {
-        console.error('Fatal Phase Error:', err);
-        onProgress({ done: true, result: null, error: "A fatal error occurred: " + err.message });
-        stopAll();
-    }
+        if (trialBest && trialBest.genome) finish(trialBest.genome, null, trialBest.error);
+        else onProgress({ done: true, result: null, error: trialBest?.error || "Solver failed." });
+    } catch (err) { onProgress({ done: true, result: null }); stopAll(); }
   };
 
   runAllPhases();

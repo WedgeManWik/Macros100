@@ -545,7 +545,7 @@ const DietPlanner = () => {
         const rawAmount = newMicros[k].amount;
         newMicros[k].sources.forEach((s: any) => {
             s.pctOfTotal = rawAmount > 0 ? Math.round((s.amount / rawAmount) * 100) : 0;
-            if (isAmino) s.amount = Math.round(s.amount * 1000) / 1000; // Round to nearest mg
+            if (isAmino) s.amount = Math.round(s.amount) / 1000; // mg to g
             else s.amount = Math.round(s.amount * 100) / 100;
         });
         newMicros[k].sources.sort((a: any, b: any) => b.pctOfTotal - a.pctOfTotal);
@@ -567,10 +567,7 @@ const DietPlanner = () => {
     essentialKeys.forEach(k => { 
         totalSat += Math.min(1.0, (newMicros[k].total || 0) / 100); 
     });
-    if (newMicros.water) {
-        totalSat += Math.min(1.0, (newMicros.water.total || 0) / 100);
-    }
-    const accuracy = Math.round((totalSat / (essentialKeys.length + 1)) * 1000) / 10;
+    const accuracy = Math.round((totalSat / essentialKeys.length) * 1000) / 10;
 
     return {
         actualCalories: Math.round(newMicros.energy?.amount || 0),
