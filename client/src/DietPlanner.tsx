@@ -489,52 +489,48 @@ const DietPlanner = () => {
 
   const cancelGeneration = () => { setLoading(false); };
 
-  const recalculateDiet = (updatedIngredients: Record<string, number>) => {
-    if (!diet) return;
+  const calculateNutrientsFromIngredients = (sectionedIngredients: DietPlan['sectionedIngredients'], currentMicros: DietPlan['micronutrients']): Pick<DietPlan, 'actualCalories' | 'macros' | 'micronutrients' | 'accuracy'> => {
+    const flatIngredients: Record<string, number> = {};
+    Object.values(sectionedIngredients).flat().forEach(i => {
+        flatIngredients[i.name] = (flatIngredients[i.name] || 0) + i.amount;
+    });
 
-    const newMicros: any = JSON.parse(JSON.stringify(diet.micronutrients));
-    // Reset all amounts to 0 before recalculating
+    const newMicros: any = JSON.parse(JSON.stringify(currentMicros || {}));
     Object.keys(newMicros).forEach(k => {
         newMicros[k].amount = 0;
         newMicros[k].total = 0;
     });
 
-    const isMale = formData.gender === 'male';
-    const nutrientConfig = {
-        energy: { target: formData.targetCalories },
-        water: { target: isMale ? 3700 : 2700 },
-        // ... (targets are used for % calculation below)
-    };
-
-    // Recalculate totals from all foods
-    Object.entries(updatedIngredients).forEach(([name, amount]) => {
+    Object.entries(flatIngredients).forEach(([name, amount]) => {
+        // EXACT MATCH ONLY: Ensure no unwanted food substitutions
         const food = foods.find(f => f.name === name);
-        if (!food) return;
         const r = amount / 100;
-        
-        // Update Energy
-        newMicros.energy.amount += r * food.calories;
-        // Update Macros
-        newMicros.protein.amount += r * food.protein;
-        newMicros.carbs.amount += r * food.carbs;
-        newMicros.fat.amount += r * food.fat;
 
-        // Update all other nutrients
-        if (food.nutrients) {
-            Object.entries(food.nutrients).forEach(([k, val]) => {
-                if (newMicros[k]) {
-                    newMicros[k].amount += r * (val || 0);
-                }
-            });
+        if (food) {
+            if (newMicros.energy) newMicros.energy.amount += r * food.calories;
+            if (newMicros.protein) newMicros.protein.amount += r * food.protein;
+            if (newMicros.carbs) newMicros.carbs.amount += r * food.carbs;
+            if (newMicros.fat) newMicros.fat.amount += r * food.fat;
+
+            if (food.nutrients) {
+                Object.entries(food.nutrients).forEach(([k, val]) => {
+                    if (newMicros[k]) newMicros[k].amount += r * (val || 0);
+                });
+            }
+        } else {
+            // SAFE RECOVERY: If food is not in local state (e.g. legacy profile), use original diet data
+            const existingInDiet = Object.values(sectionedIngredients).flat().find(i => i.name === name);
+            if (existingInDiet) {
+                const ratio = amount / (existingInDiet.amount || 1);
+                if (newMicros.energy) newMicros.energy.amount += existingInDiet.calories * ratio;
+            }
         }
     });
 
-    // Finalize percentages and units
     const aminoAcids = ['cystine', 'histidine', 'isoleucine', 'leucine', 'lysine', 'methionine', 'phenylalanine', 'threonine', 'tryptophan', 'tyrosine', 'valine'];
     Object.keys(newMicros).forEach(k => {
         const config = getDefaultNutrientConfig(k);
         const isAmino = aminoAcids.includes(k);
-        
         newMicros[k].unit = config.unit || (isAmino ? 'g' : (['energy'].includes(k) ? 'kcal' : ['protein', 'carbs', 'fat', 'fiber', 'sugars', 'water', 'omega3', 'omega6', 'fatSat', 'fatPoly', 'fatMono'].includes(k) ? 'g' : ['b12', 'folate', 'a', 'k', 'selenium'].includes(k) ? 'mcg' : 'mg'));
         if (isAmino) newMicros[k].amount = Math.round(newMicros[k].amount) / 1000;
         else newMicros[k].amount = Math.round(newMicros[k].amount * 100) / 100;
@@ -546,70 +542,68 @@ const DietPlanner = () => {
         }
     });
 
-    // Recalculate Saturation Score
     const essentialKeys = Object.keys(newMicros).filter(k => {
-        const isDefaultEssential = (diet.micronutrients[k] as any)?.essential || false; // Approximation
+        const isDefaultEssential = (currentMicros[k] as any)?.essential || false;
         return isDefaultEssential || formData.customRDAs[k]?.target !== undefined;
     });
-    
-    // Fallback: use all keys currently in micronutrients if essential tracking is lost
     const scoreKeys = essentialKeys.length > 0 ? essentialKeys : Object.keys(newMicros).filter(k => !['energy','water'].includes(k));
-    
     let totalSat = 0;
     scoreKeys.forEach(k => { totalSat += Math.min(1.0, newMicros[k].total / 100); });
-    totalSat += Math.min(1.0, newMicros.water.total / 100);
-    const finalAccuracy = Math.round((totalSat / (scoreKeys.length + 1)) * 1000) / 10;
+    totalSat += Math.min(1.0, (newMicros.water?.total || 0) / 100);
+    const accuracy = Math.round((totalSat / (scoreKeys.length + 1)) * 1000) / 10;
 
-    setDiet({
-        ...diet,
-        actualCalories: Math.round(newMicros.energy.amount),
-        accuracy: finalAccuracy,
+    return {
+        actualCalories: Math.round(newMicros.energy?.amount || 0),
+        accuracy,
         macros: {
-            protein: Math.round(newMicros.protein.amount),
-            carbs: Math.round(newMicros.carbs.amount),
-            fat: Math.round(newMicros.fat.amount)
+            protein: Math.round(newMicros.protein?.amount || 0),
+            carbs: Math.round(newMicros.carbs?.amount || 0),
+            fat: Math.round(newMicros.fat?.amount || 0)
         },
         micronutrients: newMicros
-    });
+    };
   };
 
   const handleAmountChange = (section: string, index: number, newAmount: string) => {
     if (!diet) return;
     const amt = parseFloat(newAmount) || 0;
     
-    const newSectioned = { ...diet.sectionedIngredients };
-    newSectioned[section][index].amount = amt;
-    
-    // Update calories for this specific food item
-    const food = foods.find(f => f.name === newSectioned[section][index].name);
-    if (food) {
-        newSectioned[section][index].calories = Math.round((amt / 100) * food.calories);
-    }
+    setDiet(prev => {
+        if (!prev) return null;
+        const newSectioned = JSON.parse(JSON.stringify(prev.sectionedIngredients));
+        newSectioned[section][index].amount = amt;
+        
+        const food = foods.find(f => f.name === newSectioned[section][index].name);
+        if (food) {
+            newSectioned[section][index].calories = Math.round((amt / 100) * food.calories);
+        }
 
-    const flatIngredients: Record<string, number> = {};
-    Object.values(newSectioned).flat().forEach(i => {
-        flatIngredients[i.name] = (flatIngredients[i.name] || 0) + i.amount;
+        const updatedStats = calculateNutrientsFromIngredients(newSectioned, prev.micronutrients);
+        return {
+            ...prev,
+            ...updatedStats,
+            sectionedIngredients: newSectioned
+        };
     });
-
-    setDiet({ ...diet, sectionedIngredients: newSectioned });
-    recalculateDiet(flatIngredients);
   };
 
   const [showAddIngredientModal, setShowAddIngredientModal] = useState<{ section: string } | null>(null);
 
   const removeIngredient = (section: string, index: number) => {
     if (!diet) return;
-    const newSectioned = { ...diet.sectionedIngredients };
-    newSectioned[section].splice(index, 1);
-    if (newSectioned[section].length === 0) delete newSectioned[section];
+    setDiet(prev => {
+        if (!prev) return null;
+        const newSectioned = JSON.parse(JSON.stringify(prev.sectionedIngredients));
+        newSectioned[section].splice(index, 1);
+        if (newSectioned[section].length === 0) delete newSectioned[section];
 
-    const flatIngredients: Record<string, number> = {};
-    Object.values(newSectioned).flat().forEach(i => {
-        flatIngredients[i.name] = (flatIngredients[i.name] || 0) + i.amount;
+        const updatedStats = calculateNutrientsFromIngredients(newSectioned, prev.micronutrients);
+        return {
+            ...prev,
+            ...updatedStats,
+            sectionedIngredients: newSectioned
+        };
     });
-
-    setDiet({ ...diet, sectionedIngredients: newSectioned });
-    recalculateDiet(flatIngredients);
   };
 
   const revertFood = (section: string, index: number) => {
@@ -617,16 +611,23 @@ const DietPlanner = () => {
     const originalItem = originalDiet.sectionedIngredients[section]?.[index];
     if (!originalItem) return;
 
-    const newSectioned = { ...diet.sectionedIngredients };
-    newSectioned[section][index].amount = originalItem.amount;
-    
-    const flatIngredients: Record<string, number> = {};
-    Object.values(newSectioned).flat().forEach(i => {
-        flatIngredients[i.name] = (flatIngredients[i.name] || 0) + i.amount;
-    });
+    setDiet(prev => {
+        if (!prev) return null;
+        const newSectioned = JSON.parse(JSON.stringify(prev.sectionedIngredients));
+        newSectioned[section][index].amount = originalItem.amount;
+        
+        const food = foods.find(f => f.name === newSectioned[section][index].name);
+        if (food) {
+            newSectioned[section][index].calories = Math.round((originalItem.amount / 100) * food.calories);
+        }
 
-    setDiet({ ...diet, sectionedIngredients: newSectioned });
-    recalculateDiet(flatIngredients);
+        const updatedStats = calculateNutrientsFromIngredients(newSectioned, prev.micronutrients);
+        return {
+            ...prev,
+            ...updatedStats,
+            sectionedIngredients: newSectioned
+        };
+    });
   };
 
   const revertToOriginal = () => {
@@ -641,23 +642,25 @@ const DietPlanner = () => {
     const food = foods.find(f => f.name === foodName);
     if (!food) return;
 
-    const newSectioned = { ...diet.sectionedIngredients };
-    if (!newSectioned[section]) newSectioned[section] = [];
-    
-    newSectioned[section].push({
-        name: food.name,
-        icon: food.icon,
-        amount: amount,
-        calories: Math.round((amount / 100) * food.calories)
-    });
+    setDiet(prev => {
+        if (!prev) return null;
+        const newSectioned = JSON.parse(JSON.stringify(prev.sectionedIngredients));
+        if (!newSectioned[section]) newSectioned[section] = [];
+        
+        newSectioned[section].push({
+            name: food.name,
+            icon: food.icon,
+            amount: amount,
+            calories: Math.round((amount / 100) * food.calories)
+        });
 
-    const flatIngredients: Record<string, number> = {};
-    Object.values(newSectioned).flat().forEach(i => {
-        flatIngredients[i.name] = (flatIngredients[i.name] || 0) + i.amount;
+        const updatedStats = calculateNutrientsFromIngredients(newSectioned, prev.micronutrients);
+        return {
+            ...prev,
+            ...updatedStats,
+            sectionedIngredients: newSectioned
+        };
     });
-
-    setDiet({ ...diet, sectionedIngredients: newSectioned });
-    recalculateDiet(flatIngredients);
     setShowAddIngredientModal(null);
   };
 
