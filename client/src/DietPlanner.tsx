@@ -35,7 +35,9 @@ interface DietPlan {
     total: number; 
     unit: string; 
     sources: { food: string; amount: number; pctOfTotal: number }[]; 
-    max?: number 
+    max?: number;
+    target?: number;
+    essential?: boolean;
   }>;
   error?: string;
 }
@@ -335,7 +337,7 @@ const DietPlanner = () => {
         energy: { target: targetCals, max: targetCals + 50 },
         water: { target: isMale ? 3700 : 2700, max: 10000 },
         fiber: { target: isMale ? 38 : 25, max: 100 },
-        sugars: { target: 50, max: 100 },
+        sugars: { target: (targetCals * 0.05) / 4, max: (targetCals * 0.20) / 4 },
         omega3: { target: isMale ? 1.6 : 1.1, max: 10 },
         omega6: { target: isMale ? 17 : 12, max: 40 },
         cholesterol: { target: 300, max: 600 },
@@ -359,19 +361,19 @@ const DietPlanner = () => {
         phosphorus: { target: 700, max: 4000 },
         potassium: { target: isMale ? 3400 : 2600, max: 10000 },
         selenium: { target: 55, max: 400 },
-        sodium: { target: 2300, max: 3000 },
+        sodium: { target: formData.age > 60 ? 1500 : 2300, max: formData.age > 60 ? 2300 : 3000 },
         zinc: { target: isMale ? 11 : 8, max: 40 },
-        cystine: { target: 500, max: 5000 },
-        histidine: { target: 700, max: 5000 },
-        isoleucine: { target: 1400, max: 10000 },
-        leucine: { target: 2700, max: 20000 },
-        lysine: { target: 2100, max: 15000 },
-        methionine: { target: 700, max: 5000 },
-        phenylalanine: { target: 1100, max: 10000 },
-        threonine: { target: 1000, max: 10000 },
-        tryptophan: { target: 280, max: 2000 },
-        tyrosine: { target: 800, max: 10000 },
-        valine: { target: 1600, max: 12000 }
+        cystine: { target: weight * 6, max: 5000 },
+        histidine: { target: weight * 14, max: 5000 },
+        isoleucine: { target: weight * 19, max: 10000 },
+        leucine: { target: weight * 42, max: 20000 },
+        lysine: { target: weight * 38, max: 15000 },
+        methionine: { target: weight * 13, max: 5000 },
+        phenylalanine: { target: weight * 14, max: 10000 },
+        threonine: { target: weight * 20, max: 10000 },
+        tryptophan: { target: weight * 5, max: 2000 },
+        tyrosine: { target: weight * 19, max: 10000 },
+        valine: { target: weight * 24, max: 12000 }
     };
 
     if (configs[key]) return configs[key];
@@ -499,58 +501,76 @@ const DietPlanner = () => {
     Object.keys(newMicros).forEach(k => {
         newMicros[k].amount = 0;
         newMicros[k].total = 0;
+        newMicros[k].sources = [];
     });
 
     Object.entries(flatIngredients).forEach(([name, amount]) => {
-        // EXACT MATCH ONLY: Ensure no unwanted food substitutions
         const food = foods.find(f => f.name === name);
         const r = amount / 100;
 
         if (food) {
-            if (newMicros.energy) newMicros.energy.amount += r * food.calories;
+            if (newMicros.energy) {
+                const contrib = r * food.calories;
+                newMicros.energy.amount += contrib;
+            }
             if (newMicros.protein) newMicros.protein.amount += r * food.protein;
             if (newMicros.carbs) newMicros.carbs.amount += r * food.carbs;
             if (newMicros.fat) newMicros.fat.amount += r * food.fat;
 
-            if (food.nutrients) {
-                Object.entries(food.nutrients).forEach(([k, val]) => {
-                    if (newMicros[k]) newMicros[k].amount += r * (val || 0);
-                });
-            }
-        } else {
-            // SAFE RECOVERY: If food is not in local state (e.g. legacy profile), use original diet data
-            const existingInDiet = Object.values(sectionedIngredients).flat().find(i => i.name === name);
-            if (existingInDiet) {
-                const ratio = amount / (existingInDiet.amount || 1);
-                if (newMicros.energy) newMicros.energy.amount += existingInDiet.calories * ratio;
-            }
+            Object.keys(newMicros).forEach(k => {
+                if (k === 'energy' || k === 'protein' || k === 'carbs' || k === 'fat') return;
+                const val = food.nutrients ? food.nutrients[k] : 0;
+                if (val) {
+                    const contrib = r * val;
+                    newMicros[k].amount += contrib;
+                    if (contrib > 0.001) {
+                        newMicros[k].sources.push({ food: name, amount: contrib, pctOfTotal: 0 });
+                    }
+                }
+            });
         }
     });
 
     const aminoAcids = ['cystine', 'histidine', 'isoleucine', 'leucine', 'lysine', 'methionine', 'phenylalanine', 'threonine', 'tryptophan', 'tyrosine', 'valine'];
     Object.keys(newMicros).forEach(k => {
         const config = getDefaultNutrientConfig(k);
+        const serverTarget = currentMicros[k]?.target;
+        const target = (serverTarget !== undefined && serverTarget > 0) ? serverTarget : config.target;
         const isAmino = aminoAcids.includes(k);
+        
+        // Finalize units
         newMicros[k].unit = config.unit || (isAmino ? 'g' : (['energy'].includes(k) ? 'kcal' : ['protein', 'carbs', 'fat', 'fiber', 'sugars', 'water', 'omega3', 'omega6', 'fatSat', 'fatPoly', 'fatMono'].includes(k) ? 'g' : ['b12', 'folate', 'a', 'k', 'selenium'].includes(k) ? 'mcg' : 'mg'));
-        if (isAmino) newMicros[k].amount = Math.round(newMicros[k].amount) / 1000;
-        else newMicros[k].amount = Math.round(newMicros[k].amount * 100) / 100;
+        
+        // Calculate pctOfTotal for sources before rounding the total amount
+        const rawAmount = newMicros[k].amount;
+        newMicros[k].sources.forEach((s: any) => {
+            s.pctOfTotal = rawAmount > 0 ? Math.round((s.amount / rawAmount) * 100) : 0;
+            if (isAmino) s.amount = Math.round(s.amount * 1000) / 1000; // Round to nearest mg
+            else s.amount = Math.round(s.amount * 100) / 100;
+        });
+        newMicros[k].sources.sort((a: any, b: any) => b.pctOfTotal - a.pctOfTotal);
 
-        if (config.target > 0) {
-            newMicros[k].total = Math.round(((isAmino ? newMicros[k].amount * 1000 : newMicros[k].amount) / config.target) * 100);
+        // Round total amount exactly like the server
+        if (isAmino) newMicros[k].amount = Math.round(rawAmount) / 1000;
+        else newMicros[k].amount = Math.round(rawAmount * 100) / 100;
+
+        if (target > 0) {
+            newMicros[k].total = Math.round(((isAmino ? newMicros[k].amount * 1000 : newMicros[k].amount) / target) * 100);
         } else {
             newMicros[k].total = 100;
         }
     });
 
-    const essentialKeys = Object.keys(newMicros).filter(k => {
-        const isDefaultEssential = (currentMicros[k] as any)?.essential || false;
-        return isDefaultEssential || formData.customRDAs[k]?.target !== undefined;
-    });
-    const scoreKeys = essentialKeys.length > 0 ? essentialKeys : Object.keys(newMicros).filter(k => !['energy','water'].includes(k));
+    // Mirror server's accuracy logic exactly
+    const essentialKeys = Object.keys(newMicros).filter(k => (currentMicros[k] as any)?.essential === true);
     let totalSat = 0;
-    scoreKeys.forEach(k => { totalSat += Math.min(1.0, newMicros[k].total / 100); });
-    totalSat += Math.min(1.0, (newMicros.water?.total || 0) / 100);
-    const accuracy = Math.round((totalSat / (scoreKeys.length + 1)) * 1000) / 10;
+    essentialKeys.forEach(k => { 
+        totalSat += Math.min(1.0, (newMicros[k].total || 0) / 100); 
+    });
+    if (newMicros.water) {
+        totalSat += Math.min(1.0, (newMicros.water.total || 0) / 100);
+    }
+    const accuracy = Math.round((totalSat / (essentialKeys.length + 1)) * 1000) / 10;
 
     return {
         actualCalories: Math.round(newMicros.energy?.amount || 0),

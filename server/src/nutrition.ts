@@ -16,11 +16,8 @@ const nutrientNames: Record<string, string> = {
     cystine: 'Cystine', histidine: 'Histidine', isoleucine: 'Isoleucine', leucine: 'Leucine', lysine: 'Lysine', methionine: 'Methionine', phenylalanine: 'Phenylalanine', threonine: 'Threonine', tryptophan: 'Tryptophan', tyrosine: 'Tyrosine', valine: 'Valine'
 };
 
-// Pre-process foods to ensure caloric consistency
-const CONSISTENT_FOOD_DATABASE = FOOD_DATABASE.map((f: Food) => {
-    const recalculatedCals = (f.protein * 4) + (f.carbs * 4) + (f.fat * 9);
-    return { ...f, calories: recalculatedCals };
-});
+// Use original foods directly to ensure consistency with client-side label data
+const CONSISTENT_FOOD_DATABASE = FOOD_DATABASE;
 
 export function generateDietAsync(details: any, onProgress: (msg: any) => void) {
   let targetCalories: number;
@@ -213,9 +210,39 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
 
   const finish = (bestPlan: any, bestResult: any, errorMessage?: string) => {
     try {
-        console.log("Nutrition: starting finish()");
+        // 1. First, round all ingredients exactly as we will send them to the client
+        const roundedPlan: any = {};
+        Object.entries(bestPlan || {}).forEach(([name, amount]: [string, any]) => {
+            if (amount > 0) {
+                roundedPlan[name] = Math.round(amount);
+            }
+        });
+
+        // 2. Initial Water calculation from basic ingredients
+        const getWater = () => {
+            let w = 0;
+            Object.entries(roundedPlan).forEach(([name, amount]: [string, any]) => {
+                const food = CONSISTENT_FOOD_DATABASE.find((f: Food) => f.name === name);
+                if (food) w += (amount / 100) * (food.nutrients.water || 0);
+            });
+            return w;
+        };
+
+        // 3. Add Mineral Water if needed (rounded)
+        const waterTarget = nutrientConfig.water.target || 0;
+        const currentWater = getWater();
+        if (currentWater < waterTarget) {
+            const deficit = waterTarget - currentWater;
+            const waterFood = CONSISTENT_FOOD_DATABASE.find((f: Food) => f.name === 'Mineral Water');
+            if (waterFood) {
+                roundedPlan['Mineral Water'] = Math.round((roundedPlan['Mineral Water'] || 0) + deficit);
+            }
+        }
+
+        // 4. Calculate final breakdown using these rounded amounts
         const breakdown: any = {};
         const aminoAcids = ['cystine', 'histidine', 'isoleucine', 'leucine', 'lysine', 'methionine', 'phenylalanine', 'threonine', 'tryptophan', 'tyrosine', 'valine'];
+        
         Object.keys(nutrientConfig).forEach(n => {
             const config = nutrientConfig[n];
             const isAmino = aminoAcids.includes(n);
@@ -223,83 +250,67 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
                 amount: 0, total: 0,
                 unit: config.unit || (isAmino ? 'g' : (n==='energy'?'kcal':n==='protein'||n==='carbs'||n==='fat'||n==='fiber'||n==='sugars'||n==='water'||n==='omega3'||n==='omega6'||n==='fatSat'||n==='fatPoly'||n==='fatMono'?'g' : ['b12','folate','a','k','selenium'].includes(n)?'mcg':'mg')),
                 sources: [],
-                max: config.max
+                max: config.max,
+                essential: essentialKeys.includes(n), // CRITICAL: Use essentialKeys to be consistent with accuracy score
+                target: config.target
             };
-            Object.entries(bestPlan || {}).forEach(([name, amount]: [string, any]) => {
+
+            Object.entries(roundedPlan).forEach(([name, amount]: [string, any]) => {
                 const food = CONSISTENT_FOOD_DATABASE.find((f: Food) => f.name === name);
-                if (!food) return;
-                const factor = amount / 100;
-                let val = (n === 'energy' ? food.calories : n === 'protein' ? food.protein : n === 'carbs' ? food.carbs : n === 'fat' ? food.fat : (food.nutrients[n] || 0));
-                let rawVal = factor * val;
-                if (rawVal > 0.001) {
-                    breakdown[n].amount += rawVal;
-                    if (config.target && config.target > 0) {
-                        breakdown[n].sources.push({ 
-                            food: name, 
-                            amount: rawVal, // Now absolute amount
-                            pctOfTotal: 0 // Will be calculated below
-                        });
+                const r = amount / 100;
+                if (food) {
+                    const val = (n === 'energy' ? food.calories : (n === 'protein' ? food.protein : (n === 'carbs' ? food.carbs : (n === 'fat' ? food.fat : (food.nutrients[n] || 0)))));
+                    const contrib = r * val;
+                    if (contrib > 0) {
+                        breakdown[n].amount += contrib;
+                        if (contrib > 0.001) {
+                            breakdown[n].sources.push({ food: name, amount: contrib, pctOfTotal: 0 });
+                        }
                     }
                 }
             });
-            
-            // Finalize amounts and calculate % of total intake for each source
-            const totalRaw = breakdown[n].amount;
+
+            // Finalize sources and totals
+            const totalIntake = breakdown[n].amount;
             breakdown[n].sources.forEach((s: any) => {
-                s.pctOfTotal = totalRaw > 0 ? Math.round((s.amount / totalRaw) * 100) : 0;
-                // Format the amount based on unit type
-                if (isAmino) s.amount = Math.round(s.amount) / 1000;
+                s.pctOfTotal = totalIntake > 0 ? Math.round((s.amount / totalIntake) * 100) : 0;
+                if (isAmino) s.amount = Math.round(s.amount * 1000) / 1000; // Round to nearest mg
                 else s.amount = Math.round(s.amount * 100) / 100;
             });
-            // Sort sources by biggest contributor
             breakdown[n].sources.sort((a: any, b: any) => b.pctOfTotal - a.pctOfTotal);
 
-            breakdown[n].amount = Math.round((isAmino ? breakdown[n].amount/1000 : breakdown[n].amount) * 100) / 100;
+            // Total amount rounding
+            if (isAmino) breakdown[n].amount = Math.round(breakdown[n].amount) / 1000; // mg to g with mg precision
+            else breakdown[n].amount = Math.round(breakdown[n].amount * 100) / 100;
+
             if (config.target && config.target > 0) {
                 breakdown[n].total = Math.round(((isAmino ? breakdown[n].amount * 1000 : breakdown[n].amount) / config.target) * 100);
             } else {
                 breakdown[n].total = 100;
             }
         });
-        
+
+        // 5. Create sectioned ingredients
         const sectionOrder = ['Proteins', 'Carbs', 'Fruits', 'Vegetables', 'Fiber and Vegetables', 'Nuts', 'Seeds', 'Fats and Oils', 'Dairy', 'Other'];
         const sectionedIngredients: any = {};
         sectionOrder.forEach(s => { sectionedIngredients[s] = []; });
 
-        Object.entries(bestPlan || {}).forEach(([name, amount]: [string, any]) => {
-            if (amount > 0) {
-                const food = CONSISTENT_FOOD_DATABASE.find((f: Food) => f.name === name);
-                if (!food) return;
-                const section = food.section || 'Other';
-                if (!sectionedIngredients[section]) sectionedIngredients[section] = [];
-                sectionedIngredients[section].push({ name, icon: food.icon, amount: Math.round(amount), calories: Math.round((amount/100)*food.calories) });
-            }
+        Object.entries(roundedPlan).forEach(([name, amount]: [string, any]) => {
+            const food = CONSISTENT_FOOD_DATABASE.find((f: Food) => f.name === name);
+            if (!food) return;
+            const section = food.section || 'Other';
+            if (!sectionedIngredients[section]) sectionedIngredients[section] = [];
+            sectionedIngredients[section].push({ 
+                name, 
+                icon: food.icon, 
+                amount: amount, 
+                calories: Math.round((amount/100)*food.calories) 
+            });
         });
 
         Object.keys(sectionedIngredients).forEach(key => { if (sectionedIngredients[key].length === 0) delete sectionedIngredients[key]; });
 
-        const waterTarget = nutrientConfig.water.target || 0;
-        const currentWater = breakdown.water.amount;
-        if (currentWater < waterTarget) {
-            const deficit = waterTarget - currentWater;
-            const waterFood = CONSISTENT_FOOD_DATABASE.find((f: Food) => f.name === 'Mineral Water');
-            if (waterFood) {
-                const addedAmount = deficit; 
-                bestPlan['Mineral Water'] = (bestPlan['Mineral Water'] || 0) + addedAmount;
-                breakdown.water.amount += addedAmount;
-                breakdown.water.total = 100;
-                const section = waterFood.section || 'Other';
-                if (!sectionedIngredients[section]) sectionedIngredients[section] = [];
-                const existing = sectionedIngredients[section].find((i: any) => i.name === 'Mineral Water');
-                if (existing) {
-                    existing.amount = Math.round(bestPlan['Mineral Water']);
-                    existing.calories = Math.round((existing.amount/100)*waterFood.calories);
-                } else {
-                    sectionedIngredients[section].push({ name: 'Mineral Water', icon: waterFood.icon, amount: Math.round(addedAmount), calories: Math.round((addedAmount/100)*waterFood.calories) });
-                }
-            }
-        }
-
+        // 6. Accuracy Score calculation
         let totalSaturation = 0;
         essentialKeys.forEach(k => { 
             if (breakdown[k]) {
@@ -337,13 +348,12 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
         if (trialBest && trialBest.genome && Object.keys(trialBest.genome).length > 0) {
             finish(trialBest.genome, trialBest.res, trialBest.error);
         } else {
-            // Use the specific diagnostic reason if available, otherwise the generic fallback
-            const reason = trialBest?.error || "The algorithm could not find a diet that satisfies all constraints (calories, strict macros, and minimum food amounts) with your current food selection.";
+            const reason = trialBest?.error || "The algorithm could not find a diet that satisfies all constraints.";
             onProgress({ done: true, result: null, error: reason });
         }
     } catch (err: any) {
         console.error('Fatal Phase Error:', err);
-        onProgress({ done: true, result: null, error: "A fatal error occurred during optimization: " + err.message });
+        onProgress({ done: true, result: null, error: "A fatal error occurred: " + err.message });
         stopAll();
     }
   };
