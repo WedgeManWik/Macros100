@@ -197,11 +197,11 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
         };
 
         const currentWater = getWaterIntake();
-        if (currentWater < waterTarget && details.likedFoods.includes('Mineral Water')) {
-            const waterFood = CONSISTENT_FOOD_DATABASE.find((f: Food) => f.name === 'Mineral Water');
+        if (currentWater < waterTarget && details.likedFoods.includes('Water')) {
+            const waterFood = CONSISTENT_FOOD_DATABASE.find((f: Food) => f.name === 'Water');
             if (waterFood) {
                 const deficit = waterTarget - currentWater;
-                roundedPlan['Mineral Water'] = Math.round((roundedPlan['Mineral Water'] || 0) + deficit);
+                roundedPlan['Water'] = Math.round((roundedPlan['Water'] || 0) + deficit);
             }
         }
 
