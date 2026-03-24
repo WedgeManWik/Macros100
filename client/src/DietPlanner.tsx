@@ -42,6 +42,34 @@ interface DietPlan {
   error?: string;
 }
 
+interface FormData {
+  weight: number;
+  height: number;
+  age: number;
+  gender: 'male' | 'female';
+  bodyFat: number;
+  activityLevel: number;
+  goal: 'maintain' | 'fast-lose' | 'moderate-lose' | 'moderate-gain' | 'fast-gain';
+  mealsPerDay: number;
+  likedFoods: string[];
+  mustHaveFoods: Array<{ name: string, min?: number, max?: number, amount?: number }>;
+  macros: {
+    protein: { mode: string, value: number, strict: boolean };
+    fat: { mode: string, value: number, strict: boolean };
+    carbs: { mode: string, value: number, strict: boolean };
+  };
+  customMacros: boolean;
+  maintenanceCalories: number;
+  calorieOffset: number;
+  targetCalories: number;
+  customMaxAmounts: Record<string, number>;
+  algoModel: 'beast' | 'titan' | 'olympian' | 'god';
+  advancedSettings: boolean;
+  strictCalories: boolean;
+  isBfCustom: boolean;
+  customRDAs: Record<string, { target?: number, max?: number }>;
+}
+
 const DietPlanner = () => {
   const [foods, setFoods] = useState<Food[]>([]);
   const [diet, setDiet] = useState<DietPlan | null>(null);
@@ -50,32 +78,45 @@ const DietPlanner = () => {
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
-  const [formData, setFormData] = useState({
-    weight: 70,
-    height: 175,
-    age: 25,
-    gender: 'male' as const,
-    bodyFat: 15,
-    activityLevel: 1.375,
-    goal: 'maintain' as 'maintain' | 'fast-lose' | 'moderate-lose' | 'moderate-gain' | 'fast-gain',
-    mealsPerDay: 3,
-    likedFoods: [] as string[],
-    mustHaveFoods: [] as Array<{ name: string, min?: number, max?: number, amount?: number }>,
-    macros: {
-      protein: { mode: 'g/kg', value: 2.2, strict: true },
-      fat: { mode: '%', value: 35, strict: true },
-      carbs: { mode: 'remainder', value: 0, strict: true }
-    },
-    customMacros: false,
-    maintenanceCalories: 2111,
-    calorieOffset: 0,
-    targetCalories: 2111,
-    customMaxAmounts: {} as Record<string, number>,
-    algoModel: 'beast' as 'beast' | 'titan' | 'olympian' | 'god',
-    advancedSettings: false,
-    strictCalories: false,
-    isBfCustom: false,
-    customRDAs: {} as Record<string, { target?: number, max?: number }>
+  const [formData, setFormData] = useState<FormData>(() => {
+    const defaults: FormData = {
+        weight: 70,
+        height: 175,
+        age: 25,
+        gender: 'male',
+        bodyFat: 15,
+        activityLevel: 1.375,
+        goal: 'maintain',
+        mealsPerDay: 3,
+        likedFoods: [],
+        mustHaveFoods: [],
+        macros: {
+          protein: { mode: 'g/kg', value: 2.2, strict: true },
+          fat: { mode: '%', value: 35, strict: true },
+          carbs: { mode: 'remainder', value: 0, strict: true }
+        },
+        customMacros: false,
+        maintenanceCalories: 2111,
+        calorieOffset: 0,
+        targetCalories: 2111,
+        customMaxAmounts: {},
+        algoModel: 'beast',
+        advancedSettings: false,
+        strictCalories: false,
+        isBfCustom: false,
+        customRDAs: {}
+    };
+
+    const saved = localStorage.getItem('macros100_profile');
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            return { ...defaults, ...parsed };
+        } catch (e) {
+            return defaults;
+        }
+    }
+    return defaults;
   });
 
   const [showRDAModal, setShowRDAModal] = useState(false);
@@ -210,15 +251,21 @@ const DietPlanner = () => {
     try {
         const text = await navigator.clipboard.readText();
         const data = JSON.parse(text);
+        
+        // Filter liked foods and must-have foods against current database
+        const validFoodNames = foods.map(f => f.name);
+        const filteredLiked = (data.likedFoods || []).filter((name: string) => validFoodNames.includes(name));
+        const filteredMust = (data.mustHaveFoods || []).filter((m: any) => validFoodNames.includes(m.name));
+
         setFormData(prev => ({ 
             ...prev, 
-            customRDAs: {}, // RESET FIRST
+            customRDAs: {}, 
             ...data,
             macros: { ...prev.macros, ...(data.macros || {}) },
-            mustHaveFoods: data.mustHaveFoods || [],
-            likedFoods: data.likedFoods || prev.likedFoods
+            mustHaveFoods: filteredMust,
+            likedFoods: filteredLiked
         }));
-        alert('Profile loaded successfully!');
+        alert('Profile loaded and verified successfully!');
     } catch (err) {
         alert('Failed to parse profile from clipboard.');
     }
@@ -231,18 +278,27 @@ const DietPlanner = () => {
         const res = await fetch('/api/foods');
         const loadedFoods = await res.json();
         setFoods(loadedFoods);
+        const validNames = loadedFoods.map((f: any) => f.name);
         
         const savedProfileStr = localStorage.getItem('macros100_profile');
         if (savedProfileStr) {
             const savedProfile = JSON.parse(savedProfileStr);
-            if (savedProfile.mustHaveFoods) {
-                savedProfile.mustHaveFoods = savedProfile.mustHaveFoods.map((m: any) => {
-                    if (m.amount !== undefined && m.min === undefined) {
-                        return { ...m, min: m.amount, max: m.amount + 50 }; 
-                    }
-                    return m;
-                });
+            
+            // Filter persistence data against current database
+            if (savedProfile.likedFoods) {
+                savedProfile.likedFoods = savedProfile.likedFoods.filter((n: string) => validNames.includes(n));
             }
+            if (savedProfile.mustHaveFoods) {
+                savedProfile.mustHaveFoods = savedProfile.mustHaveFoods
+                    .filter((m: any) => validNames.includes(m.name))
+                    .map((m: any) => {
+                        if (m.amount !== undefined && m.min === undefined) {
+                            return { ...m, min: m.amount, max: m.amount + 50 }; 
+                        }
+                        return m;
+                    });
+            }
+
             setFormData(prev => ({ ...prev, ...savedProfile }));
         } else {
             setFormData(prev => ({ ...prev, likedFoods: loadedFoods.map((f: any) => f.name) }));
