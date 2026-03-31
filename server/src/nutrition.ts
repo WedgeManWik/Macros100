@@ -127,7 +127,16 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
       let lastProgressUpdate = 0;
 
       for (let i = 0; i < workerCount; i++) {
-        const workerPath = path.join(__dirname, 'milp_diet_worker.js');
+        let workerPath = path.join(__dirname, 'milp_diet_worker.js');
+        // If we are running via ts-node, the .js file won't exist in src, but .ts will
+        if (!__filename.endsWith('.js') && !require('fs').existsSync(workerPath)) {
+            const tsPath = path.join(__dirname, 'milp_diet_worker.ts');
+            if (require('fs').existsSync(tsPath)) {
+                workerPath = tsPath;
+            }
+        }
+        
+        console.log(`[Nutrition] Spawning worker from: ${workerPath} for model: ${details.algoModel}`);
         const worker = new Worker(workerPath, {
           workerData: {
             FOOD_DATABASE: CONSISTENT_FOOD_DATABASE,

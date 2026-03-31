@@ -332,17 +332,29 @@ async function run() {
             }
         });
 
-        log(`Identified ${heroFoods.size} key foods. Refining...`);
+        log(`Identified ${heroFoods.size} key foods. Refining using ${details.algoModel || 'default'} model...`);
 
         let finalCandidates: any[] = [];
-        const subsetCount = details.algoModel === 'beast' ? 10 : details.algoModel === 'titan' ? 30 : 60;
+        
+        // Configuration mapping
+        const algoModel = details.algoModel || 'beast';
+        let subsetCount = algoModel === 'beast' ? 15 : algoModel === 'titan' ? 40 : algoModel === 'olympian' ? 80 : 150;
+        let solverTimeLimit = algoModel === 'beast' ? 1000 : algoModel === 'titan' ? 2000 : algoModel === 'olympian' ? 4000 : 8000;
+        const trialLimit = algoModel === 'beast' ? 40 : algoModel === 'titan' ? 50 : algoModel === 'olympian' ? 60 : 80;
+
+        // Respect Benchmark overrides if present
+        if (details.benchConfig) {
+            subsetCount = details.benchConfig.subset || subsetCount;
+            solverTimeLimit = details.benchConfig.trials || solverTimeLimit;
+            log(`Benchmark Override: Subsets=${subsetCount}, TimeLimit=${solverTimeLimit}`);
+        }
         
         for (let i = 0; i < subsetCount; i++) {
             const trialSet = new Set(heroFoods);
             const shuffled = [...likedPool].sort(() => 0.5 - Math.random());
-            for (let j = 0; j < shuffled.length && trialSet.size < 40; j++) trialSet.add(shuffled[j].name);
+            for (let j = 0; j < shuffled.length && trialSet.size < trialLimit; j++) trialSet.add(shuffled[j].name);
             const trialPool = FOOD_DATABASE.filter((f: Food) => trialSet.has(f.name));
-            const res = await solveGLPK(trialPool, true, 1000, bestCeiling);
+            const res = await solveGLPK(trialPool, true, solverTimeLimit, bestCeiling);
             if (res.result && res.result.vars) {
                 const genome: Record<string, number> = {};
                 trialPool.forEach((f: Food, idx: number) => {
@@ -358,6 +370,7 @@ async function run() {
         }
 
         if (finalCandidates.length > 0) {
+            log(`Refinement complete. Found ${finalCandidates.length} valid diets. Picking the best one...`);
             finalCandidates.sort((a, b) => b.score - a.score);
             const best = finalCandidates[0];
             parentPort?.postMessage({ type: 'result', result: { genome: best.genome, targetCalories, actualCalories: Math.round(best.totals.energy), accuracy: best.accuracy, macros: { protein: Math.round(best.totals.protein), carbs: Math.round(best.totals.carbs), fat: Math.round(best.totals.fat) } } });
@@ -365,23 +378,70 @@ async function run() {
         }
 
         // BEST EFFORT FALLBACK
-        log("No perfect diet found. Generating best-effort plan...");
+        const isGodMode = algoModel === 'god';
+        const fallbackSubsets = algoModel === 'beast' ? 1 : algoModel === 'titan' ? 20 : algoModel === 'olympian' ? 80 : 250;
+        const totalFallbackTime = algoModel === 'beast' ? 3000 : algoModel === 'titan' ? 8000 : algoModel === 'olympian' ? 15000 : 45000;
+        
+        log(`No perfect diet found. Running deep ${fallbackSubsets}-trial stochastic search for best-effort plan...`);
+        
         const reason = await diagnoseFailure(likedPool, bestCeiling);
-        const finalBestEffort = await solveGLPK(likedPool, true, 3000, 1.0, true);
-        if (finalBestEffort.result && finalBestEffort.result.vars) {
-            const genome: Record<string, number> = {};
-            likedPool.forEach((f: Food, idx: number) => {
-                const val = finalBestEffort.result.vars[`f_${idx}`] || 0;
-                if (val > 0.001) genome[f.name] = Math.round(val * 100);
-            });
-            const totals = getTotalsFromVars(finalBestEffort.result.vars, likedPool);
-            const score = calculateNutrientScore(totals);
-            const accuracy = Math.round((score / essentialKeys.length) * 1000) / 10;
-            parentPort?.postMessage({ 
-                type: 'result', 
-                result: { genome, targetCalories, actualCalories: Math.round(totals.energy), accuracy, macros: { protein: Math.round(totals.protein), carbs: Math.round(totals.carbs), fat: Math.round(totals.fat) } },
-                error: reason
-            });
+        let bestEffortCandidate: any = null;
+
+        for (let i = 0; i < fallbackSubsets; i++) {
+            // Stochastic subset selection: For God Mode, force variety by occasionally excluding foods
+            const trialSet = new Set(heroFoods);
+            const shuffled = [...likedPool].sort(() => 0.5 - Math.random());
+            
+            // God Mode: Randomly exclude 10% of foods in each trial to force different combinations
+            const poolSizeLimit = isGodMode ? Math.floor(likedPool.length * 0.9) : trialLimit;
+            
+            for (let j = 0; j < shuffled.length && trialSet.size < poolSizeLimit; j++) {
+                // Stochastic skip logic for God Mode variety
+                if (isGodMode && Math.random() < 0.1 && !heroFoods.has(shuffled[j].name)) continue;
+                trialSet.add(shuffled[j].name);
+            }
+            
+            const trialPool = FOOD_DATABASE.filter((f: Food) => trialSet.has(f.name));
+            
+            // Randomize safety ceiling slightly for each trial in higher models
+            const passCeiling = algoModel === 'beast' ? 1.0 : (1.0 + (Math.random() * 0.3));
+            
+            // Solve with deep search
+            const res = await solveGLPK(trialPool, true, Math.floor(totalFallbackTime / fallbackSubsets), passCeiling, true);
+            
+            if (res.result && res.result.vars) {
+                const genome: Record<string, number> = {};
+                trialPool.forEach((f: Food, idx: number) => {
+                    const val = res.result.vars[`f_${idx}`] || 0;
+                    if (val > 0.001) genome[f.name] = Math.round(val * 100);
+                });
+                const totals = getTotalsFromVars(res.result.vars, trialPool);
+                const score = calculateNutrientScore(totals);
+                const accuracy = Math.round((score / essentialKeys.length) * 1000) / 10;
+                
+                if (!bestEffortCandidate || accuracy > bestEffortCandidate.accuracy) {
+                    bestEffortCandidate = { 
+                        genome, targetCalories, 
+                        actualCalories: Math.round(totals.energy), 
+                        accuracy, 
+                        macros: { protein: Math.round(totals.protein), carbs: Math.round(totals.carbs), fat: Math.round(totals.fat) } 
+                    };
+                }
+            }
+            
+            if (i % (isGodMode ? 20 : 5) === 0) {
+                parentPort?.postMessage({ 
+                    type: 'progress', 
+                    gen: 90 + (i/fallbackSubsets * 10), 
+                    accuracy: bestEffortCandidate?.accuracy || 0,
+                    telemetry: { trialInfo: `Best-Effort Trial ${i}/${fallbackSubsets} | Accuracy: ${bestEffortCandidate?.accuracy || 0}%` }
+                });
+            }
+        }
+
+        if (bestEffortCandidate) {
+            log(`Deep search complete. Found optimal best-effort plan with ${bestEffortCandidate.accuracy}% accuracy.`);
+            parentPort?.postMessage({ type: 'result', result: bestEffortCandidate, error: reason });
         } else {
             parentPort?.postMessage({ type: 'result', result: null, error: reason });
         }

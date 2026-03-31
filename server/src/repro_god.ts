@@ -30,13 +30,15 @@ const createProfile = (mode: any) => ({
 
 async function runTest(mode: string) {
     console.log(`\n--- STARTING TEST: ${mode.toUpperCase()} MODE ---`);
+    const start = Date.now();
     return new Promise((resolve) => {
         generateDietAsync(createProfile(mode), (msg) => {
             if (msg.done) {
-                console.log(`\n${mode.toUpperCase()} Result: ${msg.result?.accuracy}%`);
+                const duration = ((Date.now() - start) / 1000).toFixed(1);
+                console.log(`\n${mode.toUpperCase()} Result: ${msg.result?.accuracy}% in ${duration}s`);
                 resolve(msg.result?.accuracy);
-            } else if (msg.telemetry?.trialInfo?.includes("Final")) {
-                process.stdout.write(`\r${mode.toUpperCase()} Progress: ${msg.generation}% | ${msg.telemetry.trialInfo}`);
+            } else {
+                process.stdout.write(`\r${mode.toUpperCase()} Progress: ${msg.generation}% | Accuracy: ${msg.accuracy}% | ${msg.telemetry?.trialInfo || ''}`);
             }
         });
     });
@@ -44,6 +46,7 @@ async function runTest(mode: string) {
 
 async function start() {
     await runTest('beast');
+    await runTest('olympian');
     await runTest('god');
     process.exit(0);
 }

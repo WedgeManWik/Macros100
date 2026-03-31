@@ -29,7 +29,10 @@ export interface DietDetails {
   };
   likedFoods?: string[];
   mustHaveFoods?: Array<{ name: string; min?: number; max?: number }>;
-  customMaxAmounts?: Record<string, number>;
+  algoModel?: 'beast' | 'titan' | 'olympian' | 'god';
+  customRDAs?: Record<string, { target?: number, max?: number }>;
+  advancedSettings?: boolean;
+  strictCalories?: boolean;
 }
 
 export interface NutrientConfig {
