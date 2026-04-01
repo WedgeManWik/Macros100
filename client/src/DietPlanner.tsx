@@ -534,6 +534,15 @@ const DietPlanner = () => {
                 if (status.result) {
                     setDiet(status.result);
                     setOriginalDiet(JSON.parse(JSON.stringify(status.result)));
+                    
+                    // MOBILE SCROLL: Jump to results on small screens
+                    if (window.innerWidth < 992) {
+                        setTimeout(() => {
+                            const resultsEl = document.querySelector('.panel-right');
+                            resultsEl?.scrollIntoView({ behavior: 'smooth' });
+                        }, 100);
+                    }
+
                     // If it's a best-effort result, the worker passes the error inside the result
                     if (status.result.error) {
                         // We don't set the main 'error' state here because that shows the big red box
@@ -773,12 +782,22 @@ const DietPlanner = () => {
   const foodSections = ["Proteins", "Carbs", "Fruits", "Fiber and Vegetables", "Nuts", "Dairy", "Fats", "Drink", "Probiotic", "Snacks"];
 
   return (
-    <Container fluid className="vh-100 p-0 overflow-hidden animate-up" style={{ background: 'var(--bg-main)' }}>
+    <Container fluid className="vh-100 p-0 animate-up custom-main-container" style={{ background: 'var(--bg-main)' }}>
       <style>
         {`
+          .custom-main-container {
+            overflow-x: hidden;
+            overflow-y: auto;
+          }
+          @media (min-width: 992px) {
+            .custom-main-container {
+              overflow: hidden;
+            }
+          }
           .tooltip-inner {
-            max-width: 450px !important;
-            width: 350px !important;
+            max-width: 95vw !important;
+            width: auto !important;
+            min-width: 280px !important;
             background-color: rgba(15, 15, 15, 0.95) !important;
             border: 1px solid rgba(255, 255, 255, 0.1) !important;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
@@ -807,7 +826,7 @@ const DietPlanner = () => {
       {/* LIKED FOODS MODAL */}
       <div className={`modal-blur-overlay ${showFoodModal ? 'active' : ''}`} />
       <div className={`custom-modal-container ${showFoodModal ? 'active' : ''}`} onClick={() => setShowFoodModal(false)}>
-        <div className="custom-modal-content glass-panel p-4" onClick={e => e.stopPropagation()} style={{ width: '85%', height: '85%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div className="custom-modal-content glass-panel p-4" onClick={e => e.stopPropagation()} style={{ width: window.innerWidth < 992 ? '95%' : '85%', height: window.innerWidth < 992 ? '95%' : '85%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h2 className="h3 mb-0 fw-bold d-flex align-items-center">
                     <Heart className="me-2 text-liked" size={28} /> Select Liked Foods
@@ -859,7 +878,7 @@ const DietPlanner = () => {
       {/* CUSTOM RDAs MODAL */}
       <div className={`modal-blur-overlay ${showRDAModal ? 'active' : ''}`} />
       <div className={`custom-modal-container ${showRDAModal ? 'active' : ''}`} onClick={() => setShowRDAModal(false)}>
-        <div className="custom-modal-content glass-panel p-4" onClick={e => e.stopPropagation()} style={{ width: '80%', height: '80%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div className="custom-modal-content glass-panel p-4" onClick={e => e.stopPropagation()} style={{ width: window.innerWidth < 992 ? '95%' : '80%', height: window.innerWidth < 992 ? '95%' : '80%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h2 className="h3 mb-0 fw-bold d-flex align-items-center">
                     <Activity className="me-2 text-info" size={28} /> Custom RDAs & Upper Limits
@@ -1512,7 +1531,7 @@ const DietPlanner = () => {
               {/* ADD INGREDIENT MODAL */}
               <div className={`modal-blur-overlay ${showAddIngredientModal ? 'active' : ''}`} />
               <div className={`custom-modal-container ${showAddIngredientModal ? 'active' : ''}`} onClick={() => setShowAddIngredientModal(null)}>
-                <div className="custom-modal-content glass-panel p-4" onClick={e => e.stopPropagation()} style={{ width: '60%', maxHeight: '80%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                <div className="custom-modal-content glass-panel p-4" onClick={e => e.stopPropagation()} style={{ width: window.innerWidth < 992 ? '95%' : '60%', maxHeight: '85%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                     <div className="d-flex justify-content-between align-items-center mb-4">
                         <h2 className="h4 mb-0 fw-bold">Add Ingredient to {showAddIngredientModal?.section}</h2>
                         <Button variant="outline-light" className="rounded-circle border-0" onClick={() => setShowAddIngredientModal(null)}>✕</Button>
