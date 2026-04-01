@@ -296,7 +296,18 @@ async function diagnoseFailure(allPool: Food[], ceiling: number) {
 async function run() {
     try {
         const mustHaveNames = (details.mustHaveFoods || []).map((m: any) => m.name);
-        const likedPool = FOOD_DATABASE.filter((f: Food) => details.likedFoods.includes(f.name) || mustHaveNames.includes(f.name));
+        const uniqueFoodNames = new Set([...details.likedFoods, ...mustHaveNames]);
+        
+        if (uniqueFoodNames.size < 5) {
+            parentPort?.postMessage({ 
+                type: 'result', 
+                result: null, 
+                error: "You need to select more foods! Please pick at least 5 different foods to allow the algorithm to find a balanced combination." 
+            });
+            return;
+        }
+
+        const likedPool = FOOD_DATABASE.filter((f: Food) => uniqueFoodNames.has(f.name));
         log(`Analyzing ${likedPool.length} foods...`);
 
         const ceilings = [0.8, 0.85, 0.9, 0.95, 1.0];

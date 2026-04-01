@@ -454,6 +454,7 @@ const DietPlanner = () => {
 
   const [foodSearch, setFoodSearch] = useState('');
   const [showFoodModal, setShowFoodModal] = useState(false);
+  const [shouldWiggle, setShouldWiggle] = useState(false);
 
   const toggleFood = (foodName: string) => {
     setFormData(prev => ({
@@ -484,6 +485,18 @@ const DietPlanner = () => {
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+
+    // VALIDATION: Check for at least 5 unique foods
+    const mustHaveNames = (formData.mustHaveFoods || []).map((m: any) => m.name);
+    const uniqueFoodNames = new Set([...formData.likedFoods, ...mustHaveNames]);
+    
+    if (uniqueFoodNames.size < 5) {
+        setError("You need to select more foods! Please pick at least 5 different foods to allow the algorithm to find a balanced combination.");
+        setShouldWiggle(true);
+        setTimeout(() => setShouldWiggle(false), 500);
+        return;
+    }
+
     setLoading(true);
     setDiet(null);
     setError(null);
@@ -1203,7 +1216,7 @@ const DietPlanner = () => {
 
           {/* FIXED ACTION BAR */}
           <div className="bottom-left-actions glass-panel">
-            <Button variant="outline-primary" className="w-100 py-2 d-flex align-items-center justify-content-center fw-bold" onClick={() => setShowFoodModal(true)}>
+            <Button variant="outline-primary" className={`w-100 py-2 d-flex align-items-center justify-content-center fw-bold ${shouldWiggle ? 'wiggle' : ''}`} onClick={() => setShowFoodModal(true)}>
                 <Heart className="me-2 text-liked" size={18} /> Select Liked Foods ({formData.likedFoods.length})
             </Button>
             <Button variant="primary" className="w-100 py-3 shadow-sm fw-bold" onClick={() => handleSubmit()} disabled={loading}>
