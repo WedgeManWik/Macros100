@@ -122,6 +122,30 @@ const DietPlanner = () => {
   const [showRDAModal, setShowRDAModal] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
+  // SWIPE NAVIGATION
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientX);
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+    
+    if (window.innerWidth < 992) {
+        if (isLeftSwipe) setIsSidebarCollapsed(true);
+        if (isRightSwipe) setIsSidebarCollapsed(false);
+    }
+  };
+
   // Estimate Body Fat if not custom
   useEffect(() => {
     if (formData.isBfCustom) return;
@@ -498,6 +522,11 @@ const DietPlanner = () => {
         return;
     }
 
+    // MOBILE IMMEDIATE SWITCH: Show loading on Results tab immediately
+    if (window.innerWidth < 992) {
+        setIsSidebarCollapsed(true);
+    }
+
     setLoading(true);
     setDiet(null);
     setError(null);
@@ -784,7 +813,14 @@ const DietPlanner = () => {
   const foodSections = ["Proteins", "Carbs", "Fruits", "Fiber and Vegetables", "Nuts", "Dairy", "Fats", "Drink", "Probiotic", "Snacks"];
 
   return (
-    <Container fluid className="vh-100 p-0 animate-up custom-main-container" style={{ background: 'var(--bg-main)' }}>
+    <Container 
+        fluid 
+        className="vh-100 p-0 animate-up custom-main-container" 
+        style={{ background: 'var(--bg-main)' }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+    >
       <style>
         {`
           .custom-main-container {

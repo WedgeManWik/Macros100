@@ -32,9 +32,11 @@ body, html, #root {
 .panel-left { 
   background-color: var(--bg-panel) !important; 
   border-right: 1px solid var(--border-color); 
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
   position: relative;
   z-index: 10;
+  flex: 0 0 41.666667%; /* lg=5 */
+  max-width: 41.666667%;
 }
 
 .panel-left.collapsed {
@@ -51,7 +53,7 @@ body, html, #root {
 
 .panel-right { 
   background-color: var(--bg-main) !important; 
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
   flex: 1;
 }
 
@@ -70,7 +72,7 @@ body, html, #root {
   align-items: center;
   justify-content: center;
   box-shadow: var(--shadow-md);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
 }
 
@@ -158,7 +160,7 @@ hr { border-color: var(--border-color) !important; margin: 2rem 0; }
   border-top: 1px solid rgba(255, 255, 255, 0.08); 
   border-right: 1px solid rgba(255, 255, 255, 0.08); 
   box-shadow: 0 -10px 30px rgba(0,0,0,0.8);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 .bottom-left-actions.collapsed {
@@ -191,7 +193,7 @@ option { background-color: #1a1a1a !important; color: #fff !important; }
     left: 0 !important;
     width: 100% !important;
     height: calc(100vh - 70px) !important; /* Account for bottom nav */
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
     z-index: 10;
     border: none !important;
     margin: 0 !important;
@@ -293,7 +295,7 @@ option { background-color: #1a1a1a !important; color: #fff !important; }
     border-radius: 0 !important;
     border-top: 1px solid var(--border-color) !important;
     z-index: 1000 !important;
-    position: absolute;
+    position: fixed !important;
     transform: none !important;
     opacity: 1 !important;
     pointer-events: all !important;
