@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Container, Row, Col, Form, Button, Card, Alert, ProgressBar, Spinner, OverlayTrigger, Tooltip } from 'react-bootstrap';
-import { Calculator, Utensils, Target, Activity, Heart, Info, RotateCcw } from 'lucide-react';
+import { Calculator, Utensils, Target, Activity, Heart, Info, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Food {
   name: string;
@@ -120,6 +120,7 @@ const DietPlanner = () => {
   });
 
   const [showRDAModal, setShowRDAModal] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Estimate Body Fat if not custom
   useEffect(() => {
@@ -964,8 +965,17 @@ const DietPlanner = () => {
       </div>
 
       <Row className="h-100 g-0">
+        {/* SIDEBAR TOGGLE BUTTON */}
+        <div 
+            className={`sidebar-toggle-btn ${isSidebarCollapsed ? 'collapsed' : 'expanded'}`}
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            title={isSidebarCollapsed ? "Expand Details" : "Retract Details"}
+        >
+            {isSidebarCollapsed ? <ChevronRight size={24} /> : <ChevronLeft size={24} />}
+        </div>
+
         {/* LEFT SIDE: DETAILS */}
-        <Col lg={5} className="h-100 overflow-y-auto custom-scrollbar border-end border-secondary border-opacity-10 position-relative panel-left">
+        <Col lg={5} className={`h-100 overflow-y-auto custom-scrollbar border-end border-secondary border-opacity-10 position-relative panel-left ${isSidebarCollapsed ? 'collapsed' : ''}`}>
           <div className="p-4 details-content-wrapper mx-auto" style={{ maxWidth: '600px' }}>
             <Card className="border-0 shadow-lg mb-4" style={{ backgroundColor: 'var(--bg-card)' }}>
               <Card.Body className="p-4">
@@ -1234,7 +1244,7 @@ const DietPlanner = () => {
           </div>
 
           {/* FIXED ACTION BAR */}
-          <div className="bottom-left-actions glass-panel">
+          <div className={`bottom-left-actions glass-panel ${isSidebarCollapsed ? 'collapsed' : ''}`}>
             <Button variant="outline-primary" className={`w-100 py-2 d-flex align-items-center justify-content-center fw-bold ${shouldWiggle ? 'wiggle' : ''}`} onClick={() => setShowFoodModal(true)}>
                 <Heart className="me-2 text-liked" size={18} /> Select Liked Foods ({formData.likedFoods.length})
             </Button>
@@ -1245,7 +1255,7 @@ const DietPlanner = () => {
         </Col>
 
         {/* RIGHT SIDE: RESULTS */}
-        <Col lg={7} className="h-100 overflow-y-auto p-5 custom-scrollbar panel-right">
+        <Col lg={7} className={`h-100 overflow-y-auto p-5 custom-scrollbar panel-right ${isSidebarCollapsed ? 'expanded' : ''}`}>
           <header className="text-center mb-5 pb-4">
             <div className="d-inline-block px-3 py-1 mb-3 glass-panel rounded-pill small fw-bold text-primary tracking-widest text-uppercase" style={{ fontSize: '0.7rem', border: '1px solid rgba(61, 155, 255, 0.3)' }}>Next-Gen Health Optimization</div>
             <h1 className="display-2 fw-800 mb-3">Macros100</h1>
