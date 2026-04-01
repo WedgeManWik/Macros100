@@ -1013,281 +1013,283 @@ const DietPlanner = () => {
 
         {/* LEFT SIDE: DETAILS */}
         <Col lg={5} className={`h-100 overflow-y-auto custom-scrollbar border-end border-secondary border-opacity-10 position-relative panel-left ${isSidebarCollapsed ? 'collapsed' : ''}`}>
-          <div className="p-4 details-content-wrapper mx-auto" style={{ maxWidth: '600px' }}>
-            <Card className="border-0 shadow-lg mb-4" style={{ backgroundColor: 'var(--bg-card)' }}>
-              <Card.Body className="p-4">
-                <div className="d-flex justify-content-between mb-4 pt-2">
-                  <Button variant="outline-primary" size="sm" onClick={copyProfile}>Copy Profile</Button>
-                  <Button variant="outline-primary" size="sm" onClick={pasteProfile}>Paste Profile</Button>
-                </div>
-                
-                <h3 className="h5 mb-4 d-flex align-items-center fw-bold">
-                  <Calculator className="me-2 text-primary" size={20} /> Your Details
-                </h3>
-                
-                <Form>
-                  <Row>
-                    <Col md={6} className="mb-3">
-                      <Form.Label>Weight (kg)</Form.Label>
-                      <Form.Control type="number" step="any" name="weight" value={formData.weight} onChange={handleInputChange} />
-                    </Col>
-                    <Col md={6} className="mb-3">
-                      <Form.Label>Height (cm)</Form.Label>
-                      <Form.Control type="number" step="any" name="height" value={formData.height} onChange={handleInputChange} />
-                    </Col>
-                  </Row>
+          <div className="sidebar-inner-content">
+            <div className="p-4 details-content-wrapper mx-auto" style={{ maxWidth: '600px' }}>
+              <Card className="border-0 shadow-lg mb-4" style={{ backgroundColor: 'var(--bg-card)' }}>
+                <Card.Body className="p-4">
+                  <div className="d-flex justify-content-between mb-4 pt-2">
+                    <Button variant="outline-primary" size="sm" onClick={copyProfile}>Copy Profile</Button>
+                    <Button variant="outline-primary" size="sm" onClick={pasteProfile}>Paste Profile</Button>
+                  </div>
+                  
+                  <h3 className="h5 mb-4 d-flex align-items-center fw-bold">
+                    <Calculator className="me-2 text-primary" size={20} /> Your Details
+                  </h3>
+                  
+                  <Form>
+                    <Row>
+                      <Col md={6} className="mb-3">
+                        <Form.Label>Weight (kg)</Form.Label>
+                        <Form.Control type="number" step="any" name="weight" value={formData.weight} onChange={handleInputChange} />
+                      </Col>
+                      <Col md={6} className="mb-3">
+                        <Form.Label>Height (cm)</Form.Label>
+                        <Form.Control type="number" step="any" name="height" value={formData.height} onChange={handleInputChange} />
+                      </Col>
+                    </Row>
 
-                  <Row>
-                    <Col md={6} className="mb-3">
-                      <Form.Label>Age</Form.Label>
-                      <Form.Control type="number" step="any" name="age" value={formData.age} onChange={handleInputChange} />
-                    </Col>
-                    <Col md={6} className="mb-3">
-                      <Form.Label>Gender</Form.Label>
-                      <Form.Select name="gender" value={formData.gender} onChange={handleInputChange}>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                      </Form.Select>
-                    </Col>
-                  </Row>
+                    <Row>
+                      <Col md={6} className="mb-3">
+                        <Form.Label>Age</Form.Label>
+                        <Form.Control type="number" step="any" name="age" value={formData.age} onChange={handleInputChange} />
+                      </Col>
+                      <Col md={6} className="mb-3">
+                        <Form.Label>Gender</Form.Label>
+                        <Form.Select name="gender" value={formData.gender} onChange={handleInputChange}>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                        </Form.Select>
+                      </Col>
+                    </Row>
 
-                  <div className="mb-3">
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <Form.Label className="mb-0">Body Fat %</Form.Label>
-                      <Button 
-                        variant="link" 
-                        className={`p-0 text-decoration-none fw-bold ${formData.isBfCustom ? 'text-primary' : 'text-muted'}`}
-                        style={{ fontSize: '0.65rem', lineHeight: '1' }}
-                        onClick={() => setFormData(p => ({ ...p, isBfCustom: !p.isBfCustom }))}
-                      >
-                        {formData.isBfCustom ? 'LOCK (CUSTOM)' : 'AUTO (ESTIMATED)'}
-                      </Button>
+                    <div className="mb-3">
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <Form.Label className="mb-0">Body Fat %</Form.Label>
+                        <Button 
+                          variant="link" 
+                          className={`p-0 text-decoration-none fw-bold ${formData.isBfCustom ? 'text-primary' : 'text-muted'}`}
+                          style={{ fontSize: '0.65rem', lineHeight: '1' }}
+                          onClick={() => setFormData(p => ({ ...p, isBfCustom: !p.isBfCustom }))}
+                        >
+                          {formData.isBfCustom ? 'LOCK (CUSTOM)' : 'AUTO (ESTIMATED)'}
+                        </Button>
+                      </div>
+                      <Form.Control type="number" step="any" name="bodyFat" value={formData.bodyFat} onChange={handleInputChange} />
+                      <Form.Text className="text-muted small" style={{ fontSize: '0.7rem' }}>
+                        {!formData.isBfCustom ? "Estimating based on BMI, Age, and Gender (+10.8% for women)." : "Custom value locked. Click AUTO to resume estimation."}
+                      </Form.Text>
                     </div>
-                    <Form.Control type="number" step="any" name="bodyFat" value={formData.bodyFat} onChange={handleInputChange} />
-                    <Form.Text className="text-muted small" style={{ fontSize: '0.7rem' }}>
-                      {!formData.isBfCustom ? "Estimating based on BMI, Age, and Gender (+10.8% for women)." : "Custom value locked. Click AUTO to resume estimation."}
-                    </Form.Text>
-                  </div>
 
-                  <div className="mb-3">
-                    <Form.Label>Activity Level</Form.Label>
-                    <Form.Select name="activityLevel" value={formData.activityLevel} onChange={handleInputChange}>
-                      <option value="1.2">Sedentary (office job, little exercise)</option>
-                      <option value="1.375">Lightly Active (1-3 days exercise/week)</option>
-                      <option value="1.55">Moderately Active (3-5 days exercise/week)</option>
-                      <option value="1.725">Very Active (6-7 days exercise/week)</option>
-                      <option value="1.9">Extra Active (physical job or 2x training)</option>
-                    </Form.Select>
-                  </div>
+                    <div className="mb-3">
+                      <Form.Label>Activity Level</Form.Label>
+                      <Form.Select name="activityLevel" value={formData.activityLevel} onChange={handleInputChange}>
+                        <option value="1.2">Sedentary (office job, little exercise)</option>
+                        <option value="1.375">Lightly Active (1-3 days exercise/week)</option>
+                        <option value="1.55">Moderately Active (3-5 days exercise/week)</option>
+                        <option value="1.725">Very Active (6-7 days exercise/week)</option>
+                        <option value="1.9">Extra Active (physical job or 2x training)</option>
+                      </Form.Select>
+                    </div>
 
-                  <div className="mb-3">
-                    <Form.Label>Maintenance Calories</Form.Label>
-                    <Form.Control type="number" name="maintenanceCalories" value={formData.maintenanceCalories} onChange={handleInputChange} />
-                  </div>
+                    <div className="mb-3">
+                      <Form.Label>Maintenance Calories</Form.Label>
+                      <Form.Control type="number" name="maintenanceCalories" value={formData.maintenanceCalories} onChange={handleInputChange} />
+                    </div>
 
-                  <div className="mb-4">
-                    <Form.Label>Goal</Form.Label>
-                    <Form.Select name="goal" value={formData.goal} onChange={handleInputChange}>
-                      <option value="fast-lose">Fast Lose Weight</option>
-                      <option value="moderate-lose">Moderate Lose Weight (Recommended)</option>
-                      <option value="maintain">Maintain</option>
-                      <option value="moderate-gain">Moderate Gain Weight (Recommended)</option>
-                      <option value="fast-gain">Fast Gain Weight</option>
-                    </Form.Select>
-                  </div>
+                    <div className="mb-4">
+                      <Form.Label>Goal</Form.Label>
+                      <Form.Select name="goal" value={formData.goal} onChange={handleInputChange}>
+                        <option value="fast-lose">Fast Lose Weight</option>
+                        <option value="moderate-lose">Moderate Lose Weight (Recommended)</option>
+                        <option value="maintain">Maintain</option>
+                        <option value="moderate-gain">Moderate Gain Weight (Recommended)</option>
+                        <option value="fast-gain">Fast Gain Weight</option>
+                      </Form.Select>
+                    </div>
 
-                  <div className="mb-4">
-                    <Form.Label>Calorie Offset</Form.Label>
-                    <Form.Control type="number" name="calorieOffset" value={formData.calorieOffset} onChange={handleInputChange} />
-                  </div>
+                    <div className="mb-4">
+                      <Form.Label>Calorie Offset</Form.Label>
+                      <Form.Control type="number" name="calorieOffset" value={formData.calorieOffset} onChange={handleInputChange} />
+                    </div>
 
-                  <div className="mb-4">
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <Form.Label className="mb-0">Target Calories</Form.Label>
+                    <div className="mb-4">
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <Form.Label className="mb-0">Target Calories</Form.Label>
+                        <Form.Check 
+                          type="switch"
+                          reverse
+                          id="strict-calories-switch"
+                          label={<small className="text-muted fw-bold" style={{ fontSize: '0.65rem' }}>STRICT</small>}
+                          checked={formData.strictCalories}
+                          onChange={(e) => setFormData(prev => ({ ...prev, strictCalories: e.target.checked }))}
+                        />
+                      </div>
+                      <Form.Control type="number" name="targetCalories" value={formData.targetCalories} onChange={handleInputChange} />
+                    </div>
+
+                    <hr className="my-4" />
+
+                    <h3 className="h5 mb-3 d-flex align-items-center justify-content-between fw-bold">
+                      <span className="d-flex align-items-center"><Activity className="me-2 text-macro" size={20} /> Macronutrient Split</span>
                       <Form.Check 
                         type="switch"
-                        reverse
-                        id="strict-calories-switch"
-                        label={<small className="text-muted fw-bold" style={{ fontSize: '0.65rem' }}>STRICT</small>}
-                        checked={formData.strictCalories}
-                        onChange={(e) => setFormData(prev => ({ ...prev, strictCalories: e.target.checked }))}
+                        id="custom-macros-switch"
+                        label={<small className="text-muted" style={{ fontSize: '0.7rem' }}>Custom Settings</small>}
+                        checked={formData.customMacros}
+                        onChange={(e) => setFormData(prev => ({ ...prev, customMacros: e.target.checked }))}
                       />
-                    </div>
-                    <Form.Control type="number" name="targetCalories" value={formData.targetCalories} onChange={handleInputChange} />
-                  </div>
+                    </h3>
+                    <div style={{ opacity: formData.customMacros ? 1 : 0.5, pointerEvents: formData.customMacros ? 'all' : 'none', transition: 'opacity 0.2s' }}>
+                      {(() => {
+                        const calc = { protein: 0, fat: 0, carbs: 0 };
+                        const targetCals = formData.targetCalories;
+                        
+                        ['protein', 'fat', 'carbs'].forEach(m => {
+                          const macro = (formData.macros as any)[m];
+                          if (macro.mode === 'g/kg') calc[m as keyof typeof calc] = macro.value * formData.weight;
+                          else if (macro.mode === '%') calc[m as keyof typeof calc] = (macro.value / 100 * targetCals) / (m === 'fat' ? 9 : 4);
+                          else if (macro.mode === 'g') calc[m as keyof typeof calc] = macro.value;
+                        });
+                        const remainderMacro = Object.keys(formData.macros).find(k => (formData.macros as any)[k].mode === 'remainder');
+                        if (remainderMacro) {
+                          const usedCals = (calc.protein * 4) + (calc.fat * 9) + (calc.carbs * 4);
+                          calc[remainderMacro as keyof typeof calc] = Math.max(0, targetCals - usedCals) / (remainderMacro === 'fat' ? 9 : 4);
+                        }
 
-                  <hr className="my-4" />
-
-                  <h3 className="h5 mb-3 d-flex align-items-center justify-content-between fw-bold">
-                    <span className="d-flex align-items-center"><Activity className="me-2 text-macro" size={20} /> Macronutrient Split</span>
-                    <Form.Check 
-                      type="switch"
-                      id="custom-macros-switch"
-                      label={<small className="text-muted" style={{ fontSize: '0.7rem' }}>Custom Settings</small>}
-                      checked={formData.customMacros}
-                      onChange={(e) => setFormData(prev => ({ ...prev, customMacros: e.target.checked }))}
-                    />
-                  </h3>
-                  <div style={{ opacity: formData.customMacros ? 1 : 0.5, pointerEvents: formData.customMacros ? 'all' : 'none', transition: 'opacity 0.2s' }}>
-                    {(() => {
-                      const calc = { protein: 0, fat: 0, carbs: 0 };
-                      const targetCals = formData.targetCalories;
-                      
-                      ['protein', 'fat', 'carbs'].forEach(m => {
-                        const macro = (formData.macros as any)[m];
-                        if (macro.mode === 'g/kg') calc[m as keyof typeof calc] = macro.value * formData.weight;
-                        else if (macro.mode === '%') calc[m as keyof typeof calc] = (macro.value / 100 * targetCals) / (m === 'fat' ? 9 : 4);
-                        else if (macro.mode === 'g') calc[m as keyof typeof calc] = macro.value;
-                      });
-                      const remainderMacro = Object.keys(formData.macros).find(k => (formData.macros as any)[k].mode === 'remainder');
-                      if (remainderMacro) {
-                        const usedCals = (calc.protein * 4) + (calc.fat * 9) + (calc.carbs * 4);
-                        calc[remainderMacro as keyof typeof calc] = Math.max(0, targetCals - usedCals) / (remainderMacro === 'fat' ? 9 : 4);
-                      }
-
-                      return (
-                        <Row className="g-3">
-                          {['protein', 'fat', 'carbs'].map(macroName => {
-                            const mData = (formData.macros as any)[macroName];
-                            const color = macroName === 'protein' ? 'var(--accent-danger)' : macroName === 'carbs' ? 'var(--accent-primary)' : 'var(--accent-warn)';
-                            return (
-                              <Col key={macroName} xs={4}>
-                                <div className="text-center p-2 rounded-3 border bg-light bg-opacity-5">
-                                  <div className="text-capitalize fw-bold small mb-2" style={{ color, letterSpacing: '0.05em' }}>{macroName}</div>
-                                  <div className="h4 fw-bold mb-3" style={{ color }}>{Math.round(calc[macroName as keyof typeof calc])}g</div>
-                                  
-                                  <Form.Control 
-                                    size="sm" 
-                                    type="number" 
-                                    step="any" 
-                                    className="mb-2 text-center"
-                                    disabled={mData.mode === 'remainder'} 
-                                    value={mData.value} 
-                                    onChange={(e) => handleMacroChange(macroName as any, 'value', e.target.value)} 
-                                  />
-                                  
-                                  <Form.Select 
-                                    size="sm" 
-                                    className="mb-3 text-center"
-                                    value={mData.mode} 
-                                    onChange={(e) => handleMacroChange(macroName as any, 'mode', e.target.value)}
-                                  >
-                                    <option value="g/kg">g/kg</option>
-                                    <option value="%">%</option>
-                                    <option value="g">g</option>
-                                    <option value="remainder">Rem.</option>
-                                  </Form.Select>
-
-                                  <div className="d-flex justify-content-center">
-                                    <Form.Check 
-                                      type="switch"
-                                      reverse
-                                      id={`strict-${macroName}`}
-                                      className="small-switch centered-switch"
-                                      label={<div style={{ fontSize: '0.6rem', color: '#888', fontWeight: 'bold' }}>STRICT</div>}
-                                      checked={mData.strict}
-                                      onChange={(e) => handleMacroChange(macroName as any, 'strict', e.target.checked)}
+                        return (
+                          <Row className="g-3">
+                            {['protein', 'fat', 'carbs'].map(macroName => {
+                              const mData = (formData.macros as any)[macroName];
+                              const color = macroName === 'protein' ? 'var(--accent-danger)' : macroName === 'carbs' ? 'var(--accent-primary)' : 'var(--accent-warn)';
+                              return (
+                                <Col key={macroName} xs={4}>
+                                  <div className="text-center p-2 rounded-3 border bg-light bg-opacity-5">
+                                    <div className="text-capitalize fw-bold small mb-2" style={{ color, letterSpacing: '0.05em' }}>{macroName}</div>
+                                    <div className="h4 fw-bold mb-3" style={{ color }}>{Math.round(calc[macroName as keyof typeof calc])}g</div>
+                                    
+                                    <Form.Control 
+                                      size="sm" 
+                                      type="number" 
+                                      step="any" 
+                                      className="mb-2 text-center"
+                                      disabled={mData.mode === 'remainder'} 
+                                      value={mData.value} 
+                                      onChange={(e) => handleMacroChange(macroName as any, 'value', e.target.value)} 
                                     />
+                                    
+                                    <Form.Select 
+                                      size="sm" 
+                                      className="mb-3 text-center"
+                                      value={mData.mode} 
+                                      onChange={(e) => handleMacroChange(macroName as any, 'mode', e.target.value)}
+                                    >
+                                      <option value="g/kg">g/kg</option>
+                                      <option value="%">%</option>
+                                      <option value="g">g</option>
+                                      <option value="remainder">Rem.</option>
+                                    </Form.Select>
+
+                                    <div className="d-flex justify-content-center">
+                                      <Form.Check 
+                                        type="switch"
+                                        reverse
+                                        id={`strict-${macroName}`}
+                                        className="small-switch centered-switch"
+                                        label={<div style={{ fontSize: '0.6rem', color: '#888', fontWeight: 'bold' }}>STRICT</div>}
+                                        checked={mData.strict}
+                                        onChange={(e) => handleMacroChange(macroName as any, 'strict', e.target.checked)}
+                                      />
+                                    </div>
                                   </div>
-                                </div>
-                              </Col>
-                            );
-                          })}
-                        </Row>
-                      );
-                    })()}
-                  </div>
-
-                  <hr className="my-4" />
-
-                  <h3 className="h5 mb-3 d-flex align-items-center fw-bold">
-                    <Utensils className="me-2 text-musthave" size={20} /> Must Have Foods
-                  </h3>
-                  <div className="mb-3">
-                    <Form.Select size="sm" className="bg-light" onChange={(e) => { if (e.target.value) addMustHave(e.target.value); e.target.value = ""; }}>
-                      <option value="">+ Add Must-Have Ingredient</option>
-                      {foodSections.map(section => (
-                          <optgroup label={section} key={section}>
-                              {foods.filter(f => f.section === section).sort((a,b) => a.name.localeCompare(b.name)).map(f => (
-                                  <option key={f.name} value={f.name}>{f.icon} {f.name}</option>
-                              ))}
-                          </optgroup>
-                      ))}
-                    </Form.Select>
-                  </div>
-                  <div className="mb-4">
-                    {formData.mustHaveFoods.map(must => {
-                      const food = foods.find(f => f.name === must.name);
-                      return (
-                        <div key={must.name} className="d-flex align-items-center mb-2 bg-light p-2 rounded-3 border justify-content-between">
-                          <span className="me-2 fs-5">{food?.icon}</span>
-                          <div className="flex-grow-1 min-width-0 me-2"><div className="small fw-bold text-truncate">{must.name}</div></div>
-                          <div className="d-flex align-items-center gap-1">
-                              <Form.Control size="sm" type="number" value={must.min || 0} onChange={(e) => updateMustHaveRange(must.name, 'min', parseFloat(e.target.value))} style={{ width: '85px', fontSize: '0.8rem', padding: '0.2rem' }} className="text-center" />
-                              <span className="text-muted small">-</span>
-                              <Form.Control size="sm" type="number" value={must.max || 0} onChange={(e) => updateMustHaveRange(must.name, 'max', parseFloat(e.target.value))} style={{ width: '85px', fontSize: '0.8rem', padding: '0.2rem' }} className="text-center" />
-                              <span className="small text-muted ms-1">g</span>
-                          </div>
-                          <Button variant="link" className="p-0 text-danger text-decoration-none ms-2 fw-bold" onClick={() => removeMustHave(must.name)}>X</Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <hr className="my-4" />
-
-                  <h3 className="h5 mb-3 d-flex align-items-center fw-bold">
-                    <Activity className="me-2 text-info" size={20} /> Optimization Model
-                  </h3>
-                  <div className="mb-3">
-                    <Form.Select name="algoModel" value={formData.algoModel} onChange={handleInputChange}>
-                      <option value="beast">Beast Mode (Fast, 1000 trials)</option>
-                      <option value="titan">Titan Mode (Balanced, 5000 trials)</option>
-                      <option value="olympian">Olympian Mode (Deep, 10000 trials)</option>
-                      <option value="god">God Mode (Exhaustive, 20000 trials)</option>
-                    </Form.Select>
-                    <Form.Text className="text-muted small mt-2 d-block">
-                      Higher modes run more simulations to find better nutrient coverage but take longer to complete.
-                    </Form.Text>
-                  </div>
-
-                  <hr className="my-4" />
-
-                  <h3 className="h5 mb-3 d-flex align-items-center justify-content-between fw-bold">
-                    <span className="d-flex align-items-center"><Activity className="me-2 text-info" size={20} /> Advanced Settings</span>
-                    <Form.Check 
-                      type="switch"
-                      id="advanced-settings-switch"
-                      label={<small className="text-muted" style={{ fontSize: '0.7rem' }}>Enable</small>}
-                      checked={formData.advancedSettings}
-                      onChange={(e) => setFormData(prev => ({ ...prev, advancedSettings: e.target.checked }))}
-                    />
-                  </h3>
-
-                  {formData.advancedSettings && (
-                    <div className="fade-in">
-                      <Button 
-                        variant="outline-info" 
-                        className="w-100 py-2 d-flex align-items-center justify-content-center fw-bold mb-3"
-                        onClick={() => setShowRDAModal(true)}
-                      >
-                        <Utensils className="me-2" size={18} /> Custom RDAs & Upper Limits
-                      </Button>
+                                </Col>
+                              );
+                            })}
+                          </Row>
+                        );
+                      })()}
                     </div>
-                  )}
-                </Form>
-              </Card.Body>
-            </Card>
-          </div>
 
-          {/* FIXED ACTION BAR */}
-          <div className={`bottom-left-actions glass-panel ${isSidebarCollapsed ? 'collapsed' : ''}`}>
-            <Button variant="outline-primary" className={`w-100 py-2 d-flex align-items-center justify-content-center fw-bold ${shouldWiggle ? 'wiggle' : ''}`} onClick={() => setShowFoodModal(true)}>
-                <Heart className="me-2 text-liked" size={18} /> Select Liked Foods ({formData.likedFoods.length})
-            </Button>
-            <Button variant="primary" className="w-100 py-3 shadow-sm fw-bold" onClick={() => handleSubmit()} disabled={loading}>
-                {loading ? 'Optimizing Parameters...' : 'Generate Daily Plan'}
-            </Button>
+                    <hr className="my-4" />
+
+                    <h3 className="h5 mb-3 d-flex align-items-center fw-bold">
+                      <Utensils className="me-2 text-musthave" size={20} /> Must Have Foods
+                    </h3>
+                    <div className="mb-3">
+                      <Form.Select size="sm" className="bg-light" onChange={(e) => { if (e.target.value) addMustHave(e.target.value); e.target.value = ""; }}>
+                        <option value="">+ Add Must-Have Ingredient</option>
+                        {foodSections.map(section => (
+                            <optgroup label={section} key={section}>
+                                {foods.filter(f => f.section === section).sort((a,b) => a.name.localeCompare(b.name)).map(f => (
+                                    <option key={f.name} value={f.name}>{f.icon} {f.name}</option>
+                                ))}
+                            </optgroup>
+                        ))}
+                      </Form.Select>
+                    </div>
+                    <div className="mb-4">
+                      {formData.mustHaveFoods.map(must => {
+                        const food = foods.find(f => f.name === must.name);
+                        return (
+                          <div key={must.name} className="d-flex align-items-center mb-2 bg-light p-2 rounded-3 border justify-content-between">
+                            <span className="me-2 fs-5">{food?.icon}</span>
+                            <div className="flex-grow-1 min-width-0 me-2"><div className="small fw-bold text-truncate">{must.name}</div></div>
+                            <div className="d-flex align-items-center gap-1">
+                                <Form.Control size="sm" type="number" value={must.min || 0} onChange={(e) => updateMustHaveRange(must.name, 'min', parseFloat(e.target.value))} style={{ width: '85px', fontSize: '0.8rem', padding: '0.2rem' }} className="text-center" />
+                                <span className="text-muted small">-</span>
+                                <Form.Control size="sm" type="number" value={must.max || 0} onChange={(e) => updateMustHaveRange(must.name, 'max', parseFloat(e.target.value))} style={{ width: '85px', fontSize: '0.8rem', padding: '0.2rem' }} className="text-center" />
+                                <span className="small text-muted ms-1">g</span>
+                            </div>
+                            <Button variant="link" className="p-0 text-danger text-decoration-none ms-2 fw-bold" onClick={() => removeMustHave(must.name)}>X</Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <hr className="my-4" />
+
+                    <h3 className="h5 mb-3 d-flex align-items-center fw-bold">
+                      <Activity className="me-2 text-info" size={20} /> Optimization Model
+                    </h3>
+                    <div className="mb-3">
+                      <Form.Select name="algoModel" value={formData.algoModel} onChange={handleInputChange}>
+                        <option value="beast">Beast Mode (Fast, 1000 trials)</option>
+                        <option value="titan">Titan Mode (Balanced, 5000 trials)</option>
+                        <option value="olympian">Olympian Mode (Deep, 10000 trials)</option>
+                        <option value="god">God Mode (Exhaustive, 20000 trials)</option>
+                      </Form.Select>
+                      <Form.Text className="text-muted small mt-2 d-block">
+                        Higher modes run more simulations to find better nutrient coverage but take longer to complete.
+                      </Form.Text>
+                    </div>
+
+                    <hr className="my-4" />
+
+                    <h3 className="h5 mb-3 d-flex align-items-center justify-content-between fw-bold">
+                      <span className="d-flex align-items-center"><Activity className="me-2 text-info" size={20} /> Advanced Settings</span>
+                      <Form.Check 
+                        type="switch"
+                        id="advanced-settings-switch"
+                        label={<small className="text-muted" style={{ fontSize: '0.7rem' }}>Enable</small>}
+                        checked={formData.advancedSettings}
+                        onChange={(e) => setFormData(prev => ({ ...prev, advancedSettings: e.target.checked }))}
+                      />
+                    </h3>
+
+                    {formData.advancedSettings && (
+                      <div className="fade-in">
+                        <Button 
+                          variant="outline-info" 
+                          className="w-100 py-2 d-flex align-items-center justify-content-center fw-bold mb-3"
+                          onClick={() => setShowRDAModal(true)}
+                        >
+                          <Utensils className="me-2" size={18} /> Custom RDAs & Upper Limits
+                        </Button>
+                      </div>
+                    )}
+                  </Form>
+                </Card.Body>
+              </Card>
+            </div>
+
+            {/* FIXED ACTION BAR */}
+            <div className={`bottom-left-actions glass-panel ${isSidebarCollapsed ? 'collapsed' : ''}`}>
+              <Button variant="outline-primary" className={`w-100 py-2 d-flex align-items-center justify-content-center fw-bold ${shouldWiggle ? 'wiggle' : ''}`} onClick={() => setShowFoodModal(true)}>
+                  <Heart className="me-2 text-liked" size={18} /> Select Liked Foods ({formData.likedFoods.length})
+              </Button>
+              <Button variant="primary" className="w-100 py-3 shadow-sm fw-bold" onClick={() => handleSubmit()} disabled={loading}>
+                  {loading ? 'Optimizing Parameters...' : 'Generate Daily Plan'}
+              </Button>
+            </div>
           </div>
         </Col>
 
