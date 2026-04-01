@@ -195,7 +195,7 @@ hr { border-color: var(--border-color) !important; margin: 2rem 0; }
 optgroup { background-color: #121212 !important; color: #3d9bff !important; font-weight: bold !important; }
 option { background-color: #1a1a1a !important; color: #fff !important; }
 
-/* MOBILE PANEL LOGIC (SMOOTH SLIDING) */
+/* MOBILE PANEL LOGIC (NO ANIMATIONS) */
 @media (max-width: 991.98px) {
   body, html, #root { overflow: hidden !important; height: 100vh !important; }
   .vh-100 { height: 100vh !important; overflow: hidden !important; }
@@ -208,7 +208,7 @@ option { background-color: #1a1a1a !important; color: #fff !important; }
     max-width: 100% !important;
     flex: 0 0 100% !important;
     height: calc(100vh - 70px) !important; 
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important; /* Smooth sliding */
+    transition: none !important; /* Instant switch on mobile */
     z-index: 10;
     border: none !important;
     margin: 0 !important;
@@ -224,27 +224,23 @@ option { background-color: #1a1a1a !important; color: #fff !important; }
     min-width: 0 !important;
   }
 
-  /* Fixed-width sliding logic to prevent reflow */
   .panel-left {
     z-index: 30;
-    transform: translateX(0);
   }
 
   .panel-left.collapsed {
-    transform: translateX(-100%) !important;
     visibility: hidden !important;
     opacity: 0 !important;
     pointer-events: none !important;
+    display: none !important;
   }
 
   .panel-right {
     z-index: 20;
-    transform: translateX(100%);
   }
 
   .panel-right.expanded {
     z-index: 40;
-    transform: translateX(0) !important;
   }
 
   .sidebar-toggle-btn {
@@ -275,19 +271,16 @@ option { background-color: #1a1a1a !important; color: #fff !important; }
     border-top: 1px solid var(--border-color) !important;
     z-index: 1000 !important;
     position: fixed !important;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    transition: none !important;
     box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
-    transform: translateX(0);
   }
 
   .bottom-left-actions.collapsed {
-    transform: translateX(-100%) !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
+    display: none !important;
   }
   
   .details-content-wrapper { 
-    padding-bottom: 250px !important; 
+    padding-bottom: 250px !important; /* Massive padding so action bar doesn't block inputs */
     padding-left: 1rem !important; 
     padding-right: 1rem !important; 
     max-width: 100% !important;
