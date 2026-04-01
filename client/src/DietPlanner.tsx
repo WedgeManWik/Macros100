@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Container, Row, Col, Form, Button, Card, Alert, ProgressBar, Spinner, OverlayTrigger, Tooltip } from 'react-bootstrap';
-import { Calculator, Utensils, Target, Activity, Heart, Info, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calculator, Utensils, Target, Activity, Heart, Info, RotateCcw, ChevronLeft, ChevronRight, Settings, ClipboardList } from 'lucide-react';
 
 interface Food {
   name: string;
@@ -536,12 +536,13 @@ const DietPlanner = () => {
                     setDiet(status.result);
                     setOriginalDiet(JSON.parse(JSON.stringify(status.result)));
                     
-                    // MOBILE SCROLL: Jump to results on small screens
+                    // MOBILE AUTO-SWITCH: Switch to Results tab on small screens
                     if (window.innerWidth < 992) {
+                        setIsSidebarCollapsed(true);
                         setTimeout(() => {
                             const resultsEl = document.querySelector('.panel-right');
-                            resultsEl?.scrollIntoView({ behavior: 'smooth' });
-                        }, 100);
+                            resultsEl?.scrollTo({ top: 0, behavior: 'smooth' });
+                        }, 300);
                     }
 
                     // If it's a best-effort result, the worker passes the error inside the result
@@ -1721,6 +1722,38 @@ const DietPlanner = () => {
           )}
         </Col>
       </Row>
+
+      {/* MOBILE NAVIGATION BAR */}
+      <div className="mobile-nav-bar">
+        <button 
+            className={`mobile-nav-item ${!isSidebarCollapsed ? 'active' : ''}`}
+            onClick={() => setIsSidebarCollapsed(false)}
+        >
+            <div className="nav-icon-box">
+                <Settings size={20} />
+            </div>
+            <span>Configure</span>
+            {formData.likedFoods.length > 0 && (
+                <div className="position-absolute translate-middle-y" style={{ top: '15px', right: '25%' }}>
+                    <span className="badge rounded-pill bg-primary" style={{ fontSize: '0.5rem' }}>{formData.likedFoods.length}</span>
+                </div>
+            )}
+        </button>
+        <button 
+            className={`mobile-nav-item ${isSidebarCollapsed ? 'active' : ''}`}
+            onClick={() => setIsSidebarCollapsed(true)}
+        >
+            <div className="nav-icon-box">
+                <ClipboardList size={20} />
+            </div>
+            <span>Meal Plan</span>
+            {diet && (
+                <div className="position-absolute translate-middle-y" style={{ top: '15px', right: '25%' }}>
+                    <span className="badge rounded-pill bg-success" style={{ fontSize: '0.5rem' }}>{diet.accuracy}%</span>
+                </div>
+            )}
+        </button>
+      </div>
     </Container>
   );
 };
