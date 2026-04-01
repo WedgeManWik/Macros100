@@ -37,7 +37,7 @@ body, html, #root {
   z-index: 10;
   flex: 0 0 41.666667%; /* lg=5 */
   max-width: 41.666667%;
-  overflow-y: auto !important; /* Allow scrolling */
+  overflow-y: auto !important;
   overflow-x: hidden !important;
   height: 100vh;
 }
@@ -311,10 +311,15 @@ option { background-color: #1a1a1a !important; color: #fff !important; }
     border-top: 1px solid var(--border-color) !important;
     z-index: 1000 !important;
     position: fixed !important;
-    transform: none !important;
-    opacity: 1 !important;
-    pointer-events: all !important;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
     box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+    /* No forced transform/opacity here so it follows the .collapsed class */
+  }
+
+  .bottom-left-actions.collapsed {
+    transform: translateX(-100%) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
   }
   
   .details-content-wrapper { 
