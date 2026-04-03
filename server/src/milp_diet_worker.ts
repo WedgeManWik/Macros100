@@ -55,9 +55,9 @@ function checkDietQuality(result: any, ceiling: number): { valid: boolean, reaso
     if (totals.water > 4000) return { valid: false, reason: `Water exceeds limit.` };
     
     // SAFETY: Hard in strict passes
-    for (const k of essentialKeys) {
+    for (const k of Object.keys(nutrientConfig)) {
         if (nutrientConfig[k].max) {
-            const actualCeiling = k === 'sugars' ? 1.0 : ceiling;
+            const actualCeiling = ceiling;
             if (totals[k] > (nutrientConfig[k].max * actualCeiling + 0.1)) {
                 return { valid: false, reason: `${nutrientNames[k] || k} exceeded ${Math.round(actualCeiling*100)}% safety limit.` };
             }
@@ -126,14 +126,18 @@ async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number, ceil
         });
 
         // 3. SAFETY LIMITS (Soft penalized in relaxed mode)
-        essentialKeys.forEach((k: string) => {
+        Object.keys(nutrientConfig).forEach((k: string) => {
             const config = nutrientConfig[k];
-            const foodCoeffs = foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) / (config.target || 1) }));
-            constraints.push({ name: `lk_cov_${k}`, vars: [...foodCoeffs, { name: `cov_${k}`, coef: -1 }], bnds: { type: glp.GLP_LO, lb: 0, ub: 0 } });
-            constraints.push({ name: `lk_min_${k}`, vars: [{ name: 'min_cov', coef: 1 }, { name: `cov_${k}`, coef: -1 }], bnds: { type: glp.GLP_UP, lb: 0, ub: 0 } });
+            const isEssential = essentialKeys.includes(k);
+
+            if (isEssential) {
+                const foodCoeffs = foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) / (config.target || 1) }));
+                constraints.push({ name: `lk_cov_${k}`, vars: [...foodCoeffs, { name: `cov_${k}`, coef: -1 }], bnds: { type: glp.GLP_LO, lb: 0, ub: 0 } });
+                constraints.push({ name: `lk_min_${k}`, vars: [{ name: 'min_cov', coef: 1 }, { name: `cov_${k}`, coef: -1 }], bnds: { type: glp.GLP_UP, lb: 0, ub: 0 } });
+            }
             
             if (config.max) {
-                const actualCeiling = k === 'sugars' ? 1.0 : ceiling;
+                const actualCeiling = ceiling;
                 const limit = config.max * actualCeiling;
                 const totalCoeffs = foods.map((f, i) => ({ name: `f_${i}`, coef: (k === 'energy' ? f.calories : k === 'protein' ? f.protein : k === 'carbs' ? f.carbs : k === 'fat' ? f.fat : (f.nutrients[k] as any || 0)) }));
                 
@@ -219,7 +223,7 @@ async function diagnoseFailure(allPool: Food[], ceiling: number) {
         if (mTotals.carbs > carbTarget + 5) return `CARB CONTRADICTION: Your must-have foods contain ~${Math.round(mTotals.carbs)}g carbs, already exceeding your ${Math.round(carbTarget)}g goal. This is common in Keto profiles with too many mandatory vegetables or fruit.`;
         if (mTotals.fat > fatTarget + 5) return `FAT CONTRADICTION: Your must-have foods contain ~${Math.round(mTotals.fat)}g fat, already exceeding your ${Math.round(fatTarget)}g goal.`;
 
-        for (const k of essentialKeys) {
+        for (const k of Object.keys(nutrientConfig)) {
             if (nutrientConfig[k].max && mTotals[k] > (nutrientConfig[k].max * ceiling + 0.1)) {
                 const name = nutrientNames[k] || k;
                 let topContrib = ""; let maxC = 0;
