@@ -864,8 +864,8 @@ const DietPlanner = () => {
                 <h2 className="h3 mb-0 fw-bold d-flex align-items-center">
                     <Heart className="me-2 text-liked" size={28} /> Select Liked Foods
                 </h2>
-                <Button variant="link" className="text-decoration-none border-0 p-2 d-flex align-items-center justify-content-center fw-bold text-danger" style={{ fontSize: '2rem', lineHeight: '1' }} onClick={() => setShowFoodModal(false)}>
-                    X
+                <Button variant="outline-light" className="rounded-circle border-0 modal-close-btn p-0 d-flex align-items-center justify-content-center" style={{ fontSize: '1.5rem', fontWeight: 'bold', width: '50px', height: '50px' }} onClick={() => setShowFoodModal(false)}>
+                    ✕
                 </Button>
             </div>
 
