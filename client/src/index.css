@@ -207,21 +207,25 @@ option { background-color: #1a1a1a !important; color: #fff !important; }
 
 /* MOBILE PANEL LOGIC (NO ANIMATIONS) */
 @media (max-width: 991.98px) {
-  /* Make text white on mobile as requested */
-  .text-secondary, .text-muted, .text-white-50, .form-label, .small, small, .text-white-50 {
+  /* Only target elements that are intentionally grey/muted in the original design */
+  .text-secondary, 
+  .text-muted, 
+  .text-white-50, 
+  .form-text, 
+  .form-label, 
+  .small, 
+  small,
+  .lead,
+  p.text-secondary,
+  span.text-muted {
     color: #ffffff !important;
+    opacity: 1 !important;
   }
   
-  .lead, p, div {
+  /* Ensure broad paragraph tags are readable but not overriding inline styles */
+  p:not([class*="text-"]) {
     color: #ffffff !important;
   }
-
-  /* Restore specific accent colors which might have been overridden by the broad 'div' selector above */
-  .text-primary { color: var(--accent-primary) !important; }
-  .text-success, .text-musthave { color: var(--accent-secondary) !important; }
-  .text-danger, .text-liked { color: var(--accent-danger) !important; }
-  .text-warning, .text-macro { color: var(--accent-warn) !important; }
-  .text-info { color: var(--accent-primary) !important; }
 
   .bottom-left-actions {
     width: auto !important;
