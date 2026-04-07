@@ -175,26 +175,6 @@ hr { border-color: var(--border-color) !important; margin: 2rem 0; }
   overflow-x: hidden !important;
 }
 
-.modal-close-btn {
-  width: 50px !important;
-  height: 50px !important;
-  color: #ffffff !important;
-  background: rgba(255, 255, 255, 0.1) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  z-index: 10005 !important;
-}
-
-.modal-close-btn svg {
-  width: 32px !important;
-  height: 32px !important;
-  color: #ffffff !important;
-  stroke: #ffffff !important;
-  stroke-width: 3px !important;
-  display: block !important;
-}
-
 .bottom-left-actions { 
   position: fixed; 
   bottom: 0; 
@@ -367,34 +347,6 @@ option { background-color: #1a1a1a !important; color: #fff !important; }
   /* Modal Mobile Fixes */
   .custom-modal-container {
     z-index: 10000 !important; /* Higher than everything else */
-  }
-  .custom-modal-content {
-    width: 95% !important;
-    height: 85% !important; /* Shorter to ensure Save button is visible */
-    border-radius: 1.5rem !important;
-    display: flex;
-    flex-direction: column;
-    overflow-x: hidden !important;
-  }
-  .custom-modal-content .p-5, 
-  .custom-modal-content .flex-grow-1,
-  .custom-modal-content .overflow-y-auto {
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-    flex: 1;
-  }
-  .modal-close-btn {
-    width: 50px !important;
-    height: 50px !important;
-    color: #ffffff !important;
-    background: rgba(255, 255, 255, 0.1) !important;
-  }
-  .modal-close-btn svg {
-    width: 32px !important;
-    height: 32px !important;
-    color: #ffffff !important;
-    stroke: #ffffff !important;
-    stroke-width: 2.5px !important;
   }
   
   .search-controls-mobile {
