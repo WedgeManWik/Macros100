@@ -200,26 +200,34 @@ option { background-color: #1a1a1a !important; color: #fff !important; }
   .bottom-left-actions {
     width: auto !important;
     position: fixed !important;
-    /* The floating approach is the most robust way to avoid browser UI collisions */
-    bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+    /* Move it significantly higher to clear any possible browser UI */
+    bottom: calc(4rem + env(safe-area-inset-bottom, 0px)) !important;
     left: 1rem !important;
     right: 1rem !important;
     padding: 1rem !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    gap: 0.6rem !important;
-    background: var(--bg-panel) !important;
-    border-radius: 1.5rem !important;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.95) !important;
+    gap: 0.5rem !important;
+    background: #0a0a0a !important; /* Solid background */
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 1.25rem !important;
+    box-shadow: 0 15px 50px rgba(0,0,0,1) !important;
     transform: translateY(0) !important;
     opacity: 1 !important;
     pointer-events: auto !important;
     display: flex !important;
-    z-index: 2200 !important;
+    flex-direction: column !important;
+    z-index: 9999 !important; /* Extremely high z-index */
     transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
   }
 
+  .bottom-left-actions .btn {
+    padding: 0.6rem 1rem !important;
+    font-size: 0.7rem !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
   .bottom-left-actions.collapsed {
-    transform: translateY(calc(100% + 2rem)) !important;
+    transform: translateY(calc(100% + 5rem)) !important;
     pointer-events: none !important;
   }
 
