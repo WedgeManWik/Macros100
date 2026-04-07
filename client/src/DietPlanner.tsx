@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Container, Row, Col, Form, Button, Card, Alert, ProgressBar, Spinner, OverlayTrigger, Tooltip } from 'react-bootstrap';
-import { Calculator, Utensils, Target, Activity, Heart, Info, RotateCcw, ChevronLeft, ChevronRight, Settings, ClipboardList } from 'lucide-react';
+import { Calculator, Utensils, Target, Activity, Heart, Info, RotateCcw, ChevronLeft, ChevronRight, Settings, ClipboardList, X } from 'lucide-react';
 
 interface Food {
   name: string;
@@ -859,18 +859,22 @@ const DietPlanner = () => {
       {/* LIKED FOODS MODAL */}
       <div className={`modal-blur-overlay ${showFoodModal ? 'active' : ''}`} />
       <div className={`custom-modal-container ${showFoodModal ? 'active' : ''}`} onClick={() => setShowFoodModal(false)}>
-        <div className="custom-modal-content glass-panel p-4" onClick={e => e.stopPropagation()} style={{ width: window.innerWidth < 992 ? '95%' : '85%', height: window.innerWidth < 992 ? '95%' : '85%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div className="custom-modal-content glass-panel p-4" onClick={e => e.stopPropagation()}>
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h2 className="h3 mb-0 fw-bold d-flex align-items-center">
                     <Heart className="me-2 text-liked" size={28} /> Select Liked Foods
                 </h2>
-                <Button variant="outline-light" className="rounded-circle border-0" onClick={() => setShowFoodModal(false)}>✕</Button>
+                <Button variant="outline-light" className="rounded-circle border-0 modal-close-btn p-0 d-flex align-items-center justify-content-center" onClick={() => setShowFoodModal(false)}>
+                    <X />
+                </Button>
             </div>
 
-            <div className="mb-4 d-flex gap-3 align-items-center">
+            <div className="mb-4 d-flex gap-3 align-items-center search-controls-mobile">
                 <Form.Control size="lg" type="text" placeholder="Search ingredients..." className="glass-panel border-0" style={{ background: 'rgba(255,255,255,0.05)', color: 'white' }} value={foodSearch} onChange={(e) => setFoodSearch(e.target.value.toLowerCase())} />
-                <Button variant="outline-primary" className="text-nowrap" onClick={() => setFormData(p => ({ ...p, likedFoods: foods.map(f => f.name) }))}>Select All</Button>
-                <Button variant="outline-danger" className="text-nowrap" onClick={() => setFormData(p => ({ ...p, likedFoods: [] }))}>Deselect All</Button>
+                <div className="d-flex gap-2 btn-group">
+                    <Button variant="outline-primary" className="text-nowrap flex-grow-1" onClick={() => setFormData(p => ({ ...p, likedFoods: foods.map(f => f.name) }))}>Select All</Button>
+                    <Button variant="outline-danger" className="text-nowrap flex-grow-1" onClick={() => setFormData(p => ({ ...p, likedFoods: [] }))}>Deselect All</Button>
+                </div>
             </div>
 
             <div className="flex-grow-1 overflow-y-auto pr-3 custom-scrollbar">
@@ -930,7 +934,9 @@ const DietPlanner = () => {
                     >
                         <RotateCcw size={14} className="me-2" /> Reset All to Standard
                     </Button>
-                    <Button variant="outline-light" className="rounded-circle border-0" onClick={() => setShowRDAModal(false)}>✕</Button>
+                    <Button variant="outline-light" className="rounded-circle border-0 modal-close-btn p-0 d-flex align-items-center justify-content-center" onClick={() => setShowRDAModal(false)}>
+                        <X />
+                    </Button>
                 </div>
             </div>
 
