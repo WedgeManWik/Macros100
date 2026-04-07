@@ -25,18 +25,16 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ show, onClose }) => {
             ol li { font-family: Arial; }
           `}
         </style>
-        {/* Modal content from user */}
         <div data-custom-class="body">
-          <div align="center" class="MsoNormal" data-custom-class="title" style="text-align: left; line-height: 1.5;">
+          <div align="center" className="MsoNormal" data-custom-class="title" style={{ textAlign: 'left', lineHeight: '1.5' }}>
             <strong><h1>DISCLAIMER</h1></strong>
           </div>
-          <div class="MsoNormal" data-custom-class="heading_1">
+          <div className="MsoNormal" data-custom-class="heading_1">
              <strong><h2>WEBSITE DISCLAIMER</h2></strong>
           </div>
-          <div class="MsoNormal" data-custom-class="body_text" style="line-height: 1.5;">
+          <div className="MsoNormal" data-custom-class="body_text" style={{ lineHeight: '1.5' }}>
             <span>The information provided by Macros100 is for general informational purposes only...</span>
           </div>
-          {/* ... truncated for brevity, full content from user should be here ... */}
         </div>
       </Modal.Body>
       <Modal.Footer>
