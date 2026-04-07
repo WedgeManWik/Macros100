@@ -155,7 +155,17 @@ hr { border-color: var(--border-color) !important; margin: 2rem 0; }
 .modal-blur-overlay.active { opacity: 1; visibility: visible; }
 .custom-modal-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; z-index: 1001; opacity: 0; visibility: hidden; transform: scale(0.95); transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .custom-modal-container.active { opacity: 1; visibility: visible; transform: scale(1); }
-.custom-modal-content { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8); border: 1px solid rgba(255, 255, 255, 0.08); background: var(--bg-panel); }
+.custom-modal-content { 
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8); 
+  border: 1px solid rgba(255, 255, 255, 0.08); 
+  background: var(--bg-panel); 
+  width: 85%;
+  height: 85%;
+  border-radius: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
 .bottom-left-actions { 
   position: fixed; 
@@ -197,6 +207,22 @@ option { background-color: #1a1a1a !important; color: #fff !important; }
 
 /* MOBILE PANEL LOGIC (NO ANIMATIONS) */
 @media (max-width: 991.98px) {
+  /* Make text white on mobile as requested */
+  .text-secondary, .text-muted, .text-white-50, .form-label, .small, small, .text-white-50 {
+    color: #ffffff !important;
+  }
+  
+  .lead, p, div {
+    color: #ffffff !important;
+  }
+
+  /* Restore specific accent colors which might have been overridden by the broad 'div' selector above */
+  .text-primary { color: var(--accent-primary) !important; }
+  .text-success, .text-musthave { color: var(--accent-secondary) !important; }
+  .text-danger, .text-liked { color: var(--accent-danger) !important; }
+  .text-warning, .text-macro { color: var(--accent-warn) !important; }
+  .text-info { color: var(--accent-primary) !important; }
+
   .bottom-left-actions {
     width: auto !important;
     position: fixed !important;
