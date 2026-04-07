@@ -26,7 +26,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ show, onClose }) => {
           `}
         </style>
         <div data-custom-class="body">
-          <div align="center" className="MsoNormal" data-custom-class="title" style={{ textAlign: 'left', lineHeight: '1.5' }}>
+          <div className="MsoNormal" data-custom-class="title" style={{ textAlign: 'left', lineHeight: '1.5' }}>
             <strong><h1>DISCLAIMER</h1></strong>
           </div>
           <div className="MsoNormal" data-custom-class="heading_1">
