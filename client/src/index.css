@@ -346,18 +346,27 @@ option { background-color: #1a1a1a !important; color: #fff !important; }
     border-radius: 1.5rem !important;
     display: flex;
     flex-direction: column;
+    overflow-x: hidden !important;
   }
-  .custom-modal-content .p-5 {
+  .custom-modal-content .p-5, 
+  .custom-modal-content .flex-grow-1,
+  .custom-modal-content .overflow-y-auto {
     overflow-y: auto !important;
+    overflow-x: hidden !important;
     flex: 1;
   }
   .modal-close-btn {
     width: 50px !important;
     height: 50px !important;
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.1) !important;
   }
   .modal-close-btn svg {
-    width: 30px !important;
-    height: 30px !important;
+    width: 32px !important;
+    height: 32px !important;
+    color: #ffffff !important;
+    stroke: #ffffff !important;
+    stroke-width: 2.5px !important;
   }
   
   .search-controls-mobile {
