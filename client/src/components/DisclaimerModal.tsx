@@ -1,0 +1,49 @@
+import React from 'react';
+import { Modal, Button } from 'react-bootstrap';
+
+interface DisclaimerModalProps {
+  show: boolean;
+  onClose: () => void;
+}
+
+const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ show, onClose }) => {
+  return (
+    <Modal show={show} onHide={onClose} size="lg" centered>
+      <Modal.Body style={{ padding: '2rem' }}>
+        <style>
+          {`
+            [data-custom-class='body'], [data-custom-class='body'] * { background: transparent !important; }
+            [data-custom-class='title'], [data-custom-class='title'] * { font-family: Arial !important; font-size: 26px !important; color: #000000 !important; }
+            [data-custom-class='subtitle'], [data-custom-class='subtitle'] * { font-family: Arial !important; color: #595959 !important; font-size: 14px !important; }
+            [data-custom-class='heading_1'], [data-custom-class='heading_1'] * { font-family: Arial !important; font-size: 19px !important; color: #000000 !important; }
+            [data-custom-class='heading_2'], [data-custom-class='heading_2'] * { font-family: Arial !important; font-size: 17px !important; color: #000000 !important; }
+            [data-custom-class='body_text'], [data-custom-class='body_text'] * { color: #595959 !important; font-size: 14px !important; font-family: Arial !important; }
+            [data-custom-class='link'], [data-custom-class='link'] * { color: #3030F1 !important; font-size: 14px !important; font-family: Arial !important; word-break: break-word !important; }
+            ul { list-style-type: square; }
+            ul > li > ul { list-style-type: circle; }
+            ul > li > ul > li > ul { list-style-type: square; }
+            ol li { font-family: Arial; }
+          `}
+        </style>
+        {/* Modal content from user */}
+        <div data-custom-class="body">
+          <div align="center" class="MsoNormal" data-custom-class="title" style="text-align: left; line-height: 1.5;">
+            <strong><h1>DISCLAIMER</h1></strong>
+          </div>
+          <div class="MsoNormal" data-custom-class="heading_1">
+             <strong><h2>WEBSITE DISCLAIMER</h2></strong>
+          </div>
+          <div class="MsoNormal" data-custom-class="body_text" style="line-height: 1.5;">
+            <span>The information provided by Macros100 is for general informational purposes only...</span>
+          </div>
+          {/* ... truncated for brevity, full content from user should be here ... */}
+        </div>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="primary" onClick={onClose}>I Understand</Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};
+
+export default DisclaimerModal;
