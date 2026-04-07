@@ -122,30 +122,6 @@ const DietPlanner = () => {
   const [showRDAModal, setShowRDAModal] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  // SWIPE NAVIGATION
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
-  const minSwipeDistance = 50;
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-  };
-
-  const onTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientX);
-
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
-    
-    if (window.innerWidth < 992) {
-        if (isLeftSwipe) setIsSidebarCollapsed(true);
-        if (isRightSwipe) setIsSidebarCollapsed(false);
-    }
-  };
-
   // Estimate Body Fat if not custom
   useEffect(() => {
     if (formData.isBfCustom) return;
@@ -817,9 +793,6 @@ const DietPlanner = () => {
         fluid 
         className="vh-100 p-0 animate-up custom-main-container" 
         style={{ background: 'var(--bg-main)' }}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
     >
       <style>
         {`
@@ -861,6 +834,26 @@ const DietPlanner = () => {
           }
         `}
       </style>
+
+      {/* MOBILE TOGGLE BUTTON */}
+      {diet && (
+        <div className="mobile-top-btn-wrapper">
+            <Button 
+                variant="primary" 
+                size="sm" 
+                className="rounded-pill px-4 shadow-lg fw-bold border-2 border-white border-opacity-10"
+                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                style={{ backdropFilter: 'blur(10px)', background: 'rgba(61, 155, 255, 0.8)' }}
+            >
+                {isSidebarCollapsed ? (
+                    <span className="d-flex align-items-center"><ChevronLeft size={18} className="me-1" /> go back</span>
+                ) : (
+                    <span className="d-flex align-items-center">view diet <ChevronRight size={18} className="ms-1" /></span>
+                )}
+            </Button>
+        </div>
+      )}
+
       {/* LIKED FOODS MODAL */}
       <div className={`modal-blur-overlay ${showFoodModal ? 'active' : ''}`} />
       <div className={`custom-modal-container ${showFoodModal ? 'active' : ''}`} onClick={() => setShowFoodModal(false)}>
@@ -1763,37 +1756,6 @@ const DietPlanner = () => {
         </Col>
       </Row>
 
-      {/* MOBILE NAVIGATION BAR */}
-      <div className="mobile-nav-bar">
-        <button 
-            className={`mobile-nav-item ${!isSidebarCollapsed ? 'active' : ''}`}
-            onClick={() => setIsSidebarCollapsed(false)}
-        >
-            <div className="nav-icon-box">
-                <Settings size={20} />
-            </div>
-            <span>Configure</span>
-            {formData.likedFoods.length > 0 && (
-                <div className="position-absolute translate-middle-y" style={{ top: '15px', right: '25%' }}>
-                    <span className="badge rounded-pill bg-primary" style={{ fontSize: '0.5rem' }}>{formData.likedFoods.length}</span>
-                </div>
-            )}
-        </button>
-        <button 
-            className={`mobile-nav-item ${isSidebarCollapsed ? 'active' : ''}`}
-            onClick={() => setIsSidebarCollapsed(true)}
-        >
-            <div className="nav-icon-box">
-                <ClipboardList size={20} />
-            </div>
-            <span>Meal Plan</span>
-            {diet && (
-                <div className="position-absolute translate-middle-y" style={{ top: '15px', right: '25%' }}>
-                    <span className="badge rounded-pill bg-success" style={{ fontSize: '0.5rem' }}>{diet.accuracy}%</span>
-                </div>
-            )}
-        </button>
-      </div>
     </Container>
   );
 };
