@@ -13,7 +13,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors());
+const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
+app.use(cors({ origin: allowedOrigin }));
 app.use(bodyParser.json());
 
 // Job Store
@@ -72,22 +73,26 @@ app.get('/api/status/:id', (req, res) => {
   res.json(job);
 });
 
-// Serve static files from React build
-const buildPath = path.join(__dirname, '../../client/dist');
-console.log(`Checking for static files at: ${buildPath}`);
+// Serve static files from React build (Optional for split deployments)
+if (process.env.SERVE_FRONTEND !== 'false') {
+  const buildPath = path.join(__dirname, '../../client/dist');
+  console.log(`Checking for static files at: ${buildPath}`);
 
-app.use(express.static(buildPath));
+  app.use(express.static(buildPath));
 
-// Catch-all: serve index.html for any other requests (SPA fallback)
-app.get('*path', (req, res) => {
-  const indexPath = path.join(buildPath, 'index.html');
-  res.sendFile(indexPath, (err) => {
-    if (err) {
-      console.error(`Error sending index.html: ${err.message} at ${indexPath}`);
-      res.status(404).send('Frontend build not found. Please check deployment logs.');
-    }
+  // Catch-all: serve index.html for any other requests (SPA fallback)
+  app.get('*', (req, res) => {
+    const indexPath = path.join(buildPath, 'index.html');
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        if (!res.headersSent) {
+          console.error(`Error sending index.html: ${err.message} at ${indexPath}`);
+          res.status(404).send('Frontend build not found. Please check deployment logs.');
+        }
+      }
+    });
   });
-});
+}
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);

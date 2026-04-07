@@ -70,6 +70,8 @@ interface FormData {
   customRDAs: Record<string, { target?: number, max?: number }>;
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
 const DietPlanner = () => {
   const [foods, setFoods] = useState<Food[]>([]);
   const [diet, setDiet] = useState<DietPlan | null>(null);
@@ -276,7 +278,7 @@ const DietPlanner = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const res = await fetch('/api/foods');
+        const res = await fetch(`${API_BASE_URL}/api/foods`);
         const loadedFoods = await res.json();
         setFoods(loadedFoods);
         const validNames = loadedFoods.map((f: any) => f.name);
@@ -514,7 +516,7 @@ const DietPlanner = () => {
     });
 
     try {
-      const startRes = await fetch('/api/start-generation', {
+      const startRes = await fetch(`${API_BASE_URL}/api/start-generation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -525,7 +527,7 @@ const DietPlanner = () => {
       const startTime = Date.now();
       const interval = setInterval(async () => {
         try {
-            const statusRes = await fetch(`/api/status/${jobId}`);
+            const statusRes = await fetch(`${API_BASE_URL}/api/status/${jobId}`);
             const status = await statusRes.json();
             
             setProgress({
