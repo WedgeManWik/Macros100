@@ -1,7 +1,7 @@
 import { parentPort, workerData } from 'worker_threads';
 // @ts-ignore
 import glpkModule from 'glpk.js/node';
-import { Food } from './types.js';
+import { Food, NutrientConfig } from './types.js';
 
 function log(msg: string) {
     console.log(`[MILP Worker] ${msg}`);
@@ -12,7 +12,25 @@ const {
   FOOD_DATABASE, details, targetCalories, 
   proteinTarget, fatTarget, carbTarget, 
   essentialKeys, nutrientNames, nutrientConfig 
-} = workerData;
+} = workerData as {
+    FOOD_DATABASE: Food[],
+    details: any,
+    targetCalories: number,
+    proteinTarget: number,
+    fatTarget: number,
+    carbTarget: number,
+    essentialKeys: string[],
+    nutrientNames: Record<string, string>,
+    nutrientConfig: Record<string, NutrientConfig>
+};
+
+// Apply user requested 90% safety margin globally to all nutrient upper bounds
+// We skip 'energy' because its target is very close to its max, and reducing it would make the problem infeasible.
+Object.keys(nutrientConfig).forEach(k => {
+    if (k !== 'energy' && nutrientConfig[k].max) {
+        nutrientConfig[k].max *= 0.9;
+    }
+});
 
 const foodMap = new Map<string, Food>();
 FOOD_DATABASE.forEach((f: Food) => foodMap.set(f.name, f));

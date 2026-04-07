@@ -81,7 +81,7 @@ if (process.env.SERVE_FRONTEND !== 'false') {
   app.use(express.static(buildPath));
 
   // Catch-all: serve index.html for any other requests (SPA fallback)
-  app.get('*', (req, res) => {
+  app.use((req, res) => {
     const indexPath = path.join(buildPath, 'index.html');
     res.sendFile(indexPath, (err) => {
       if (err) {
