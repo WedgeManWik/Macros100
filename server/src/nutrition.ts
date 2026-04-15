@@ -1,6 +1,8 @@
 import { Worker } from 'worker_threads';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 // @ts-ignore
 import { FOOD_DATABASE } from './foods.cjs';
 import { Food, NutrientConfig } from './types.js';
@@ -128,6 +130,7 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
 
       for (let i = 0; i < workerCount; i++) {
         let workerPath = path.join(__dirname, 'milp_diet_worker.js');
+        
         // If we are running via ts-node, the .js file won't exist in src, but .ts will
         if (!__filename.endsWith('.js') && !require('fs').existsSync(workerPath)) {
             const tsPath = path.join(__dirname, 'milp_diet_worker.ts');
@@ -180,7 +183,13 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
             }
           }
         });
-        worker.on('error', () => {
+        worker.on('error', (err: any) => {
+            console.error(`[Nutrition] Worker error: ${err.message || String(err)}`);
+            completedWorkers++;
+            if (completedWorkers === workerCount) resolve(currentPhaseBest);
+        });
+        worker.on('exit', (code) => {
+            if (code !== 0 && !currentPhaseBest) console.error(`[Nutrition] Worker exited with code ${code}`);
             completedWorkers++;
             if (completedWorkers === workerCount) resolve(currentPhaseBest);
         });
@@ -275,17 +284,20 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
 
         onProgress({ 
             done: true, 
+            error: errorMessage,
             result: { 
                 targetCalories: Math.round(targetCalories), 
                 actualCalories: Math.round(breakdown.energy.amount), 
                 accuracy: finalAccuracy, 
                 macros: { protein: Math.round(breakdown.protein.amount), carbs: Math.round(breakdown.carbs.amount), fat: Math.round(breakdown.fat.amount) }, 
                 sectionedIngredients, 
-                micronutrients: breakdown,
-                error: errorMessage 
+                micronutrients: breakdown
             } 
         });
-    } catch (e) { onProgress({ done: true, result: null }); }
+    } catch (e) { 
+        console.error("FINISH ERROR:", e);
+        onProgress({ done: true, result: null, error: String(e) }); 
+    }
     finally { stopAll(); }
   };
 
@@ -294,7 +306,11 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
         const trialBest = await runPhase(1, "MILP Optimization");
         if (trialBest && trialBest.genome) finish(trialBest.genome, null, trialBest.error);
         else onProgress({ done: true, result: null, error: trialBest?.error || "Solver failed." });
-    } catch (err) { onProgress({ done: true, result: null }); stopAll(); }
+    } catch (err) { 
+        console.error("RUNALLPHASES ERROR:", err);
+        onProgress({ done: true, result: null, error: String(err) }); 
+        stopAll(); 
+    }
   };
 
   runAllPhases();

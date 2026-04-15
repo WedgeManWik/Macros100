@@ -3,34 +3,36 @@ import { parentPort, workerData } from 'worker_threads';
 import glpkModule from 'glpk.js/node';
 import { Food, NutrientConfig } from './types.js';
 
+console.log("[MILP Worker] Script execution started");
+parentPort?.postMessage({ type: 'progress', gen: 0, accuracy: 0, telemetry: { trialInfo: "Worker starting..." } });
+
 function log(msg: string) {
     console.log(`[MILP Worker] ${msg}`);
     parentPort?.postMessage({ type: 'progress', gen: 0, accuracy: 0, telemetry: { trialInfo: msg } });
 }
 
-const { 
-  FOOD_DATABASE, details, targetCalories, 
-  proteinTarget, fatTarget, carbTarget, 
-  essentialKeys, nutrientNames, nutrientConfig 
-} = workerData as {
-    FOOD_DATABASE: Food[],
-    details: any,
-    targetCalories: number,
-    proteinTarget: number,
-    fatTarget: number,
-    carbTarget: number,
-    essentialKeys: string[],
-    nutrientNames: Record<string, string>,
-    nutrientConfig: Record<string, NutrientConfig>
-};
+let FOOD_DATABASE: Food[], details: any, targetCalories: number, 
+    proteinTarget: number, fatTarget: number, carbTarget: number, 
+    essentialKeys: string[], nutrientNames: Record<string, string>, 
+    nutrientConfig: Record<string, NutrientConfig>;
 
-// Apply user requested 90% safety margin globally to all nutrient upper bounds
-// We skip 'energy' because its target is very close to its max, and reducing it would make the problem infeasible.
-Object.keys(nutrientConfig).forEach(k => {
-    if (k !== 'energy' && nutrientConfig[k].max) {
-        nutrientConfig[k].max *= 0.9;
-    }
-});
+try {
+    ({ 
+      FOOD_DATABASE, details, targetCalories, 
+      proteinTarget, fatTarget, carbTarget, 
+      essentialKeys, nutrientNames, nutrientConfig 
+    } = workerData as any);
+
+    // Apply user requested 90% safety margin globally to all nutrient upper bounds
+    Object.keys(nutrientConfig).forEach(k => {
+        if (k !== 'energy' && nutrientConfig[k].max) {
+            nutrientConfig[k].max *= 0.9;
+        }
+    });
+} catch (e) {
+    parentPort?.postMessage({ type: 'result', result: null, error: `Initialization failed: ${String(e)}` });
+    process.exit(1);
+}
 
 const foodMap = new Map<string, Food>();
 FOOD_DATABASE.forEach((f: Food) => foodMap.set(f.name, f));
@@ -55,7 +57,7 @@ function checkDietQuality(result: any, ceiling: number): { valid: boolean, reaso
     const cals = totals.energy;
     
     // CALORIES: Always Hard
-    const calLB = details.strictCalories ? (targetCalories - 21) : (targetCalories - 21);
+    const calLB = targetCalories - 21;
     const calUB = details.strictCalories ? (targetCalories + 21) : (targetCalories + 56);
     if (cals < calLB || cals > calUB) return { valid: false, reason: `Calories (${Math.round(cals)}) outside budget.` };
 
@@ -63,9 +65,9 @@ function checkDietQuality(result: any, ceiling: number): { valid: boolean, reaso
     const pDiff = Math.abs(totals.protein - proteinTarget);
     const fDiff = Math.abs(totals.fat - fatTarget);
     const cDiff = Math.abs(totals.carbs - carbTarget);
-    const pLimit = details.macros.protein.strict ? 2.1 : 5.6;
-    const fLimit = details.macros.fat.strict ? 2.1 : 5.6;
-    const cLimit = details.macros.carbs.strict ? 2.1 : 5.6;
+    const pLimit = details.macros.protein.strict ? 3.1 : 10.1;
+    const fLimit = details.macros.fat.strict ? 3.1 : 10.1;
+    const cLimit = details.macros.carbs.strict ? 3.1 : 10.1;
     if (pDiff > pLimit || fDiff > fLimit || cDiff > cLimit) {
         return { valid: false, reason: `Macros missed targets.` };
     }
@@ -115,11 +117,11 @@ async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number, ceil
         // Use a small slack just for the objective, but the hard bound is what matters
         vars.push({ name: 'cal_p_dev', lb: 0, ub: 100, type: glp.GLP_DB });
         vars.push({ name: 'cal_n_dev', lb: 0, ub: 100, type: glp.GLP_DB });
-        objectiveVars.push({ name: 'cal_p_dev', coef: -1000000 }, { name: 'cal_n_dev', coef: -1000000 });
+        objectiveVars.push({ name: 'cal_p_dev', coef: -10000000 }, { name: 'cal_n_dev', coef: -10000000 });
         // Update cal goal to use slacks
         constraints[constraints.length-1].vars.push({ name: 'cal_p_dev', coef: -1 }, { name: 'cal_n_dev', coef: 1 });
 
-        const calLB = details.strictCalories ? (targetCalories - 20) : (targetCalories - 20);
+        const calLB = targetCalories - 20;
         const calUB = details.strictCalories ? (targetCalories + 20) : (targetCalories + 55);
         constraints.push({ name: 'c_cal_hard', vars: calVars, bnds: { type: glp.GLP_DB, lb: calLB, ub: calUB } });
 
@@ -129,7 +131,7 @@ async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number, ceil
             const mVars = foods.map((f, i) => ({ name: `f_${i}`, coef: (f as any)[m.name] }));
             vars.push({ name: `dev_p_${m.name}`, lb: 0, ub: 200, type: glp.GLP_DB });
             vars.push({ name: `dev_n_${m.name}`, lb: 0, ub: 200, type: glp.GLP_DB });
-            objectiveVars.push({ name: `dev_p_${m.name}`, coef: -500000 }, { name: `dev_n_${m.name}`, coef: -500000 });
+            objectiveVars.push({ name: `dev_p_${m.name}`, coef: -2000000 }, { name: `dev_n_${m.name}`, coef: -2000000 });
             
             constraints.push({ 
                 name: `macro_goal_${m.name}`, 
@@ -140,6 +142,19 @@ async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number, ceil
             if (!relaxed) {
                 const limit = details.macros[m.name as 'protein'|'carbs'|'fat'].strict ? 2.0 : 5.5;
                 constraints.push({ name: `macro_hard_${m.name}`, vars: mVars, bnds: { type: glp.GLP_DB, lb: m.target - limit, ub: m.target + limit } });
+            } else {
+                // In relaxed mode, if user selected "Strict", we still want to penalize heavily beyond the limit
+                const isStrict = details.macros[m.name as 'protein'|'carbs'|'fat'].strict;
+                if (isStrict) {
+                    vars.push({ name: `strict_p_${m.name}`, lb: 0, ub: 500, type: glp.GLP_DB });
+                    vars.push({ name: `strict_n_${m.name}`, lb: 0, ub: 500, type: glp.GLP_DB });
+                    objectiveVars.push({ name: `strict_p_${m.name}`, coef: -5000000 }, { name: `strict_n_${m.name}`, coef: -5000000 });
+                    constraints.push({ 
+                        name: `macro_strict_relaxed_${m.name}`, 
+                        vars: [...mVars, { name: `strict_p_${m.name}`, coef: -1 }, { name: `strict_n_${m.name}`, coef: 1 }], 
+                        bnds: { type: glp.GLP_FX, lb: m.target, ub: m.target } 
+                    });
+                }
             }
         });
 
@@ -316,11 +331,14 @@ async function diagnoseFailure(allPool: Food[], ceiling: number) {
 }
 
 async function run() {
+    log("Worker initialization started...");
     try {
         const mustHaveNames = (details.mustHaveFoods || []).map((m: any) => m.name);
         const uniqueFoodNames = new Set([...details.likedFoods, ...mustHaveNames]);
         
+        log(`Liked foods count: ${uniqueFoodNames.size}`);
         if (uniqueFoodNames.size < 5) {
+            log("Failing: Not enough foods.");
             parentPort?.postMessage({ 
                 type: 'result', 
                 result: null, 
@@ -331,7 +349,7 @@ async function run() {
 
         const likedPool = FOOD_DATABASE.filter((f: Food) => uniqueFoodNames.has(f.name));
         log(`Analyzing ${likedPool.length} foods...`);
-
+        
         const ceilings = [0.8, 0.85, 0.9, 0.95, 1.0];
         let bestCeiling = 1.0;
         let globalRes: any = null;
@@ -359,11 +377,36 @@ async function run() {
 
         const heroFoods = new Set<string>(mustHaveNames);
         Object.entries(globalRes.result.vars || {}).forEach(([name, val]: [string, any]) => {
-            if (name.startsWith('f_') && val > 0.01) {
+            if (name.startsWith('f_') && val > 0.001) {
                 const idx = parseInt(name.split('_')[1]);
                 heroFoods.add(likedPool[idx].name);
             }
         });
+
+        // Nutrient-Diversity Seeded Selection
+        const getDiversitySeededPool = (pool: any[], targetSize: number): Set<string> => {
+            const seeded = new Set<string>(heroFoods);
+            // Categorize foods by essential nutrients to ensure all targets can be met
+            const categories = [...essentialKeys].sort(() => 0.5 - Math.random());
+            for (const cat of categories) {
+                if (seeded.size >= targetSize + 10) break; // Allow some overflow but not too much
+                const top = [...pool]
+                    .filter(f => !seeded.has(f.name))
+                    .sort((a, b) => {
+                        const valA = ((a.nutrients && a.nutrients[cat]) || a[cat] || 0) / (a.calories || 1);
+                        const valB = ((b.nutrients && b.nutrients[cat]) || b[cat] || 0) / (b.calories || 1);
+                        return valB - valA;
+                    });
+                if (top.length > 0) seeded.add(top[0].name);
+            }
+            // Fill remainder if still below targetSize
+            const shuffled = [...pool].sort(() => 0.5 - Math.random());
+            for (const f of shuffled) {
+                if (seeded.size >= targetSize) break;
+                seeded.add(f.name);
+            }
+            return seeded;
+        };
 
         log(`Identified ${heroFoods.size} key foods. Refining using ${details.algoModel || 'default'} model...`);
 
@@ -372,7 +415,7 @@ async function run() {
         // Configuration mapping
         const algoModel = details.algoModel || 'beast';
         let subsetCount = algoModel === 'beast' ? 15 : algoModel === 'titan' ? 40 : algoModel === 'olympian' ? 80 : 150;
-        let solverTimeLimit = algoModel === 'beast' ? 1000 : algoModel === 'titan' ? 2000 : algoModel === 'olympian' ? 4000 : 8000;
+        let solverTimeLimit = algoModel === 'beast' ? 2000 : algoModel === 'titan' ? 4000 : algoModel === 'olympian' ? 8000 : 15000;
         const trialLimit = algoModel === 'beast' ? 40 : algoModel === 'titan' ? 50 : algoModel === 'olympian' ? 60 : 80;
 
         // Respect Benchmark overrides if present
@@ -382,24 +425,33 @@ async function run() {
             log(`Benchmark Override: Subsets=${subsetCount}, TimeLimit=${solverTimeLimit}`);
         }
         
-        for (let i = 0; i < subsetCount; i++) {
-            const trialSet = new Set(heroFoods);
-            const shuffled = [...likedPool].sort(() => 0.5 - Math.random());
-            for (let j = 0; j < shuffled.length && trialSet.size < trialLimit; j++) trialSet.add(shuffled[j].name);
-            const trialPool = FOOD_DATABASE.filter((f: Food) => trialSet.has(f.name));
-            const res = await solveGLPK(trialPool, true, solverTimeLimit, bestCeiling);
-            if (res.result && res.result.vars) {
-                const genome: Record<string, number> = {};
-                trialPool.forEach((f: Food, idx: number) => {
-                    const val = res.result.vars[`f_${idx}`] || 0;
-                    if (val > 0.001) genome[f.name] = Math.round(val * 100);
-                });
-                const totals = getTotalsFromVars(res.result.vars, trialPool);
-                const score = calculateNutrientScore(totals);
-                const evalRes = { totals, genome, score, accuracy: Math.round((score / essentialKeys.length) * 1000) / 10 };
-                if (checkDietQuality(evalRes, bestCeiling).valid) finalCandidates.push(evalRes);
+        const tryRefine = async (currentCeiling: number) => {
+            log(`Refining with ceiling: ${Math.round(currentCeiling*100)}%...`);
+            for (let i = 0; i < subsetCount; i++) {
+                const trialSet = getDiversitySeededPool(likedPool, trialLimit);
+                const trialPool = FOOD_DATABASE.filter((f: Food) => trialSet.has(f.name));
+                const res = await solveGLPK(trialPool, true, solverTimeLimit, currentCeiling);
+                if (res.result && res.result.vars) {
+                    const genome: Record<string, number> = {};
+                    trialPool.forEach((f: Food, idx: number) => {
+                        const val = res.result.vars[`f_${idx}`] || 0;
+                        if (val > 0.001) genome[f.name] = Math.round(val * 100);
+                    });
+                    const totals = getTotalsFromVars(res.result.vars, trialPool);
+                    const score = calculateNutrientScore(totals);
+                    const evalRes = { totals, genome, score, accuracy: Math.round((score / essentialKeys.length) * 1000) / 10 };
+                    if (checkDietQuality(evalRes, currentCeiling).valid) finalCandidates.push(evalRes);
+                }
+                if (i % 5 === 0) parentPort?.postMessage({ type: 'progress', gen: 10 + (i/subsetCount * 80), accuracy: finalCandidates[0]?.accuracy || 0 });
             }
-            if (i % 5 === 0) parentPort?.postMessage({ type: 'progress', gen: 10 + (i/subsetCount * 80), accuracy: finalCandidates[0]?.accuracy || 0 });
+        };
+
+        await tryRefine(bestCeiling);
+        
+        if (finalCandidates.length === 0 && bestCeiling < 1.0) {
+            log("No valid diets found at preferred safety ceiling. Relaxing ceiling to 100% and retrying...");
+            await tryRefine(1.0);
+            bestCeiling = 1.0;
         }
 
         if (finalCandidates.length > 0) {
@@ -418,6 +470,7 @@ async function run() {
         log(`No perfect diet found. Running deep ${fallbackSubsets}-trial stochastic search for best-effort plan...`);
         
         const reason = await diagnoseFailure(likedPool, bestCeiling);
+        log(`Diagnostic Reason for failure: ${reason}`);
         let bestEffortCandidate: any = null;
 
         for (let i = 0; i < fallbackSubsets; i++) {
