@@ -1067,7 +1067,7 @@ const DietPlanner = () => {
                       </div>
                       <Form.Control type="number" step="any" name="bodyFat" value={formData.bodyFat} onChange={handleInputChange} />
                       <Form.Text className="text-muted small" style={{ fontSize: '0.7rem' }}>
-                        {!formData.isBfCustom ? "Estimating based on BMI, Age, and Gender (+10.8% for women)." : "Custom value locked. Click AUTO to resume estimation."}
+                        {!formData.isBfCustom ? "Estimating based on BMI, Age, and Gender" : "Custom value locked. Click AUTO to resume estimation."}
                       </Form.Text>
                     </div>
 
@@ -1297,7 +1297,7 @@ const DietPlanner = () => {
         {/* RIGHT SIDE: RESULTS */}
         <Col lg={7} className={`h-100 overflow-y-auto p-5 custom-scrollbar panel-right ${isSidebarCollapsed ? 'expanded' : ''}`}>
           <header className="text-center mb-5 pb-4">
-            <div className="d-inline-block px-3 py-1 mb-3 glass-panel rounded-pill small fw-bold text-primary tracking-widest text-uppercase" style={{ fontSize: '0.7rem', border: '1px solid rgba(61, 155, 255, 0.3)' }}>Next-Gen Health Optimization</div>
+            <div className="d-inline-block px-3 py-1 mb-3 glass-panel rounded-pill small fw-bold text-primary tracking-widest text-uppercase" style={{ fontSize: '0.7rem', border: '1px solid rgba(61, 155, 255, 0.3)' }}>Perfect Nutrition. No Sacrifices.</div>
             <h1 className="display-2 fw-800 mb-3">Macros100</h1>
             <p className="lead text-secondary mx-auto" style={{ maxWidth: '700px', fontSize: '1.1rem' }}>Experience professional-grade mathematical optimization. Your perfect health targets, calculated with scientific accuracy.</p>
           </header>
