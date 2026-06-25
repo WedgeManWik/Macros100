@@ -392,6 +392,9 @@ const DietPlanner = () => {
     if (type === 'step:after' || type === 'target:notFound') {
       const nextIndex = index + (action === 'prev' ? -1 : 1);
       setCurrentStepIndex(nextIndex);
+      if (index === 13 && action === 'next') {
+        setShowFoodModal(true);
+      }
       if (index === 14 && action !== 'prev') {
         setShowFoodModal(false);
       }
