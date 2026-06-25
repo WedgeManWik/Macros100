@@ -364,6 +364,14 @@ const DietPlanner = () => {
   const [runTour, setRunTour] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const joyrideHelpers = useRef<any>(null);
+
+  useEffect(() => {
+    if (runTour && currentStepIndex === 14) {
+      setShowFoodModal(true);
+    } else if (runTour && currentStepIndex === 15) {
+      setShowFoodModal(false);
+    }
+  }, [currentStepIndex, runTour]);
   const [runResultsTour, setRunResultsTour] = useState(false);
 
   const handleJoyrideHelpers = useCallback((helpers: any) => {
