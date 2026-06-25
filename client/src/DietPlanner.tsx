@@ -1346,7 +1346,9 @@ const DietPlanner = () => {
         <strong>Joyride Debug:</strong><br/>
         {joyrideLogs.map((l, i) => <div key={i}>{l}</div>)}
       </div>
-      
+
+      {/* START TUTORIAL BUTTON */}
+      {!runTour && !runResultsTour && !localStorage.getItem('macros100_tutorial_done') && (
         <Button 
           variant="outline-secondary" 
           size="sm" 
@@ -1355,6 +1357,7 @@ const DietPlanner = () => {
         >
           <Sparkles size={14} className="me-2 text-warning" /> Start Tutorial
         </Button>
+      )}
 
       {/* MOBILE VIEW SWITCHER */}
       {diet && (
