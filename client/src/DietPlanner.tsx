@@ -377,6 +377,7 @@ const DietPlanner = () => {
   const [runTour, setRunTour] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const joyrideHelpers = useRef<any>(null);
+  const handleSubmitRef = useRef<any>(null);
 
   const [runResultsTour, setRunResultsTour] = useState(false);
 
@@ -433,7 +434,13 @@ const DietPlanner = () => {
       } else {
         const nextStep = index + (isPrev ? -1 : 1);
         addLog('Default transition: from ' + index + ' to ' + nextStep);
-        setCurrentStepIndex(nextStep);
+        if (nextStep === 4 || nextStep === 5) {
+          setTimeout(() => {
+            setCurrentStepIndex(nextStep);
+          }, 400);
+        } else {
+          setCurrentStepIndex(nextStep);
+        }
       }
     }
 
@@ -443,6 +450,11 @@ const DietPlanner = () => {
       setCurrentStepIndex(0);
       setShowFoodModal(false);
       localStorage.setItem('macros100_tutorial_done', 'true');
+      
+      if (status === 'finished' && index === 15) {
+        addLog('Last step completed. Triggering handleSubmit.');
+        handleSubmitRef.current?.();
+      }
     }
   }, [addLog]);
 
@@ -926,6 +938,13 @@ const DietPlanner = () => {
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
+    if (runTour) {
+      setRunTour(false);
+      setCurrentStepIndex(0);
+      setShowFoodModal(false);
+      localStorage.setItem('macros100_tutorial_done', 'true');
+    }
+
     // VALIDATION: Check for at least 5 unique foods
     const mustHaveNames = (formData.mustHaveFoods || []).map((m: any) => m.name);
     const uniqueFoodNames = new Set([...formData.likedFoods, ...mustHaveNames]);
@@ -962,17 +981,29 @@ const DietPlanner = () => {
       const jobId = data.jobId;
 
       const startTime = Date.now();
+      let simulatedProgress = 0;
       const interval = setInterval(async () => {
         try {
             const statusRes = await fetch(`${API_BASE_URL}/api/status/${jobId}`);
             const status = await statusRes.json();
             
-            setProgress({
-                generation: status.generation,
+            if (status.status === 'completed') {
+                simulatedProgress = 100;
+            } else if (status.status === 'failed' || status.status === 'cancelled') {
+                simulatedProgress = 0;
+            } else {
+                if (simulatedProgress < 95) {
+                    simulatedProgress += Math.random() * 15 + 5;
+                    if (simulatedProgress > 95) simulatedProgress = 95;
+                }
+            }
+
+            setProgress(prev => ({
+                generation: simulatedProgress,
                 accuracy: status.currentAccuracy,
                 time: Math.round((Date.now() - startTime) / 1000),
-                telemetry: status.telemetry || progress.telemetry
-            });
+                telemetry: status.telemetry || prev.telemetry
+            }));
 
             if (status.status === 'completed') {
                 clearInterval(interval);
@@ -1012,6 +1043,7 @@ const DietPlanner = () => {
       setLoading(false);
     }
   };
+  handleSubmitRef.current = handleSubmit;
 
   const cancelGeneration = () => { setLoading(false); };
 
@@ -1343,6 +1375,7 @@ const DietPlanner = () => {
           steps={formSteps}
         continuous={true}
         onEvent={handleJoyrideCallback}
+        locale={{ last: 'Generate' }}
         styles={( {
           options: {
             arrowColor: 'rgba(15, 15, 15, 0.95)',
