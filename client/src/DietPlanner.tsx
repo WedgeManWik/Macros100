@@ -248,14 +248,22 @@ const DietPlanner = () => {
   }, []);
   
   const [runTour, setRunTour] = useState(false);
+  const [stepIndex, setStepIndex] = useState(0);
   const [runResultsTour, setRunResultsTour] = useState(false);
 
   const handleJoyrideCallback = (data: any) => {
-    const { status, type } = data;
-    addLog('Form Callback: status=' + status + ', type=' + type);
+    const { action, index, status, type } = data;
+    addLog('Form Callback: status=' + status + ', type=' + type + ', action=' + action + ', index=' + index);
     if (status === 'finished' || status === 'skipped') {
       setRunTour(false);
+      setStepIndex(0);
       localStorage.setItem('macros100_tutorial_done', 'true');
+    } else if (type === 'step:after' || type === 'target:notFound') {
+      const nextIndex = index + (action === 'prev' ? -1 : 1);
+      setStepIndex(nextIndex);
+      if (index === 12) {
+        setShowFoodModal(false);
+      }
     }
   };
 
@@ -273,6 +281,11 @@ const DietPlanner = () => {
       target: 'body',
       placement: 'center',
       content: 'Welcome to Macros100! First, enter your basic biometric details (Weight, Height, Age, and Gender) so we can accurately estimate your metabolic rate.',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-biometrics',
+      content: 'First, enter your basic biometric details (Weight, Height, Age, and Gender) so we can accurately estimate your metabolic rate.',
       disableBeacon: true,
     },
     {
@@ -316,14 +329,25 @@ const DietPlanner = () => {
         disableBeacon: true,
     },
     {
-      target: '.tour-liked',
-      content: 'Click here to select all the foods you enjoy eating! The algorithm will only pick foods from your liked list.',
-        disableBeacon: true,
-    },
-    {
       target: '.tour-advanced',
       content: 'Advanced users can open this panel to override micronutrient targets (like specific Vitamin C or Cholesterol limits).',
         disableBeacon: true,
+    },
+    {
+      target: '.tour-liked',
+      content: 'Now, click this button to open the Liked Foods menu! The algorithm will only pick foods from your liked list.',
+      spotlightClicks: true,
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-liked-modal',
+      content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, click the X or anywhere outside the menu to close it.',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-generate',
+      content: 'Finally, click Generate Daily Plan to instantly create a scientifically perfect diet!',
+      disableBeacon: true,
     }
   ];
 
@@ -1215,9 +1239,11 @@ const DietPlanner = () => {
       
       {runTour && (
       <TourWrapper
+          key={runTour ? "form-on" : "form-off"}
           disableBeacon={true}
           debug={true}
           run={true}
+          stepIndex={stepIndex}
           addLog={addLog}
           steps={formSteps}
         continuous={true}
@@ -1298,7 +1324,7 @@ const DietPlanner = () => {
       {/* LIKED FOODS MODAL */}
       <div className={`modal-blur-overlay ${showFoodModal ? 'active' : ''}`} />
       <div className={`custom-modal-container ${showFoodModal ? 'active' : ''}`} onClick={() => setShowFoodModal(false)}>
-        <div className="custom-modal-content glass-panel p-4" onClick={e => e.stopPropagation()}>
+        <div className="custom-modal-content glass-panel p-4 tour-liked-modal" onClick={e => e.stopPropagation()}>
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h2 className="h3 mb-0 fw-bold d-flex align-items-center">
                     <Heart className="me-2 text-liked" size={28} /> Select Liked Foods
@@ -1718,10 +1744,15 @@ const DietPlanner = () => {
 
             {/* FIXED ACTION BAR */}
             <div className={`bottom-left-actions glass-panel ${isSidebarCollapsed ? 'collapsed' : ''}`}>
-              <Button variant="outline-primary" className={`w-100 py-2 d-flex align-items-center justify-content-center fw-bold ${shouldWiggle ? 'wiggle' : ''}`} onClick={() => setShowFoodModal(true)}>
+              <Button variant="outline-primary" className={`w-100 py-2 d-flex align-items-center justify-content-center fw-bold tour-liked ${shouldWiggle ? 'wiggle' : ''}`} onClick={() => {
+                setShowFoodModal(true);
+                if (runTour && stepIndex === 11) {
+                  setStepIndex(12);
+                }
+              }}>
                   <Heart className="me-2 text-liked" size={18} /> Select Liked Foods ({formData.likedFoods.length})
               </Button>
-              <Button variant="primary" className="w-100 py-3 shadow-sm fw-bold" onClick={() => handleSubmit()} disabled={loading}>
+              <Button variant="primary" className="w-100 py-3 shadow-sm fw-bold tour-generate" onClick={() => handleSubmit()} disabled={loading}>
                   {loading ? 'Optimizing Parameters...' : 'Generate Daily Plan'}
               </Button>
             </div>
