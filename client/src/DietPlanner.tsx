@@ -381,9 +381,9 @@ const DietPlanner = () => {
     addLog('Form Callback: status=' + status + ', type=' + type + ', action=' + action + ', index=' + index);
     console.log('Joyride event:', data);
     
-    // Intercept target:notFound for the liked foods modal step (Step 14)
+    // Intercept error:target_not_found for the liked foods modal step (Step 14)
     // If the modal isn't fully rendered in the DOM yet, open it and retry Step 14
-    if (type === 'target:notFound' && index === 14) {
+    if (type === 'error:target_not_found' && index === 14) {
       setShowFoodModal(true);
       setTimeout(() => {
         if (joyrideHelpers.current) {
@@ -408,7 +408,7 @@ const DietPlanner = () => {
     }
 
     // Always track the current step index so we know where the uncontrolled tour is
-    if (type === 'step:after' || type === 'target:notFound') {
+    if (type === 'step:after' || type === 'error:target_not_found') {
       const nextIndex = index + (action === 'prev' ? -1 : 1);
       setCurrentStepIndex(nextIndex);
       if (index === 13 && action === 'next') {
