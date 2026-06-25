@@ -1823,7 +1823,7 @@ const DietPlanner = () => {
                 <Accordion.Item eventKey="1" className="glass-panel border-0 mb-3 overflow-hidden">
                   <Accordion.Header>
                     <h3 className="h5 fw-bold mb-0 d-flex align-items-center m-0">
-                      <Sparkles className="me-2 text-warning-vibrant" size={20} /> Full Day Meal Plan (AI)
+                      <Sparkles className="me-2 text-warning-vibrant" size={20} /> Full Day Meal Plan
                     </h3>
                   </Accordion.Header>
                   <Accordion.Body className="p-4 pt-3">

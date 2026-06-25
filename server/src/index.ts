@@ -99,6 +99,12 @@ CRITICAL RULES:
 4. If an ingredient doesn't fit neatly into a traditional meal, combine it creatively or list it as a snack.
 5. Format your response beautifully using Markdown. Use bold headings for meals.
 6. Keep descriptions brief and appetizing.
+7. EXACT FORMAT REQUIRED for each meal:
+   ### [Meal Name]
+   - [Amount]g of [Ingredient]
+   - [Amount]g of [Ingredient]
+   
+   [Brief, appetizing 1-sentence description]
 
 Here is the daily ingredient list:
 ${ingredients.map((i: any) => `- ${i.grams}g of ${i.name}`).join('\n')}
