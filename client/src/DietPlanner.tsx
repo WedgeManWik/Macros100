@@ -1223,9 +1223,9 @@ const DietPlanner = () => {
           variant="outline-secondary" 
           size="sm" 
           className="position-fixed top-0 start-0 m-3 glass-panel d-flex align-items-center" style={{ zIndex: 1050 }}
-          onClick={() => { setRunTour(true); setIsSidebarCollapsed(false);  }}
+          onClick={() => { setRunTour(true); setStepIndex(0); setIsSidebarCollapsed(false);  }}
         >
-          <RotateCcw size={14} className="me-2" /> Replay Tutorial
+          <Sparkles size={14} className="me-2 text-warning" /> Start Tutorial
         </Button>
 
       {/* MOBILE VIEW SWITCHER */}
