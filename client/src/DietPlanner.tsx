@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Joyride } from 'react-joyride';
 const TourWrapper = (props: any) => {
   const J = Joyride as any;
@@ -210,98 +210,7 @@ const InteractiveMacroPie = ({
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
-const formSteps = [
-  {
-    target: 'body',
-    placement: 'center',
-    content: 'Welcome to Macros100! Let\'s walk through the app to get your perfect diet set up.',
-    disableBeacon: true,
-  },
-  {
-    target: '.tour-biometrics',
-    content: 'First, enter your basic biometric details (Weight, Height, Age, and Gender) so we can accurately estimate your metabolic rate.',
-    disableBeacon: true,
-  },
-  {
-    target: '.tour-bodyfat',
-    content: 'Next, enter your Body Fat percentage. If you don\'t know exactly what it is, don\'t worry! We will use a standard estimated amount based on your BMI.',
-    disableBeacon: true,
-  },
-  {
-    target: '.tour-activity',
-    content: 'Select your daily Activity Level. Be honest—this heavily impacts your calorie needs.',
-    disableBeacon: true,
-  },
-  {
-    target: '.tour-maintenance',
-    content: 'These are your calculated Maintenance Calories (the amount you need to stay exactly the same weight). You can manually adjust them here if you feel this amount is wrong based on your experience.',
-    disableBeacon: true,
-  },
-  {
-    target: '.tour-goal',
-    content: 'Select your Daily Goal (Lose, Maintain, or Gain weight).',
-    disableBeacon: true,
-  },
-  {
-    target: '.tour-offset',
-    content: 'This is the recommended Calorie Offset for your chosen goal (e.g. -500 calories for weight loss). You can change it if you wish.',
-    disableBeacon: true,
-  },
-  {
-    target: '.tour-target',
-    content: 'Your final Target Calories are displayed here. You can manually type in a specific target here, and we will recalculate your offset automatically.',
-    disableBeacon: true,
-  },
-  {
-    target: '.tour-macros',
-    content: 'By default, we use a recommended macro split. You can toggle the switch here to enable Custom Macros.',
-    spotlightClicks: true,
-    disableBeacon: true,
-  },
-  {
-    target: '.tour-macros-pie',
-    content: 'With Custom Macros enabled, you can click and manually drag the pie chart to perfectly adjust your Protein, Fat, and Carb ratios!',
-    disableBeacon: true,
-  },
-  {
-    target: '.tour-macros-strictness',
-    content: 'The Strictness setting tells the AI how hard to try to hit these macros. "Strict" forces the math engine to hit that exact amount, while "Relaxed" gives it some wiggle room to make a tastier meal plan.',
-    disableBeacon: true,
-  },
-  {
-    target: '.tour-musthave',
-    content: 'If there are foods you absolutely MUST eat every day (like 50g of whey protein), add them here and we will lock them into your diet.',
-    disableBeacon: true,
-  },
-  {
-    target: '.tour-advanced',
-    content: 'Advanced users can open this panel to override micronutrient targets (like specific Vitamin C or Cholesterol limits).',
-    disableBeacon: true,
-  },
-  {
-    target: '.tour-liked',
-      content: 'Now, click this button to open the Liked Foods menu! The algorithm will only pick foods from your liked list.',
-      spotlightClicks: true,
-      disableBeacon: true,
-      styles: {
-        buttonBack: {
-          display: 'none'
-        }
-      }
-  },
-  {
-    target: '.tour-liked-modal-header',
-    placement: 'bottom',
-    content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.',
-    disableBeacon: true,
-    hideOverlay: true,
-  },
-  {
-    target: '.tour-generate',
-    content: 'Finally, click Generate Daily Plan to instantly create a scientifically perfect diet!',
-    disableBeacon: true,
-  }
-];
+
 
 const resultsSteps = [
   {
@@ -323,6 +232,111 @@ const resultsSteps = [
 ];
 
 const DietPlanner = () => {
+  const [showFoodModal, setShowFoodModal] = useState(false);
+  const showFoodModalRef = useRef(false);
+  useEffect(() => {
+    showFoodModalRef.current = showFoodModal;
+  }, [showFoodModal]);
+
+  const formSteps = useMemo(() => [
+    {
+      target: 'body',
+      placement: 'center',
+      content: 'Welcome to Macros100! Let\'s walk through the app to get your perfect diet set up.',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-biometrics',
+      content: 'First, enter your basic biometric details (Weight, Height, Age, and Gender) so we can accurately estimate your metabolic rate.',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-bodyfat',
+      content: 'Next, enter your Body Fat percentage. If you don\'t know exactly what it is, don\'t worry! We will use a standard estimated amount based on your BMI.',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-activity',
+      content: 'Select your daily Activity Level. Be honest—this heavily impacts your calorie needs.',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-maintenance',
+      content: 'These are your calculated Maintenance Calories (the amount you need to stay exactly the same weight). You can manually adjust them here if you feel this amount is wrong based on your experience.',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-goal',
+      content: 'Select your Daily Goal (Lose, Maintain, or Gain weight).',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-offset',
+      content: 'This is the recommended Calorie Offset for your chosen goal (e.g. -500 calories for weight loss). You can change it if you wish.',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-target',
+      content: 'Your final Target Calories are displayed here. You can manually type in a specific target here, and we will recalculate your offset automatically.',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-macros',
+      content: 'By default, we use a recommended macro split. You can toggle the switch here to enable Custom Macros.',
+      spotlightClicks: true,
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-macros-pie',
+      content: 'With Custom Macros enabled, you can click and manually drag the pie chart to perfectly adjust your Protein, Fat, and Carb ratios!',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-macros-strictness',
+      content: 'The Strictness setting tells the AI how hard to try to hit these macros. "Strict" forces the math engine to hit that exact amount, while "Relaxed" gives it some wiggle room to make a tastier meal plan.',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-musthave',
+      content: 'If there are foods you absolutely MUST eat every day (like 50g of whey protein), add them here and we will lock them into your diet.',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-advanced',
+      content: 'Advanced users can open this panel to override micronutrient targets (like specific Vitamin C or Cholesterol limits).',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-liked',
+      content: 'Now, click this button to open the Liked Foods menu! The algorithm will only pick foods from your liked list.',
+      spotlightClicks: true,
+      disableBeacon: true,
+      styles: {
+        buttonBack: {
+          display: 'none'
+        }
+      }
+    },
+    {
+      target: '.tour-liked-modal-header',
+      placement: 'bottom',
+      content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.',
+      disableBeacon: true,
+      hideOverlay: true,
+      before: async () => {
+        if (!showFoodModalRef.current) {
+          setShowFoodModal(true);
+          await new Promise(resolve => setTimeout(resolve, 150));
+        }
+      }
+    },
+    {
+      target: '.tour-generate',
+      content: 'Finally, click Generate Daily Plan to instantly create a scientifically perfect diet!',
+      disableBeacon: true,
+    }
+  ], [setShowFoodModal]);
+
   const [foods, setFoods] = useState<Food[]>([]);
   const [diet, setDiet] = useState<DietPlan | null>(null);
   const [originalDiet, setOriginalDiet] = useState<DietPlan | null>(null);
@@ -381,18 +395,7 @@ const DietPlanner = () => {
     addLog('Form Callback: status=' + status + ', type=' + type + ', action=' + action + ', index=' + index);
     console.log('Joyride event:', data);
     
-    // Intercept error:target_not_found for the liked foods modal step (Step 14)
-    // If the modal isn't fully rendered in the DOM yet, open it and retry Step 14
-    if (type === 'error:target_not_found' && index === 14) {
-      setShowFoodModal(true);
-      setTimeout(() => {
-        if (joyrideHelpers.current) {
-          joyrideHelpers.current.goTo(14);
-        }
-      }, 150);
-      return;
-    }
-    
+
     // Manual scroll engine to guarantee offset
     if (type === 'tooltip:update' && data.step?.target && data.step.target !== 'body') {
       setTimeout(() => {
@@ -869,7 +872,6 @@ const DietPlanner = () => {
   ];
 
   const [foodSearch, setFoodSearch] = useState('');
-  const [showFoodModal, setShowFoodModal] = useState(false);
   const closeFoodModal = useCallback(() => {
     setShowFoodModal(false);
     if (runTour && currentStepIndex === 14 && joyrideHelpers.current) {
