@@ -318,24 +318,18 @@ const DietPlanner = () => {
       }
     },
     {
-      target: '.tour-liked-modal-header',
+      target: '.tour-liked-foods-modal-header',
       placement: 'bottom',
       content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.',
       disableBeacon: true,
       hideOverlay: true,
-      before: async () => {
-        if (!showFoodModalRef.current) {
-          setShowFoodModal(true);
-          await new Promise(resolve => setTimeout(resolve, 150));
-        }
-      }
     },
     {
       target: '.tour-generate',
       content: 'Finally, click Generate Daily Plan to instantly create a scientifically perfect diet!',
       disableBeacon: true,
     }
-  ], [setShowFoodModal]);
+  ], []);
 
   const [foods, setFoods] = useState<Food[]>([]);
   const [diet, setDiet] = useState<DietPlan | null>(null);
@@ -410,20 +404,34 @@ const DietPlanner = () => {
       }, 50);
     }
 
-    // Always track the current step index so we know where the uncontrolled tour is
     if (type === 'step:after' || type === 'error:target_not_found') {
-      const nextIndex = index + (action === 'prev' ? -1 : 1);
-      setCurrentStepIndex(nextIndex);
+      const isNext = action === 'next';
+      const isPrev = action === 'prev';
       
-      // Control modal visibility based on the active step index
-      if (nextIndex === 14) {
+      if (index === 13 && isNext) {
+        addLog('Step 13 Next triggered. Opening modal.');
         setShowFoodModal(true);
-      } else {
+        setTimeout(() => {
+          addLog('Timeout finished. Advancing to step 14.');
+          setCurrentStepIndex(14);
+        }, 150);
+      } else if (index === 14) {
+        addLog('Step 14 action: ' + action);
         setShowFoodModal(false);
+        if (isNext) {
+          setCurrentStepIndex(15);
+        } else if (isPrev) {
+          setCurrentStepIndex(13);
+        }
+      } else {
+        const nextStep = index + (isPrev ? -1 : 1);
+        addLog('Default transition: from ' + index + ' to ' + nextStep);
+        setCurrentStepIndex(nextStep);
       }
     }
 
     if (status === 'finished' || status === 'skipped' || action === 'close') {
+      addLog('Tour ended. status=' + status);
       setRunTour(false);
       setCurrentStepIndex(0);
       setShowFoodModal(false);
@@ -875,8 +883,8 @@ const DietPlanner = () => {
   const [foodSearch, setFoodSearch] = useState('');
   const closeFoodModal = useCallback(() => {
     setShowFoodModal(false);
-    if (runTour && joyrideHelpers.current) {
-      joyrideHelpers.current.next();
+    if (runTour) {
+      setCurrentStepIndex(15);
     }
   }, [runTour]);
   const [shouldWiggle, setShouldWiggle] = useState(false);
@@ -1317,6 +1325,7 @@ const DietPlanner = () => {
       {runTour && (
       <TourWrapper
           key={runTour ? "form-on" : "form-off"}
+          stepIndex={currentStepIndex}
           disableBeacon={true}
           disableOverlayClose={true}
           scrollOffset={150}
@@ -1409,7 +1418,7 @@ const DietPlanner = () => {
       <div className={`modal-blur-overlay ${showFoodModal ? 'active' : ''}`} />
       <div className={`custom-modal-container ${showFoodModal ? 'active' : ''}`} onClick={closeFoodModal}>
         <div className="custom-modal-content glass-panel p-4 tour-liked-modal" onClick={e => e.stopPropagation()}>
-            <div className="d-flex justify-content-between align-items-center mb-4 tour-liked-modal-header">
+            <div className="d-flex justify-content-between align-items-center mb-4 tour-liked-foods-modal-header">
                 <h2 className="h3 mb-0 fw-bold d-flex align-items-center">
                     <Heart className="me-2 text-liked" size={28} /> Select Liked Foods
                 </h2>
@@ -1834,9 +1843,7 @@ const DietPlanner = () => {
                 setShowFoodModal(true);
                 if (runTour) {
                   setTimeout(() => {
-                    if (joyrideHelpers.current) {
-                      joyrideHelpers.current.next();
-                    }
+                    setCurrentStepIndex(14);
                   }, 150);
                 }
               }}>
