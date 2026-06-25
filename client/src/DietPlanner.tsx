@@ -387,8 +387,8 @@ const DietPlanner = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        console.log('Macros100: Fetching foods from /api/macros100/foods');
-        const res = await fetch('/api/macros100/foods');
+        console.log('Macros100: Fetching foods from /api/foods');
+        const res = await fetch('/api/foods');
 
         if (!res.ok) {
             const errorText = await res.text();
@@ -676,7 +676,7 @@ const DietPlanner = () => {
     });
 
     try {
-      const startRes = await fetch(`${API_BASE_URL}/api/macros100/start-generation`, {
+      const startRes = await fetch(`${API_BASE_URL}/api/start-generation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -687,7 +687,7 @@ const DietPlanner = () => {
       const startTime = Date.now();
       const interval = setInterval(async () => {
         try {
-            const statusRes = await fetch(`${API_BASE_URL}/api/macros100/status/${jobId}`);
+            const statusRes = await fetch(`${API_BASE_URL}/api/status/${jobId}`);
             const status = await statusRes.json();
             
             setProgress({
