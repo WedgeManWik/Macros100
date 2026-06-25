@@ -1,4 +1,9 @@
 import { useState, useEffect } from 'react';
+import { Joyride } from 'react-joyride';
+const TourWrapper = (props: any) => {
+  const J = Joyride as any;
+  return <J {...props} />;
+};
 import { Container, Row, Col, Form, Button, Card, Alert, ProgressBar, Spinner, OverlayTrigger, Tooltip, Accordion } from 'react-bootstrap';
 import { Calculator, Utensils, Target, Activity, Heart, Info, RotateCcw, ChevronLeft, ChevronRight, Settings, ClipboardList, X, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -188,6 +193,95 @@ const DietPlanner = () => {
   const [originalDiet, setOriginalDiet] = useState<DietPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [runTour, setRunTour] = useState(false);
+  const [runResultsTour, setRunResultsTour] = useState(false);
+
+  useEffect(() => {
+    if (!localStorage.getItem('macros100_tutorial_done')) {
+      setRunTour(true);
+    }
+  }, []);
+
+  const handleJoyrideCallback = (data: any) => {
+    const { status, action } = data;
+    if (status === 'finished' || status === 'skipped') {
+      setRunTour(false);
+      localStorage.setItem('macros100_tutorial_done', 'true');
+    }
+  };
+
+  const handleResultsJoyrideCallback = (data: any) => {
+    const { status } = data;
+    if (status === 'finished' || status === 'skipped') {
+      setRunResultsTour(false);
+    }
+  };
+
+  const formSteps = [
+    {
+      target: '.tour-biometrics',
+      content: 'Welcome to Macros100! First, enter your basic biometric details (Weight, Height, Age, and Gender) so we can accurately estimate your metabolic rate.',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-bodyfat',
+      content: 'Next, enter your Body Fat percentage. If you don\'t know exactly what it is, don\'t worry! We will use a standard estimated amount based on your BMI.',
+    },
+    {
+      target: '.tour-activity',
+      content: 'Select your daily Activity Level. Be honest—this heavily impacts your calorie needs.',
+    },
+    {
+      target: '.tour-maintenance',
+      content: 'These are your calculated Maintenance Calories (the amount you need to stay exactly the same weight). You can manually adjust them here if you feel this amount is wrong based on your experience.',
+    },
+    {
+      target: '.tour-goal',
+      content: 'Select your Daily Goal (Lose, Maintain, or Gain weight).',
+    },
+    {
+      target: '.tour-offset',
+      content: 'This is the recommended Calorie Offset for your chosen goal (e.g. -500 calories for weight loss). You can change it if you wish.',
+    },
+    {
+      target: '.tour-target',
+      content: 'Your final Target Calories are displayed here. You can manually type in a specific target here, and we will recalculate your offset automatically.',
+    },
+    {
+      target: '.tour-macros',
+      content: 'By default, we use a recommended macro split. You can enable Custom Macros to manually drag the pie chart and adjust your Protein/Fat/Carb ratios. The "Strict" setting forces the math engine to hit that exact amount, while "Relaxed" gives it some wiggle room.',
+    },
+    {
+      target: '.tour-musthave',
+      content: 'If there are foods you absolutely MUST eat every day (like 50g of whey protein), add them here and we will lock them into your diet.',
+    },
+    {
+      target: '.tour-liked',
+      content: 'Click here to select all the foods you enjoy eating! The algorithm will only pick foods from your liked list.',
+    },
+    {
+      target: '.tour-advanced',
+      content: 'Advanced users can open this panel to override micronutrient targets (like specific Vitamin C or Cholesterol limits).',
+    }
+  ];
+
+  const resultsSteps = [
+    {
+      target: '.tour-result-1',
+      content: 'Your diet is ready! Here is your Ingredient List. You can edit the exact gram amounts, or click the Export button to copy the list to your clipboard.',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-result-2',
+      content: 'Want this turned into a meal plan? Click Generate AI Meal Plan! You can enter Custom Instructions (like "I only want 3 meals" or "carb backloading") and our AI will organize your exact ingredients into perfect meals.',
+    },
+    {
+      target: '.tour-result-3',
+      content: 'This is the Nutritional Breakdown. It proves your diet hit 100% of your targets! Pro Tip: Hover your mouse (or hold your finger on mobile) over any nutrient bar to see exactly which foods provided that nutrient!',
+    }
+  ];
+
   const [isEditing, setIsEditing] = useState(false);
   
   const [mealPlan, setMealPlan] = useState<string | null>(null);
@@ -1053,6 +1147,64 @@ const DietPlanner = () => {
         `}
       </style>
 
+      
+      
+      <TourWrapper
+        steps={formSteps}
+        run={runTour}
+        continuous={true}
+        
+        
+        callback={handleJoyrideCallback}
+        styles={( {
+          options: {
+            arrowColor: 'rgba(15, 15, 15, 0.95)',
+            backgroundColor: 'rgba(15, 15, 15, 0.95)',
+            primaryColor: '#ff3131',
+            textColor: '#fff',
+            zIndex: 10000,
+          },
+          tooltip: {
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '16px',
+            backdropFilter: 'blur(8px)',
+          }
+        } as any )}
+      />
+      
+      <TourWrapper
+        steps={resultsSteps}
+        run={runResultsTour}
+        continuous={true}
+        
+        
+        callback={handleResultsJoyrideCallback}
+        styles={( {
+          options: {
+            arrowColor: 'rgba(15, 15, 15, 0.95)',
+            backgroundColor: 'rgba(15, 15, 15, 0.95)',
+            primaryColor: '#ff3131',
+            textColor: '#fff',
+            zIndex: 10000,
+          },
+          tooltip: {
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '16px',
+            backdropFilter: 'blur(8px)',
+          }
+        } as any )}
+      />
+
+      
+        <Button 
+          variant="outline-secondary" 
+          size="sm" 
+          className="position-absolute top-0 start-0 m-3 glass-panel d-flex align-items-center z-3"
+          onClick={() => { setRunTour(true); setIsSidebarCollapsed(false);  }}
+        >
+          <RotateCcw size={14} className="me-2" /> Replay Tutorial
+        </Button>
+
       {/* MOBILE VIEW SWITCHER */}
       {diet && (
         <div className="d-lg-none" style={{ position: 'fixed', top: '15px', right: '15px', zIndex: 1050 }}>
@@ -1318,29 +1470,19 @@ const DietPlanner = () => {
                       </Form.Select>
                     </div>
 
-                    <div className="mb-4">
+                    <div className="mb-4 tour-offset">
                       <Form.Label>Calorie Offset</Form.Label>
                       <Form.Control type="number" name="calorieOffset" value={formData.calorieOffset} onChange={handleInputChange} />
                     </div>
 
-                    <div className="mb-4">
-                      <div className="d-flex justify-content-between align-items-center mb-2">
-                        <Form.Label className="mb-0">Target Calories</Form.Label>
-                        <Form.Check 
-                          type="switch"
-                          reverse
-                          id="strict-calories-switch"
-                          label={<small className="text-muted fw-bold" style={{ fontSize: '0.65rem' }}>STRICT</small>}
-                          checked={formData.strictCalories}
-                          onChange={(e) => setFormData(prev => ({ ...prev, strictCalories: e.target.checked }))}
-                        />
-                      </div>
+                    <div className="mb-4 tour-target">
+                      <Form.Label>Target Calories</Form.Label>
                       <Form.Control type="number" name="targetCalories" value={formData.targetCalories} onChange={handleInputChange} />
                     </div>
 
                     <hr className="my-4" />
 
-                    <h3 className="h5 mb-3 d-flex align-items-center justify-content-between fw-bold">
+                    <h3 className="h5 mb-3 d-flex align-items-center justify-content-between fw-bold tour-macros">
                       <span className="d-flex align-items-center"><Activity className="me-2 text-macro" size={20} /> Macronutrient Split</span>
                       <Form.Check 
                         type="switch"
@@ -1651,7 +1793,7 @@ const DietPlanner = () => {
               </Row>
 
               <Accordion defaultActiveKey="0" className="mt-4 mb-4 custom-accordion" data-bs-theme="dark">
-                <Accordion.Item eventKey="0" className="glass-panel border-0 mb-3 overflow-hidden">
+                <Accordion.Item eventKey="0" className="tour-result-1 glass-panel border-0 mb-3 overflow-hidden">
                   <Accordion.Header>
                     <h3 className="h5 fw-bold mb-0 d-flex align-items-center m-0"><Utensils className="me-2 text-primary-vibrant" size={20} /> Daily Ingredient List</h3>
                   </Accordion.Header>
@@ -1820,7 +1962,7 @@ const DietPlanner = () => {
                   </Accordion.Body>
                 </Accordion.Item>
 
-                <Accordion.Item eventKey="1" className="glass-panel border-0 mb-3 overflow-hidden">
+                <Accordion.Item eventKey="1" className="tour-result-2 glass-panel border-0 mb-3 overflow-hidden">
                   <Accordion.Header>
                     <h3 className="h5 fw-bold mb-0 d-flex align-items-center m-0">
                       <Sparkles className="me-2 text-warning-vibrant" size={20} /> Full Day Meal Plan
@@ -1893,7 +2035,7 @@ const DietPlanner = () => {
                   </Accordion.Body>
                 </Accordion.Item>
 
-                <Accordion.Item eventKey="2" className="glass-panel border-0 mb-3 overflow-hidden">
+                <Accordion.Item eventKey="2" className="tour-result-3 glass-panel border-0 mb-3 overflow-hidden">
                   <Accordion.Header>
                     <h3 className="h5 fw-bold mb-0 d-flex align-items-center m-0">
                       <Activity className="me-2 text-success-vibrant" size={20} /> Nutritional Breakdown
