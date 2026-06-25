@@ -414,10 +414,11 @@ const DietPlanner = () => {
     if (type === 'step:after' || type === 'error:target_not_found') {
       const nextIndex = index + (action === 'prev' ? -1 : 1);
       setCurrentStepIndex(nextIndex);
-      if (index === 13 && action === 'next') {
+      
+      // Control modal visibility based on the active step index
+      if (nextIndex === 14) {
         setShowFoodModal(true);
-      }
-      if (index === 14) {
+      } else {
         setShowFoodModal(false);
       }
     }
@@ -874,10 +875,10 @@ const DietPlanner = () => {
   const [foodSearch, setFoodSearch] = useState('');
   const closeFoodModal = useCallback(() => {
     setShowFoodModal(false);
-    if (runTour && currentStepIndex === 14 && joyrideHelpers.current) {
+    if (runTour && joyrideHelpers.current) {
       joyrideHelpers.current.next();
     }
-  }, [runTour, currentStepIndex]);
+  }, [runTour]);
   const [shouldWiggle, setShouldWiggle] = useState(false);
 
   const toggleFood = (foodName: string) => {
@@ -1831,7 +1832,7 @@ const DietPlanner = () => {
             <div className={`bottom-left-actions glass-panel ${isSidebarCollapsed ? 'collapsed' : ''}`}>
               <Button variant="outline-primary" className={`w-100 py-2 d-flex align-items-center justify-content-center fw-bold tour-liked ${shouldWiggle ? 'wiggle' : ''}`} onClick={() => {
                 setShowFoodModal(true);
-                if (runTour && currentStepIndex === 13) {
+                if (runTour) {
                   setTimeout(() => {
                     if (joyrideHelpers.current) {
                       joyrideHelpers.current.next();
