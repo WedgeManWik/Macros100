@@ -285,7 +285,7 @@ const formSteps = [
     disableBeacon: true,
   },
   {
-    target: '.tour-liked-modal',
+    target: '.tour-liked-modal-header',
     content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.',
     spotlightClicks: true,
     disableBeacon: true,
@@ -382,7 +382,7 @@ const DietPlanner = () => {
           const targetRect = targetEl.getBoundingClientRect();
           const parentRect = scrollParent.getBoundingClientRect();
           const offsetTop = targetRect.top - parentRect.top + scrollParent.scrollTop;
-          scrollParent.scrollTo({ top: Math.max(0, offsetTop - 150), behavior: 'smooth' });
+          scrollParent.scrollTo({ top: Math.max(0, offsetTop - 250), behavior: 'smooth' });
         }
       }, 50);
     }
@@ -1376,7 +1376,7 @@ const DietPlanner = () => {
       <div className={`modal-blur-overlay ${showFoodModal ? 'active' : ''}`} />
       <div className={`custom-modal-container ${showFoodModal ? 'active' : ''}`} onClick={() => setShowFoodModal(false)}>
         <div className="custom-modal-content glass-panel p-4 tour-liked-modal" onClick={e => e.stopPropagation()}>
-            <div className="d-flex justify-content-between align-items-center mb-4">
+            <div className="d-flex justify-content-between align-items-center mb-4 tour-liked-modal-header">
                 <h2 className="h3 mb-0 fw-bold d-flex align-items-center">
                     <Heart className="me-2 text-liked" size={28} /> Select Liked Foods
                 </h2>
@@ -1432,7 +1432,7 @@ const DietPlanner = () => {
       <div className={`modal-blur-overlay ${showRDAModal ? 'active' : ''}`} />
       <div className={`custom-modal-container ${showRDAModal ? 'active' : ''}`} onClick={() => setShowRDAModal(false)}>
         <div className="custom-modal-content glass-panel p-4" onClick={e => e.stopPropagation()} style={{ width: window.innerWidth < 992 ? '95%' : '80%', height: window.innerWidth < 992 ? '95%' : '80%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div className="d-flex justify-content-between align-items-center mb-4">
+            <div className="d-flex justify-content-between align-items-center mb-4 tour-liked-modal-header">
                 <h2 className="h3 mb-0 fw-bold d-flex align-items-center">
                     <Activity className="me-2 text-info" size={28} /> Custom RDAs & Upper Limits
                 </h2>
@@ -2077,7 +2077,7 @@ const DietPlanner = () => {
               <div className={`modal-blur-overlay ${showAddIngredientModal ? 'active' : ''}`} />
               <div className={`custom-modal-container ${showAddIngredientModal ? 'active' : ''}`} onClick={() => setShowAddIngredientModal(null)}>
                 <div className="custom-modal-content glass-panel p-4" onClick={e => e.stopPropagation()} style={{ width: window.innerWidth < 992 ? '95%' : '60%', maxHeight: '85%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                    <div className="d-flex justify-content-between align-items-center mb-4">
+                    <div className="d-flex justify-content-between align-items-center mb-4 tour-liked-modal-header">
                         <h2 className="h4 mb-0 fw-bold">Add Ingredient to {showAddIngredientModal?.section}</h2>
                         <Button variant="outline-light" className="rounded-circle border-0" onClick={() => setShowAddIngredientModal(null)}>✕</Button>
                     </div>
