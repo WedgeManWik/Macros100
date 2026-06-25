@@ -76,7 +76,7 @@ app.get('/api/status/:id', (req, res) => {
 
 app.post('/api/generate-meal-plan', async (req, res) => {
   try {
-    const { ingredients } = req.body;
+    const { ingredients, customInstructions } = req.body;
     if (!ingredients || !Array.isArray(ingredients)) {
       return res.status(400).json({ error: 'Ingredients array is required' });
     }
@@ -88,7 +88,7 @@ app.post('/api/generate-meal-plan', async (req, res) => {
 
     const groq = new Groq({ apiKey });
 
-    const prompt = `You are an expert, world-class nutritionist and chef. 
+    let prompt = `You are an expert, world-class nutritionist and chef. 
 I have a list of ingredients and their EXACT portions that perfectly match my daily macro and calorie goals. 
 I need you to organize these exact ingredients into a logical, delicious full-day meal plan (e.g., Breakfast, Lunch, Dinner, Snacks).
 
@@ -102,8 +102,13 @@ CRITICAL RULES:
 
 Here is the daily ingredient list:
 ${ingredients.map((i: any) => `- ${i.grams}g of ${i.name}`).join('\n')}
+`;
 
-Generate the meal plan now:`;
+    if (customInstructions && customInstructions.trim().length > 0) {
+      prompt += `\nUSER CUSTOM INSTRUCTIONS:\n${customInstructions}\n`;
+    }
+
+    prompt += `\nGenerate the meal plan now:`;
 
     const chatCompletion = await groq.chat.completions.create({
       messages: [{ role: 'user', content: prompt }],

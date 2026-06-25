@@ -193,6 +193,7 @@ const DietPlanner = () => {
   const [mealPlan, setMealPlan] = useState<string | null>(null);
   const [mealPlanLoading, setMealPlanLoading] = useState(false);
   const [mealPlanError, setMealPlanError] = useState<string | null>(null);
+  const [customInstructions, setCustomInstructions] = useState('');
 
   const [formData, setFormData] = useState<FormData>(() => {
     const defaults: FormData = {
@@ -201,36 +202,35 @@ const DietPlanner = () => {
         age: 25,
         gender: 'male',
         bodyFat: 15,
-        activityLevel: 1.375,
+        activityLevel: 1.55,
         goal: 'maintain',
         mealsPerDay: 3,
         likedFoods: [],
         mustHaveFoods: [],
         macros: {
-          protein: { mode: 'g/kg', value: 2.2, strictness: 'none', strict: false },
-          fat: { mode: '%', value: 35, strictness: 'none', strict: false },
-          carbs: { mode: 'remainder', value: 0, strictness: 'none', strict: false }
+            protein: { mode: 'g/kg', value: 2.2, strict: true, strictness: 'strict' },
+            fat: { mode: 'g/kg', value: 1.0, strict: false, strictness: 'none' },
+            carbs: { mode: 'remainder', value: 0, strict: false, strictness: 'none' }
         },
         customMacros: false,
-        maintenanceCalories: 2111,
+        maintenanceCalories: 2500,
         calorieOffset: 0,
-        targetCalories: 2111,
+        targetCalories: 2500,
         customMaxAmounts: {},
         algoModel: 'beast',
         advancedSettings: false,
-        strictCalories: false,
+        strictCalories: true,
         isBfCustom: false,
         customRDAs: {}
     };
-
-    const saved = localStorage.getItem('macros100_profile');
-    if (saved) {
-        try {
+    try {
+        const saved = localStorage.getItem('macros100_profile');
+        if (saved) {
             const parsed = JSON.parse(saved);
             return { ...defaults, ...parsed };
-        } catch (e) {
-            return defaults;
         }
+    } catch (e) {
+        // Fallback to defaults
     }
     return defaults;
   });
@@ -848,7 +848,7 @@ const DietPlanner = () => {
       const res = await fetch(`${API_BASE_URL}/api/generate-meal-plan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ingredients })
+        body: JSON.stringify({ ingredients, customInstructions })
       });
       
       const data = await res.json();
@@ -1834,6 +1834,22 @@ const DietPlanner = () => {
                         <p className="text-secondary mb-4 mx-auto" style={{ maxWidth: '500px' }}>
                           Let our AI chef instantly organize these precise ingredients into delicious, logical meals. It strictly follows your macros and won't add any unauthorized foods.
                         </p>
+                        
+                        <div className="mx-auto text-start mb-4" style={{ maxWidth: '500px' }}>
+                          <Form.Group>
+                            <Form.Label className="text-muted small fw-bold">Custom Instructions (Optional)</Form.Label>
+                            <Form.Control 
+                              as="textarea" 
+                              rows={3} 
+                              placeholder="e.g., I prefer a big breakfast, make sure the salmon is for dinner, I don't like eating before noon..."
+                              className="bg-dark text-light border-secondary border-opacity-25 custom-scrollbar"
+                              value={customInstructions}
+                              onChange={(e) => setCustomInstructions(e.target.value)}
+                              style={{ resize: 'none' }}
+                            />
+                          </Form.Group>
+                        </div>
+
                         <Button 
                           variant="primary" 
                           className="rounded-pill d-inline-flex align-items-center fw-bold px-4 py-2"
@@ -1866,6 +1882,11 @@ const DietPlanner = () => {
                           <ReactMarkdown>
                             {mealPlan}
                           </ReactMarkdown>
+                          <div className="mt-4 text-center">
+                            <Button variant="outline-secondary" size="sm" onClick={() => setMealPlan(null)}>
+                              <RotateCcw size={14} className="me-2" /> Start Over / Edit Prompt
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     )}
