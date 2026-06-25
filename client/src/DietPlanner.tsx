@@ -283,6 +283,7 @@ const formSteps = [
     content: 'Now, click this button to open the Liked Foods menu! The algorithm will only pick foods from your liked list.',
     spotlightClicks: true,
     disableBeacon: true,
+    hideFooter: true,
   },
   {
     target: '.tour-liked-modal',
