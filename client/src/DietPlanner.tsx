@@ -293,16 +293,11 @@ const formSteps = [
       }
   },
   {
-    target: '.tour-liked-modal',
-      placement: 'center',
-      content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.',
-      spotlightClicks: true,
-      disableBeacon: true,
-      styles: {
-        overlay: {
-          pointerEvents: 'none'
-        }
-      }
+    target: '.tour-liked-modal-header',
+    placement: 'bottom',
+    content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.',
+    disableBeacon: true,
+    hideOverlay: true,
   },
   {
     target: '.tour-generate',
@@ -378,13 +373,6 @@ const DietPlanner = () => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const joyrideHelpers = useRef<any>(null);
 
-  useEffect(() => {
-    if (runTour && currentStepIndex === 14) {
-      setShowFoodModal(true);
-    } else if (runTour && currentStepIndex === 15) {
-      setShowFoodModal(false);
-    }
-  }, [currentStepIndex, runTour]);
   const [runResultsTour, setRunResultsTour] = useState(false);
 
   const handleJoyrideHelpers = useCallback((helpers: any) => {
@@ -417,7 +405,7 @@ const DietPlanner = () => {
       if (index === 13 && action === 'next') {
         setShowFoodModal(true);
       }
-      if (index === 14 && action !== 'prev') {
+      if (index === 14) {
         setShowFoodModal(false);
       }
     }
@@ -425,6 +413,7 @@ const DietPlanner = () => {
     if (status === 'finished' || status === 'skipped' || action === 'close') {
       setRunTour(false);
       setCurrentStepIndex(0);
+      setShowFoodModal(false);
       localStorage.setItem('macros100_tutorial_done', 'true');
     }
   }, [addLog]);
@@ -872,6 +861,12 @@ const DietPlanner = () => {
 
   const [foodSearch, setFoodSearch] = useState('');
   const [showFoodModal, setShowFoodModal] = useState(false);
+  const closeFoodModal = useCallback(() => {
+    setShowFoodModal(false);
+    if (runTour && currentStepIndex === 14 && joyrideHelpers.current) {
+      joyrideHelpers.current.next();
+    }
+  }, [runTour, currentStepIndex]);
   const [shouldWiggle, setShouldWiggle] = useState(false);
 
   const toggleFood = (foodName: string) => {
@@ -1326,7 +1321,7 @@ const DietPlanner = () => {
             backgroundColor: 'rgba(15, 15, 15, 0.95)',
             primaryColor: '#ff3131',
             textColor: '#fff',
-            zIndex: 10000,
+            zIndex: 100000,
           },
           tooltip: {
             border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -1354,7 +1349,7 @@ const DietPlanner = () => {
             backgroundColor: 'rgba(15, 15, 15, 0.95)',
             primaryColor: '#ff3131',
             textColor: '#fff',
-            zIndex: 10000,
+            zIndex: 100000,
           },
           tooltip: {
             border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -1400,13 +1395,13 @@ const DietPlanner = () => {
 
       {/* LIKED FOODS MODAL */}
       <div className={`modal-blur-overlay ${showFoodModal ? 'active' : ''}`} />
-      <div className={`custom-modal-container ${showFoodModal ? 'active' : ''}`} onClick={() => setShowFoodModal(false)}>
+      <div className={`custom-modal-container ${showFoodModal ? 'active' : ''}`} onClick={closeFoodModal}>
         <div className="custom-modal-content glass-panel p-4 tour-liked-modal" onClick={e => e.stopPropagation()}>
             <div className="d-flex justify-content-between align-items-center mb-4 tour-liked-modal-header">
                 <h2 className="h3 mb-0 fw-bold d-flex align-items-center">
                     <Heart className="me-2 text-liked" size={28} /> Select Liked Foods
                 </h2>
-                <Button variant="outline-light" className="rounded-circle border-0 modal-close-btn p-0 d-flex align-items-center justify-content-center" style={{ fontSize: '1.5rem', fontWeight: 'bold', width: '50px', height: '50px' }} onClick={() => setShowFoodModal(false)}>
+                <Button variant="outline-light" className="rounded-circle border-0 modal-close-btn p-0 d-flex align-items-center justify-content-center" style={{ fontSize: '1.5rem', fontWeight: 'bold', width: '50px', height: '50px' }} onClick={closeFoodModal}>
                     ✕
                 </Button>
             </div>
@@ -1449,7 +1444,7 @@ const DietPlanner = () => {
                 })}
             </div>
             <div className="mt-4 text-center">
-                <Button variant="primary" size="lg" className="px-5" onClick={() => setShowFoodModal(false)}>Save & Close</Button>
+                <Button variant="primary" size="lg" className="px-5" onClick={closeFoodModal}>Save & Close</Button>
             </div>
         </div>
       </div>
@@ -1825,8 +1820,12 @@ const DietPlanner = () => {
             <div className={`bottom-left-actions glass-panel ${isSidebarCollapsed ? 'collapsed' : ''}`}>
               <Button variant="outline-primary" className={`w-100 py-2 d-flex align-items-center justify-content-center fw-bold tour-liked ${shouldWiggle ? 'wiggle' : ''}`} onClick={() => {
                 setShowFoodModal(true);
-                if (runTour && currentStepIndex === 13 && joyrideHelpers.current) {
-                  joyrideHelpers.current.next();
+                if (runTour && currentStepIndex === 13) {
+                  setTimeout(() => {
+                    if (joyrideHelpers.current) {
+                      joyrideHelpers.current.next();
+                    }
+                  }, 150);
                 }
               }}>
                   <Heart className="me-2 text-liked" size={18} /> Select Liked Foods ({formData.likedFoods.length})
