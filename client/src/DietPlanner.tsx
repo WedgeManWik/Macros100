@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Joyride } from 'react-joyride';
 const TourWrapper = (props: any) => {
   const J = Joyride as any;
@@ -324,7 +324,14 @@ const DietPlanner = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [joyrideLogs, setJoyrideLogs] = useState<string[]>(['Init']);
-  const addLog = (msg: string) => setJoyrideLogs(prev => [...prev, new Date().toISOString().split('T')[1].substring(0, 8) + ' ' + msg].slice(-20));
+  
+  const addLog = useCallback((msg: string) => {
+    setJoyrideLogs(prev => {
+        const newLogs = [...prev, new Date().toISOString().split('T')[1].substring(0, 8) + ' ' + msg];
+        if (newLogs.length > 20) return newLogs.slice(newLogs.length - 20);
+        return newLogs;
+    });
+  }, []);
   
   useEffect(() => {
     const originalWarn = console.warn;
@@ -358,7 +365,11 @@ const DietPlanner = () => {
   const joyrideHelpers = useRef<any>(null);
   const [runResultsTour, setRunResultsTour] = useState(false);
 
-  const handleJoyrideCallback = (data: any) => {
+  const handleJoyrideHelpers = useCallback((helpers: any) => {
+    joyrideHelpers.current = helpers;
+  }, []);
+
+  const handleJoyrideCallback = useCallback((data: any) => {
     const { action, index, status, type } = data;
     addLog('Form Callback: status=' + status + ', type=' + type + ', action=' + action + ', index=' + index);
     
@@ -376,16 +387,16 @@ const DietPlanner = () => {
       setCurrentStepIndex(0);
       localStorage.setItem('macros100_tutorial_done', 'true');
     }
-  };
+  }, [addLog]);
 
-  const handleResultsJoyrideCallback = (data: any) => {
+  const handleResultsJoyrideCallback = useCallback((data: any) => {
     const { action, status, type } = data;
-    addLog('Results Callback: status=' + status + ', type=' + type);
+    addLog('Results Callback: status=' + status + ', type=' + type + ', action=' + action);
     if (status === 'finished' || status === 'skipped' || action === 'close') {
       setRunResultsTour(false);
       localStorage.setItem('macros100_results_tutorial_done', 'true');
     }
-  };
+  }, [addLog]);
 
   const [isEditing, setIsEditing] = useState(false);
   
@@ -1216,7 +1227,9 @@ const DietPlanner = () => {
           .custom-main-container {
             overflow-x: hidden;
             overflow-y: auto;
-            scroll-padding-top: 120px;
+          }
+          .panel-left {
+            scroll-padding-top: 150px;
           }
           @media (min-width: 992px) {
             .custom-main-container {
@@ -1263,7 +1276,7 @@ const DietPlanner = () => {
           scrollOffset={150}
           debug={true}
           run={true}
-          getHelpers={(helpers: any) => { joyrideHelpers.current = helpers; }}
+          getHelpers={handleJoyrideHelpers}
           addLog={addLog}
           steps={formSteps}
         continuous={true}
