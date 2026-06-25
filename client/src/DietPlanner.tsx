@@ -1199,6 +1199,7 @@ const DietPlanner = () => {
       
       {runTour && (
       <TourWrapper
+          disableBeacon={true}
           debug={true}
           run={true}
           addLog={addLog}
@@ -1224,6 +1225,7 @@ const DietPlanner = () => {
       
       {runResultsTour && (
       <TourWrapper
+          disableBeacon={true}
           debug={true}
           run={true}
           addLog={addLog}
