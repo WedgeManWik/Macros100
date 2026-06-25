@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Joyride } from 'react-joyride';
+import { Joyride } from 'react-joyride';
 const TourWrapper = (props: any) => {
   const J = Joyride as any;
+  if (!J) {
+    console.error("Joyride is completely undefined!");
+    return null;
+  }
   return <J {...props} />;
 };
 import { Container, Row, Col, Form, Button, Card, Alert, ProgressBar, Spinner, OverlayTrigger, Tooltip, Accordion } from 'react-bootstrap';
