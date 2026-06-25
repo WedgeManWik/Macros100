@@ -107,6 +107,11 @@ body, html, #root {
 .text-dark, .text-black, .text-body { color: var(--text-primary) !important; }
 .border { border-color: var(--border-color) !important; }
 
+/* Force Bootstrap text utilities to be light globally, regardless of OS light/dark mode */
+.text-secondary, .text-muted, .text-white-50, .form-text, .small, small {
+  color: var(--text-secondary) !important;
+}
+
 .glass-panel {
   background: rgba(255, 255, 255, 0.03) !important; backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08) !important; border-radius: var(--radius-lg);
@@ -136,7 +141,7 @@ h1, h2, h3, h4, h5, h6 { font-weight: 800; letter-spacing: -0.03em; color: var(-
 
 .form-control, .form-select { background-color: var(--bg-card) !important; border: 1px solid var(--border-color) !important; border-radius: var(--radius-md) !important; color: var(--text-primary) !important; padding: 0.75rem 1rem !important; font-size: 0.9rem !important; transition: all 0.2s ease !important; }
 .form-control:focus, .form-select:focus { background-color: var(--bg-card-hover) !important; border-color: var(--accent-primary) !important; box-shadow: 0 0 0 4px rgba(61, 155, 255, 0.15) !important; outline: none; }
-.form-label { color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.6rem; }
+.form-label { color: var(--text-secondary) !important; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.6rem; }
 
 .food-card { position: relative; cursor: pointer; border: 1px solid var(--border-color) !important; background: rgba(255, 255, 255, 0.02) !important; }
 .food-card.selected { border-color: var(--accent-secondary) !important; background: rgba(0, 255, 65, 0.05) !important; }
