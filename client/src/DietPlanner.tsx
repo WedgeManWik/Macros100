@@ -254,7 +254,7 @@ const DietPlanner = () => {
   const handleJoyrideCallback = (data: any) => {
     const { action, index, status, type } = data;
     addLog('Form Callback: status=' + status + ', type=' + type + ', action=' + action + ', index=' + index);
-    if (status === 'finished' || status === 'skipped') {
+    if (status === 'finished' || status === 'skipped' || action === 'close') {
       setRunTour(false);
       setStepIndex(0);
       localStorage.setItem('macros100_tutorial_done', 'true');
@@ -268,9 +268,9 @@ const DietPlanner = () => {
   };
 
   const handleResultsJoyrideCallback = (data: any) => {
-    const { status, type } = data;
+    const { action, status, type } = data;
     addLog('Results Callback: status=' + status + ', type=' + type);
-    if (status === 'finished' || status === 'skipped') {
+    if (status === 'finished' || status === 'skipped' || action === 'close') {
       setRunResultsTour(false);
       localStorage.setItem('macros100_results_tutorial_done', 'true');
     }
@@ -1241,6 +1241,7 @@ const DietPlanner = () => {
       <TourWrapper
           key={runTour ? "form-on" : "form-off"}
           disableBeacon={true}
+          disableScrolling={true}
           debug={true}
           run={true}
           stepIndex={stepIndex}
@@ -1268,6 +1269,7 @@ const DietPlanner = () => {
       {runResultsTour && (
       <TourWrapper
           disableBeacon={true}
+          disableScrolling={true}
           debug={true}
           run={true}
           addLog={addLog}
