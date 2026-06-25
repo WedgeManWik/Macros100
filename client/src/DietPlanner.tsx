@@ -256,7 +256,8 @@ const DietPlanner = () => {
 
   const formSteps = [
     {
-      target: '.tour-biometrics',
+      target: 'body',
+      placement: 'center',
       content: 'Welcome to Macros100! First, enter your basic biometric details (Weight, Height, Age, and Gender) so we can accurately estimate your metabolic rate.',
       disableBeacon: true,
     },
@@ -314,7 +315,8 @@ const DietPlanner = () => {
 
   const resultsSteps = [
     {
-      target: '.tour-result-1',
+      target: 'body',
+      placement: 'center',
       content: 'Your diet is ready! Here is your Ingredient List. You can edit the exact gram amounts, or click the Export button to copy the list to your clipboard.',
       disableBeacon: true,
     },
