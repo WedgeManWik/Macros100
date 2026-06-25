@@ -1229,6 +1229,12 @@ const DietPlanner = () => {
       />
 
       
+      {/* DEBUG BOX */}
+      <div className="position-fixed bottom-0 start-0 m-3 p-2 bg-dark border border-warning text-warning overflow-hidden" style={{ zIndex: 10000, fontSize: '0.7rem', width: '300px', opacity: 0.9 }}>
+        <strong>Joyride Debug:</strong><br/>
+        {joyrideLogs.map((l, i) => <div key={i}>{l}</div>)}
+      </div>
+      
         <Button 
           variant="outline-secondary" 
           size="sm" 
