@@ -9,6 +9,7 @@
     "dev": "nodemon --watch src/**/*.ts --exec node --loader ts-node/esm src/index.ts"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "body-parser": "^2.2.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",

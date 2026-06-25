@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Container, Row, Col, Form, Button, Card, Alert, ProgressBar, Spinner, OverlayTrigger, Tooltip } from 'react-bootstrap';
-import { Calculator, Utensils, Target, Activity, Heart, Info, RotateCcw, ChevronLeft, ChevronRight, Settings, ClipboardList, X } from 'lucide-react';
+import { Container, Row, Col, Form, Button, Card, Alert, ProgressBar, Spinner, OverlayTrigger, Tooltip, Accordion } from 'react-bootstrap';
+import { Calculator, Utensils, Target, Activity, Heart, Info, RotateCcw, ChevronLeft, ChevronRight, Settings, ClipboardList, X, Sparkles } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
 interface Food {
   name: string;
@@ -188,6 +189,10 @@ const DietPlanner = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  
+  const [mealPlan, setMealPlan] = useState<string | null>(null);
+  const [mealPlanLoading, setMealPlanLoading] = useState(false);
+  const [mealPlanError, setMealPlanError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<FormData>(() => {
     const defaults: FormData = {
@@ -826,6 +831,35 @@ const DietPlanner = () => {
         },
         micronutrients: newMicros
     };
+  };
+
+  const handleGenerateMealPlan = async () => {
+    if (!diet) return;
+    setMealPlanLoading(true);
+    setMealPlanError(null);
+    try {
+      const ingredients = [];
+      for (const section of Object.values(diet.sectionedIngredients)) {
+        for (const item of section) {
+           ingredients.push({ name: item.name, grams: item.amount });
+        }
+      }
+      
+      const res = await fetch(`${API_BASE_URL}/api/generate-meal-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ingredients })
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate meal plan');
+      
+      setMealPlan(data.mealPlan);
+    } catch (err: any) {
+      setMealPlanError(err.message);
+    } finally {
+      setMealPlanLoading(false);
+    }
   };
 
   const handleAmountChange = (section: string, index: number, newAmount: string) => {
@@ -1616,10 +1650,14 @@ const DietPlanner = () => {
                 </Col>
               </Row>
 
-              <div className="d-flex align-items-center justify-content-between mb-4 pt-2 gap-2">
-                <h3 className="h4 fw-bold mb-0 d-flex align-items-center"><Utensils className="me-2 text-primary" size={24} /> Daily Meal Components</h3>
-                <div className="d-flex gap-2">
-                  <div className="d-none d-lg-flex gap-2">
+              <Accordion defaultActiveKey="0" className="mt-4 mb-4 custom-accordion" data-bs-theme="dark">
+                <Accordion.Item eventKey="0" className="glass-panel border-0 mb-3 overflow-hidden">
+                  <Accordion.Header>
+                    <h3 className="h5 fw-bold mb-0 d-flex align-items-center m-0"><Utensils className="me-2 text-primary-vibrant" size={20} /> Daily Ingredient List</h3>
+                  </Accordion.Header>
+                  <Accordion.Body className="p-4 pt-3">
+                    <div className="d-flex align-items-center justify-content-end mb-4 gap-2">
+                      <div className="d-none d-lg-flex gap-2">
                     <Button variant="outline-info" size="sm" className="fw-bold px-3" onClick={() => {
                       let report = `DIET ANALYSIS REPORT\n`;
                       report += `Target Calories: ${diet.targetCalories} kcal\n`;
@@ -1650,7 +1688,6 @@ const DietPlanner = () => {
                     <Button variant={isEditing ? "success" : "outline-primary"} size="sm" className="fw-bold px-3" onClick={() => setIsEditing(!isEditing)}>{isEditing ? 'Save Edits' : 'Edit Diet'}</Button>
                   </div>
                 </div>
-              </div>
               
               <div className="mb-5">
                 {diet.sectionedIngredients && Object.entries(diet.sectionedIngredients).map(([section, items]) => (
@@ -1780,14 +1817,68 @@ const DietPlanner = () => {
                     </div>
                 </div>
               </div>
+                  </Accordion.Body>
+                </Accordion.Item>
 
-              {/* COMPREHENSIVE NUTRIENT ANALYSIS */}
-              <div className="pt-4 border-top border-secondary border-opacity-10">
-                <Card className="border-0 mb-4 shadow-lg" style={{ backgroundColor: 'var(--bg-card)' }}>
-                  <Card.Body className="p-4">
-                    <h3 className="h4 fw-bold mb-4 d-flex align-items-center">
-                      <Activity className="me-2 text-primary-vibrant" size={24} /> Comprehensive Nutrient Analysis
+                <Accordion.Item eventKey="1" className="glass-panel border-0 mb-3 overflow-hidden">
+                  <Accordion.Header>
+                    <h3 className="h5 fw-bold mb-0 d-flex align-items-center m-0">
+                      <Sparkles className="me-2 text-warning-vibrant" size={20} /> Full Day Meal Plan (AI)
                     </h3>
+                  </Accordion.Header>
+                  <Accordion.Body className="p-4 pt-3">
+                    {!mealPlan && !mealPlanLoading && (
+                      <div className="text-center py-5">
+                        <Sparkles size={48} className="text-warning-vibrant mb-3 opacity-50" />
+                        <h4 className="fw-bold">Automate Your Meals</h4>
+                        <p className="text-secondary mb-4 mx-auto" style={{ maxWidth: '500px' }}>
+                          Let our AI chef instantly organize these precise ingredients into delicious, logical meals. It strictly follows your macros and won't add any unauthorized foods.
+                        </p>
+                        <Button 
+                          variant="primary" 
+                          className="rounded-pill d-inline-flex align-items-center fw-bold px-4 py-2"
+                          onClick={handleGenerateMealPlan}
+                        >
+                          <Sparkles size={18} className="me-2" />
+                          Generate AI Meal Plan
+                        </Button>
+                        {mealPlanError && <Alert variant="danger" className="mt-3 text-start mx-auto" style={{ maxWidth: '500px' }}>{mealPlanError}</Alert>}
+                      </div>
+                    )}
+
+                    {mealPlanLoading && (
+                      <div className="text-center py-5">
+                        <Spinner animation="border" variant="warning" className="mb-3" />
+                        <h5 className="fw-bold">Generating your perfect day...</h5>
+                        <p className="text-secondary small">This usually takes about 5 seconds.</p>
+                      </div>
+                    )}
+
+                    {mealPlan && (
+                      <div>
+                        <div className="d-flex justify-content-between align-items-center mb-4 border-bottom border-secondary border-opacity-25 pb-3">
+                          <h4 className="fw-bold m-0 text-warning-vibrant">Your Custom Meal Plan</h4>
+                          <Button variant="outline-light" size="sm" onClick={() => { navigator.clipboard.writeText(mealPlan); alert('Meal plan copied!'); }}>
+                            <ClipboardList size={16} className="me-2" /> Copy Plan
+                          </Button>
+                        </div>
+                        <div className="p-4 rounded text-light" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <ReactMarkdown>
+                            {mealPlan}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    )}
+                  </Accordion.Body>
+                </Accordion.Item>
+
+                <Accordion.Item eventKey="2" className="glass-panel border-0 mb-3 overflow-hidden">
+                  <Accordion.Header>
+                    <h3 className="h5 fw-bold mb-0 d-flex align-items-center m-0">
+                      <Activity className="me-2 text-success-vibrant" size={20} /> Nutritional Breakdown
+                    </h3>
+                  </Accordion.Header>
+                  <Accordion.Body className="p-4 pt-3">
                     
                     {[ 
                       { title: "General", keys: ["energy", "water", "caffeine", "alcohol"] },
@@ -1938,9 +2029,9 @@ const DietPlanner = () => {
                         <div className="small text-secondary"><strong>Optimization Logic:</strong> The algorithm prioritizes nutrient density to achieve 100% of all physiological targets while strictly adhering to your calorie and macro-nutrient constraints.</div>
                       </div>
                     </Alert>
-                  </Card.Body>
-                </Card>
-              </div>
+                  </Accordion.Body>
+                </Accordion.Item>
+              </Accordion>
             </div>
           ) : (
             <div className="text-center py-5 mt-5">

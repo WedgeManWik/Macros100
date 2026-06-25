@@ -3,6 +3,7 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 // @ts-ignore
 import { FOOD_DATABASE } from './foods.cjs';
 import { generateDietAsync } from './nutrition.js';
@@ -71,6 +72,49 @@ app.get('/api/status/:id', (req, res) => {
   const job = jobs[req.params.id];
   if (!job) return res.status(404).json({ error: 'Job not found' });
   res.json(job);
+});
+
+app.post('/api/generate-meal-plan', async (req, res) => {
+  try {
+    const { ingredients } = req.body;
+    if (!ingredients || !Array.isArray(ingredients)) {
+      return res.status(400).json({ error: 'Ingredients array is required' });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on the server' });
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const prompt = `You are an expert, world-class nutritionist and chef. 
+I have a list of ingredients and their EXACT portions that perfectly match my daily macro and calorie goals. 
+I need you to organize these exact ingredients into a logical, delicious full-day meal plan (e.g., Breakfast, Lunch, Dinner, Snacks).
+
+CRITICAL RULES:
+1. You MUST use EVERY ingredient on the list.
+2. You MUST use the EXACT gram amounts provided. Do not change the quantities.
+3. You MUST NOT add any new ingredients, not even spices, oils, or water unless they are in the list.
+4. If an ingredient doesn't fit neatly into a traditional meal, combine it creatively or list it as a snack.
+5. Format your response beautifully using Markdown. Use bold headings for meals.
+6. Keep descriptions brief and appetizing.
+
+Here is the daily ingredient list:
+${ingredients.map((i: any) => `- ${i.grams}g of ${i.name}`).join('\n')}
+
+Generate the meal plan now:`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+
+    res.json({ mealPlan: text });
+  } catch (err: any) {
+    console.error('Error generating meal plan:', err);
+    res.status(500).json({ error: 'Failed to generate meal plan', details: err.message });
+  }
 });
 
 // Serve static files from React build (Optional for split deployments)
