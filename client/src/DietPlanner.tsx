@@ -346,7 +346,8 @@ const DietPlanner = () => {
     },
     {
       target: '.tour-liked-modal',
-      content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, click the X or anywhere outside the menu to close it.',
+      content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.',
+      spotlightClicks: true,
       disableBeacon: true,
     },
     {
@@ -1246,7 +1247,8 @@ const DietPlanner = () => {
       <TourWrapper
           key={runTour ? "form-on" : "form-off"}
           disableBeacon={true}
-          disableScrolling={true}
+          disableOverlayClose={true}
+          scrollOffset={150}
           debug={true}
           run={true}
           getHelpers={(helpers: any) => { joyrideHelpers.current = helpers; }}
@@ -1274,7 +1276,8 @@ const DietPlanner = () => {
       {runResultsTour && (
       <TourWrapper
           disableBeacon={true}
-          disableScrolling={true}
+          disableOverlayClose={true}
+          scrollOffset={150}
           debug={true}
           run={true}
           addLog={addLog}
