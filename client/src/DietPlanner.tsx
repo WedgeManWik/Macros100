@@ -319,7 +319,7 @@ const DietPlanner = () => {
     },
     {
       target: '.tour-liked-foods-modal-header',
-      placement: 'bottom',
+      placement: 'top',
       content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.',
       disableBeacon: true,
       hideOverlay: true,
@@ -413,6 +413,13 @@ const DietPlanner = () => {
         setShowFoodModal(true);
         setTimeout(() => {
           addLog('Timeout finished. Advancing to step 14.');
+          setCurrentStepIndex(14);
+        }, 150);
+      } else if (index === 15 && isPrev) {
+        addLog('Step 15 Back triggered. Opening modal.');
+        setShowFoodModal(true);
+        setTimeout(() => {
+          addLog('Timeout finished. Returning to step 14.');
           setCurrentStepIndex(14);
         }, 150);
       } else if (index === 14) {
