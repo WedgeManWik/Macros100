@@ -284,10 +284,12 @@ const formSteps = [
     spotlightClicks: true,
     disableBeacon: true,
     hideFooter: true,
+    hideNextButton: true,
+    hideBackButton: true,
   },
   {
     target: '.tour-liked-modal',
-    placement: 'top',
+    placement: 'center',
     content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.',
     spotlightClicks: true,
     disableBeacon: true,
