@@ -203,33 +203,26 @@ const DietPlanner = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-    const [joyrideLogs, setJoyrideLogs] = useState<string[]>(['Init']);
+  const [joyrideLogs, setJoyrideLogs] = useState<string[]>(['Init']);
   const addLog = (msg: string) => setJoyrideLogs(prev => [...prev, new Date().toISOString().split('T')[1].substring(0, 8) + ' ' + msg].slice(-10));
   const [runTour, setRunTour] = useState(false);
-  const [stepIndex, setStepIndex] = useState(0);
   const [runResultsTour, setRunResultsTour] = useState(false);
-  const [resultsStepIndex, setResultsStepIndex] = useState(0);
 
   const handleJoyrideCallback = (data: any) => {
-    const { action, index, status, type } = data;
-    addLog('Form Callback: status=' + status + ', type=' + type + ', action=' + action + ', index=' + index);
+    const { status, type } = data;
+    addLog('Form Callback: status=' + status + ', type=' + type);
     if (status === 'finished' || status === 'skipped') {
       setRunTour(false);
-      setStepIndex(0);
       localStorage.setItem('macros100_tutorial_done', 'true');
-    } else if (type === 'step:after' || type === 'target:notFound') {
-      setStepIndex(index + (action === 'prev' ? -1 : 1));
     }
   };
 
   const handleResultsJoyrideCallback = (data: any) => {
-    const { action, index, status, type } = data;
+    const { status, type } = data;
+    addLog('Results Callback: status=' + status + ', type=' + type);
     if (status === 'finished' || status === 'skipped') {
       setRunResultsTour(false);
-      setResultsStepIndex(0);
       localStorage.setItem('macros100_results_tutorial_done', 'true');
-    } else if (type === 'step:after' || type === 'target:notFound') {
-      setResultsStepIndex(index + (action === 'prev' ? -1 : 1));
     }
   };
 
@@ -1176,15 +1169,11 @@ const DietPlanner = () => {
 
       
       
+      {runTour && (
       <TourWrapper
-          key={runTour ? "form-on" : "form-off"}
           addLog={addLog}
           steps={formSteps}
-          run={runTour}
-          stepIndex={stepIndex}
         continuous={true}
-        
-        
         callback={handleJoyrideCallback}
         styles={( {
           options: {
@@ -1201,16 +1190,13 @@ const DietPlanner = () => {
           }
         } as any )}
       />
+      )}
       
+      {runResultsTour && (
       <TourWrapper
-          key={runResultsTour ? "results-on" : "results-off"}
           addLog={addLog}
           steps={resultsSteps}
-          run={runResultsTour}
-          stepIndex={resultsStepIndex}
         continuous={true}
-        
-        
         callback={handleResultsJoyrideCallback}
         styles={( {
           options: {
@@ -1227,6 +1213,7 @@ const DietPlanner = () => {
           }
         } as any )}
       />
+      )}
 
       
       {/* DEBUG BOX */}
