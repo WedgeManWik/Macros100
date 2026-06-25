@@ -1213,7 +1213,7 @@ const DietPlanner = () => {
         <Button 
           variant="outline-secondary" 
           size="sm" 
-          className="position-absolute top-0 start-0 m-3 glass-panel d-flex align-items-center z-3"
+          className="position-fixed top-0 start-0 m-3 glass-panel d-flex align-items-center" style={{ zIndex: 1050 }}
           onClick={() => { setRunTour(true); setIsSidebarCollapsed(false);  }}
         >
           <RotateCcw size={14} className="me-2" /> Replay Tutorial
