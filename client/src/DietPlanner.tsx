@@ -280,19 +280,29 @@ const formSteps = [
   },
   {
     target: '.tour-liked',
-    content: 'Now, click this button to open the Liked Foods menu! The algorithm will only pick foods from your liked list.',
-    spotlightClicks: true,
-    disableBeacon: true,
-    hideFooter: true,
-    hideNextButton: true,
-    hideBackButton: true,
+      content: 'Now, click this button to open the Liked Foods menu! The algorithm will only pick foods from your liked list.',
+      spotlightClicks: true,
+      disableBeacon: true,
+      styles: {
+        buttonNext: {
+          display: 'none'
+        },
+        buttonBack: {
+          display: 'none'
+        }
+      }
   },
   {
     target: '.tour-liked-modal',
-    placement: 'center',
-    content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.',
-    spotlightClicks: true,
-    disableBeacon: true,
+      placement: 'center',
+      content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.',
+      spotlightClicks: true,
+      disableBeacon: true,
+      styles: {
+        overlay: {
+          pointerEvents: 'none'
+        }
+      }
   },
   {
     target: '.tour-generate',
