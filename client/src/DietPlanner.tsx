@@ -381,6 +381,7 @@ const DietPlanner = () => {
   const handleJoyrideCallback = useCallback((data: any) => {
     const { action, index, status, type } = data;
     addLog('Form Callback: status=' + status + ', type=' + type + ', action=' + action + ', index=' + index);
+    console.log('Joyride event:', data);
     
     // Manual scroll engine to guarantee offset
     if (type === 'tooltip:update' && data.step?.target && data.step.target !== 'body') {
