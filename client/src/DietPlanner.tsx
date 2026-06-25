@@ -285,7 +285,8 @@ const formSteps = [
     disableBeacon: true,
   },
   {
-    target: '.tour-liked-modal-header',
+    target: '.tour-liked-modal',
+    placement: 'top',
     content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.',
     spotlightClicks: true,
     disableBeacon: true,
@@ -1243,7 +1244,8 @@ const DietPlanner = () => {
             overflow-y: auto;
           }
           .panel-left {
-            scroll-padding-top: 150px;
+            scroll-padding-top: 250px;
+            scroll-behavior: smooth;
           }
           @media (min-width: 992px) {
             .custom-main-container {
