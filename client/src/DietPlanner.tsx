@@ -37,6 +37,8 @@ interface DietPlan {
     sources: { food: string; amount: number; pctOfTotal: number }[]; 
     max?: number;
     target?: number;
+    optimalMin?: number;
+    optimalMax?: number;
     essential?: boolean;
   }>;
   error?: string;
@@ -54,9 +56,9 @@ interface FormData {
   likedFoods: string[];
   mustHaveFoods: Array<{ name: string, min?: number, max?: number, amount?: number }>;
   macros: {
-    protein: { mode: string, value: number, strict: boolean };
-    fat: { mode: string, value: number, strict: boolean };
-    carbs: { mode: string, value: number, strict: boolean };
+    protein: { mode: string, value: number, strictness: 'strict' | 'relaxed' | 'none', strict?: boolean };
+    fat: { mode: string, value: number, strictness: 'strict' | 'relaxed' | 'none', strict?: boolean };
+    carbs: { mode: string, value: number, strictness: 'strict' | 'relaxed' | 'none', strict?: boolean };
   };
   customMacros: boolean;
   maintenanceCalories: number;
@@ -67,8 +69,115 @@ interface FormData {
   advancedSettings: boolean;
   strictCalories: boolean;
   isBfCustom: boolean;
-  customRDAs: Record<string, { target?: number, max?: number }>;
+  customRDAs: Record<string, { target?: number, max?: number, essential?: boolean }>;
 }
+
+const InteractiveMacroPie = ({ 
+  proteinPct, 
+  fatPct, 
+  onChange,
+  onChangeStatus,
+  targetCalories,
+  weight,
+  formData
+}: { 
+  proteinPct: number, 
+  fatPct: number, 
+  onChange: (p: number, f: number) => void,
+  onChangeStatus: (macro: 'protein'|'fat'|'carbs', status: 'strict'|'none') => void,
+  targetCalories: number,
+  weight: number,
+  formData: FormData
+}) => {
+  const radius = 80;
+  const center = 100;
+  const carbPct = Math.max(0, 1 - proteinPct - fatPct);
+
+  const getCoordinatesForPercent = (percent: number) => {
+    // Start at -90deg (12 o'clock)
+    const x = center + radius * Math.cos(2 * Math.PI * percent - Math.PI / 2);
+    const y = center + radius * Math.sin(2 * Math.PI * percent - Math.PI / 2);
+    return [x, y];
+  };
+
+  const createPath = (startPct: number, endPct: number, color: string) => {
+    const [startX, startY] = getCoordinatesForPercent(startPct);
+    const [endX, endY] = getCoordinatesForPercent(endPct);
+    const largeArcFlag = (endPct - startPct) > 0.5 ? 1 : 0;
+    return `M ${center} ${center} L ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY} Z`;
+  };
+
+  const handlePointerMove = (e: React.PointerEvent, handleType: 'PF' | 'FC') => {
+    const svg = (e.currentTarget as any).ownerSVGElement || e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const x = e.clientX - rect.left - center;
+    const y = e.clientY - rect.top - center;
+    
+    let angle = Math.atan2(y, x) + Math.PI / 2;
+    if (angle < 0) angle += 2 * Math.PI;
+    const pct = angle / (2 * Math.PI);
+
+    if (handleType === 'PF') {
+      const newP = Math.min(0.9, Math.max(0.05, pct));
+      const currentPFSum = proteinPct + fatPct;
+      const newF = Math.max(0.05, Math.min(0.9, currentPFSum - newP));
+      onChange(newP, newF);
+    } else {
+      const newPFSum = Math.min(0.95, Math.max(proteinPct + 0.05, pct));
+      onChange(proteinPct, newPFSum - proteinPct);
+    }
+  };
+
+  const pGrams = (proteinPct * targetCalories) / 4;
+  const fGrams = (fatPct * targetCalories) / 9;
+  const cGrams = (carbPct * targetCalories) / 4;
+
+  return (
+    <div className="macro-pie-container py-2 d-flex justify-content-center">
+      <div style={{ width: '180px', height: '180px', position: 'relative', touchAction: 'none' }}>
+        <svg viewBox="0 0 200 200" style={{ width: '100%', height: '100%' }}>
+          <defs>
+            <filter id="shadow">
+              <feDropShadow dx="0" dy="0" stdDeviation="3" floodOpacity="0.5"/>
+            </filter>
+          </defs>
+          {/* Fixed 12 o'clock line */}
+          <line x1="100" y1="20" x2="100" y2="100" stroke="white" strokeWidth="1" strokeDasharray="4" opacity="0.3" />
+          
+          {/* Slices */}
+          <path d={createPath(0, proteinPct, '#ff3131')} fill="#ff3131" opacity="0.8" />
+          <path d={createPath(proteinPct, proteinPct + fatPct, '#ffea00')} fill="#ffea00" opacity="0.8" />
+          <path d={createPath(proteinPct + fatPct, 1, '#3d9bff')} fill="#3d9bff" opacity="0.8" />
+          
+          {/* Handle 1: Protein-Fat */}
+          <circle 
+            cx={getCoordinatesForPercent(proteinPct)[0]} 
+            cy={getCoordinatesForPercent(proteinPct)[1]} 
+            r="10" fill="white" stroke="#ff3131" strokeWidth="3"
+            style={{ cursor: 'grab', filter: 'url(#shadow)' }}
+            onPointerMove={(e) => e.buttons === 1 && handlePointerMove(e, 'PF')}
+            onPointerDown={(e) => (e.target as any).setPointerCapture(e.pointerId)}
+          />
+          
+          {/* Handle 2: Fat-Carbs */}
+          <circle 
+            cx={getCoordinatesForPercent(proteinPct + fatPct)[0]} 
+            cy={getCoordinatesForPercent(proteinPct + fatPct)[1]} 
+            r="10" fill="white" stroke="#ffea00" strokeWidth="3"
+            style={{ cursor: 'grab', filter: 'url(#shadow)' }}
+            onPointerMove={(e) => e.buttons === 1 && handlePointerMove(e, 'FC')}
+            onPointerDown={(e) => (e.target as any).setPointerCapture(e.pointerId)}
+          />
+          
+          {/* Center Info */}
+          <circle cx="100" cy="100" r="35" fill="var(--bg-card)" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+          <text x="100" y="98" textAnchor="middle" fill="#3d9bff" style={{ fontSize: '13px', fontWeight: 'bold', fontFamily: 'monospace' }}>{targetCalories}</text>
+          <text x="100" y="112" textAnchor="middle" fill="gray" style={{ fontSize: '9px', fontWeight: 'bold' }}>KCAL</text>
+        </svg>
+      </div>
+    </div>
+  );
+};
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -93,9 +202,9 @@ const DietPlanner = () => {
         likedFoods: [],
         mustHaveFoods: [],
         macros: {
-          protein: { mode: 'g/kg', value: 2.2, strict: true },
-          fat: { mode: '%', value: 35, strict: true },
-          carbs: { mode: 'remainder', value: 0, strict: true }
+          protein: { mode: 'g/kg', value: 2.2, strictness: 'none', strict: false },
+          fat: { mode: '%', value: 35, strictness: 'none', strict: false },
+          carbs: { mode: 'remainder', value: 0, strictness: 'none', strict: false }
         },
         customMacros: false,
         maintenanceCalories: 2111,
@@ -278,9 +387,20 @@ const DietPlanner = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/foods`);
+        console.log('Macros100: Fetching foods from /api/macros100/foods');
+        const res = await fetch('/api/macros100/foods');
+
+        if (!res.ok) {
+            const errorText = await res.text();
+            console.error(`Macros100: API Error ${res.status}:`, errorText);
+            setError(`API Error ${res.status}: ${errorText}`);
+            return;
+        }
+
         const loadedFoods = await res.json();
+        console.log(`Macros100: Loaded ${loadedFoods.length} items.`);
         setFoods(loadedFoods);
+
         const validNames = loadedFoods.map((f: any) => f.name);
         
         const savedProfileStr = localStorage.getItem('macros100_profile');
@@ -352,20 +472,41 @@ const DietPlanner = () => {
     });
   };
 
-  const handleMacroChange = (macro: 'protein'|'fat'|'carbs', field: 'mode'|'value'|'strict', val: any) => {
-    setFormData(prev => ({
-      ...prev,
-      macros: {
-        ...prev.macros,
-        [macro]: {
-          ...prev.macros[macro],
-          [field]: field === 'value' ? parseFloat(val) : val
-        }
+  const handleMacroChange = (macro: 'protein'|'fat'|'carbs', field: 'mode'|'value'|'strictness'|'strict', val: any) => {
+    setFormData(prev => {
+      const newMacros = { ...prev.macros };
+      const currentMacro = { ...newMacros[macro], [field]: field === 'value' ? (parseFloat(val) || 0) : val };
+      
+      // 1. If strictness is set to 'none', mode MUST be 'remainder'
+      if (field === 'strictness' && val === 'none') {
+        currentMacro.mode = 'remainder';
+        currentMacro.value = 0;
       }
-    }));
+      
+      // 2. If mode is set to 'remainder', ensure no other macro is 'remainder'
+      if (field === 'mode' && val === 'remainder') {
+        Object.keys(newMacros).forEach(m => {
+          if (m !== macro && newMacros[m as 'protein'|'fat'|'carbs'].mode === 'remainder') {
+            newMacros[m as 'protein'|'carbs'|'fat'].mode = m === 'fat' ? '%' : 'g';
+            newMacros[m as 'protein'|'carbs'|'fat'].value = m === 'fat' ? 30 : 150;
+          }
+        });
+      }
+
+      newMacros[macro] = currentMacro;
+
+      // 3. Ensure at least one macro is 'remainder'
+      const remainderMacro = Object.keys(newMacros).find(m => newMacros[m as 'protein'|'fat'|'carbs'].mode === 'remainder');
+      if (!remainderMacro) {
+          newMacros.carbs.mode = 'remainder';
+          newMacros.carbs.value = 0;
+      }
+
+      return { ...prev, macros: newMacros };
+    });
   };
 
-  const updateCustomRDA = (key: string, field: 'target' | 'max', value: number | undefined) => {
+  const updateCustomRDA = (key: string, field: string, value: any) => {
     setFormData(prev => ({
       ...prev,
       customRDAs: {
@@ -392,67 +533,86 @@ const DietPlanner = () => {
     const targetCals = formData.targetCalories;
     
     // Logic mirrored from nutrition.ts
-    const configs: Record<string, { target: number, max: number, unit?: string }> = {
-        energy: { target: targetCals, max: targetCals + 50 },
-        water: { target: isMale ? 3700 : 2700, max: 10000 },
-        fiber: { target: isMale ? 38 : 25, max: 100 },
-        sugars: { target: (targetCals * 0.05) / 4, max: (targetCals * 0.20) / 4 },
-        omega3: { target: isMale ? 1.6 : 1.1, max: 10 },
-        omega6: { target: isMale ? 17 : 12, max: 40 },
-        cholesterol: { target: 300, max: 600 },
-        b1: { target: isMale ? 1.2 : 1.1, max: 100 },
-        b2: { target: isMale ? 1.3 : 1.1, max: 100 },
-        b3: { target: isMale ? 16 : 14, max: 35 },
-        b5: { target: 5, max: 100 },
-        b6: { target: 1.7, max: 100 },
-        b12: { target: 2.4, max: 100 },
-        folate: { target: 400, max: 1000 },
-        a: { target: isMale ? 900 : 700, max: 3000, unit: 'mcg' },
-        c: { target: isMale ? 90 : 75, max: 2000, unit: 'mg' },
-        d: { target: 800, max: 4000, unit: 'IU' },
-        e: { target: 15, max: 1000, unit: 'mg' },
-        k: { target: isMale ? 120 : 90, max: 1000 },
-        calcium: { target: 1000, max: 2500 },
-        copper: { target: 0.9, max: 10 },
-        iron: { target: isMale ? 8 : 18, max: 45 },
-        magnesium: { target: isMale ? 420 : 320, max: 1000 },
-        manganese: { target: isMale ? 2.3 : 1.8, max: 11 },
-        phosphorus: { target: 700, max: 4000 },
-        potassium: { target: isMale ? 3400 : 2600, max: 10000 },
-        selenium: { target: 55, max: 400 },
-        sodium: { target: formData.age > 60 ? 1500 : 2300, max: formData.age > 60 ? 2300 : 3000 },
-        zinc: { target: isMale ? 11 : 8, max: 40 },
-        cystine: { target: weight * 6, max: 5000 },
-        histidine: { target: weight * 14, max: 5000 },
-        isoleucine: { target: weight * 19, max: 10000 },
-        leucine: { target: weight * 42, max: 20000 },
-        lysine: { target: weight * 38, max: 15000 },
-        methionine: { target: weight * 13, max: 5000 },
-        phenylalanine: { target: weight * 14, max: 10000 },
-        threonine: { target: weight * 20, max: 10000 },
-        tryptophan: { target: weight * 5, max: 2000 },
-        tyrosine: { target: weight * 19, max: 10000 },
-        valine: { target: weight * 24, max: 12000 }
+    const configs: Record<string, { target: number, max: number, essential: boolean, unit?: string }> = {
+        energy: { target: targetCals, max: targetCals + 50, essential: false },
+        water: { target: isMale ? 3700 : 2700, max: 10000, essential: false },
+        fiber: { target: isMale ? 38 : 25, max: 100, essential: true },
+        sugars: { target: (targetCals * 0.05) / 4, max: (targetCals * 0.20) / 4, essential: false },
+        omega3: { target: isMale ? 1.6 : 1.1, max: 10, essential: true },
+        omega6: { target: isMale ? 17 : 12, max: 40, essential: true },
+        cholesterol: { target: 300, max: 600, essential: true },
+        b1: { target: isMale ? 1.2 : 1.1, max: 100, essential: true },
+        b2: { target: isMale ? 1.3 : 1.1, max: 100, essential: true },
+        b3: { target: isMale ? 16 : 14, max: 35, essential: true },
+        b5: { target: 5, max: 100, essential: true },
+        b6: { target: 1.7, max: 100, essential: true },
+        b12: { target: 2.4, max: 100, essential: true },
+        folate: { target: 400, max: 1000, essential: true },
+        a: { target: isMale ? 900 : 700, max: 3000, unit: 'mcg', essential: true },
+        c: { target: isMale ? 90 : 75, max: 2000, unit: 'mg', essential: true },
+        d: { target: 800, max: 4000, unit: 'IU', essential: false },
+        e: { target: 15, max: 1000, unit: 'mg', essential: true },
+        k: { target: isMale ? 120 : 90, max: 1000, essential: true },
+        biotin: { target: 30, max: 100, unit: 'mcg', essential: true },
+        choline: { target: isMale ? 550 : 425, max: 3500, unit: 'mg', essential: true },
+        calcium: { target: 1000, max: 2500, essential: true },
+        copper: { target: 0.9, max: 10, essential: true },
+        iron: { target: isMale ? 8 : 18, max: 45, essential: true },
+        magnesium: { target: isMale ? 420 : 320, max: 1000, essential: true },
+        manganese: { target: isMale ? 2.3 : 1.8, max: 11, essential: true },
+        phosphorus: { target: 700, max: 4000, essential: true },
+        potassium: { target: isMale ? 3400 : 2600, max: 10000, essential: true },
+        selenium: { target: 55, max: 400, essential: true },
+        sodium: { target: formData.age > 60 ? 1500 : 2300, max: formData.age > 60 ? 2300 : 3000, essential: true },
+        zinc: { target: isMale ? 11 : 8, max: 40, essential: true },
+        iodine: { target: 150, max: 1100, unit: 'mcg', essential: true },
+        fluoride: { target: isMale ? 4 : 3, max: 10, unit: 'mg', essential: true },
+        boron: { target: 3, max: 20, unit: 'mg', essential: true },
+        chromium: { target: isMale ? 35 : 25, max: 200, unit: 'mcg', essential: true },
+        molybdenum: { target: 45, max: 2000, unit: 'mcg', essential: true },
+        chloride: { target: 2300, max: 3600, unit: 'mg', essential: true },
+        betaine: { target: 1500, max: 5000, unit: 'mg', essential: false },
+        lutein_zeaxanthin: { target: 10000, max: 20000, unit: 'mcg', essential: false },
+        lycopene: { target: 15000, max: 30000, unit: 'mcg', essential: false },
+        quercetin: { target: 25, max: 500, unit: 'mg', essential: false },
+        anthocyanins: { target: 50, max: 1000, unit: 'mg', essential: false },
+        cystine: { target: weight * 6, max: 5000, essential: true },
+        histidine: { target: weight * 14, max: 5000, essential: true },
+        isoleucine: { target: weight * 19, max: 10000, essential: true },
+        leucine: { target: weight * 42, max: 20000, essential: true },
+        lysine: { target: weight * 38, max: 15000, essential: true },
+        methionine: { target: weight * 13, max: 5000, essential: true },
+        phenylalanine: { target: weight * 14, max: 10000, essential: true },
+        threonine: { target: weight * 20, max: 10000, essential: true },
+        tryptophan: { target: weight * 5, max: 2000, essential: true },
+        tyrosine: { target: weight * 19, max: 10000, essential: true },
+        valine: { target: weight * 24, max: 12000, essential: true },
+        arginine: { target: weight * 30, max: 20000, essential: true },
+        glutamine: { target: 5000, max: 30000, essential: false },
+        glycine: { target: weight * 45, max: 20000, essential: true },
+        proline: { target: 2000, max: 15000, essential: false }
     };
 
     if (configs[key]) return configs[key];
     
     // Macro fallbacks (approximate for display)
-    if (key === 'protein') return { target: 2.2 * weight, max: 4.4 * weight };
-    if (key === 'carbs') return { target: 300, max: 600 };
-    if (key === 'fat') return { target: 70, max: 140 };
-    if (key.includes('fat')) return { target: targetCals * 0.1 / 9, max: targetCals * 0.15 / 9 };
+    if (key === 'protein') return { target: 2.2 * weight, max: 4.4 * weight, essential: true };
+    if (key === 'carbs') return { target: 300, max: 600, essential: false };
+    if (key === 'net_carbs') return { target: 250, max: 500, essential: false };
+    if (key === 'fat') return { target: 70, max: 140, essential: false };
+    if (key.includes('fat')) return { target: targetCals * 0.1 / 9, max: targetCals * 0.15 / 9, essential: true };
 
-    return { target: 0, max: 0 };
+    return { target: 0, max: 0, essential: false };
   };
 
   const nutrientGroups = [ 
-    { title: "General", keys: ["energy", "water", "caffeine", "alcohol"] },
-    { title: "Carbohydrates", keys: ["fiber", "sugars"] },
+    { title: "General", keys: ["water"] },
+    { title: "Carbohydrates", keys: ["fiber", "sugars", "net_carbs"] },
     { title: "Lipids", keys: ["cholesterol", "fatMono", "fatPoly", "omega3", "omega6", "fatSat", "fatTrans"] },
-    { title: "Protein (Amino Acids)", keys: ["cystine", "histidine", "isoleucine", "leucine", "lysine", "methionine", "phenylalanine", "threonine", "tryptophan", "tyrosine", "valine"] },
-    { title: "Vitamins", keys: ["b1", "b2", "b3", "b5", "b6", "b12", "folate", "a", "c", "d", "e", "k"] },
-    { title: "Minerals", keys: ["calcium", "copper", "iron", "magnesium", "manganese", "phosphorus", "potassium", "selenium", "sodium", "zinc"] }
+    { title: "Protein (Amino Acids)", keys: ["cystine", "histidine", "isoleucine", "leucine", "lysine", "methionine", "phenylalanine", "threonine", "tryptophan", "tyrosine", "valine", "arginine", "glutamine", "glycine", "proline"] },
+    { title: "Vitamins", keys: ["b1", "b2", "b3", "b5", "b6", "b12", "folate", "a", "c", "d", "e", "k", "biotin", "choline"] },
+    { title: "Minerals", keys: ["calcium", "copper", "iron", "magnesium", "manganese", "phosphorus", "potassium", "selenium", "sodium", "zinc", "iodine", "fluoride", "boron", "chromium", "molybdenum", "chloride"] },
+    { title: "Phytonutrients & Other", keys: ["betaine", "lutein_zeaxanthin", "lycopene", "quercetin", "anthocyanins"] }
   ];
 
   const [foodSearch, setFoodSearch] = useState('');
@@ -516,7 +676,7 @@ const DietPlanner = () => {
     });
 
     try {
-      const startRes = await fetch(`${API_BASE_URL}/api/start-generation`, {
+      const startRes = await fetch(`${API_BASE_URL}/api/macros100/start-generation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -527,7 +687,7 @@ const DietPlanner = () => {
       const startTime = Date.now();
       const interval = setInterval(async () => {
         try {
-            const statusRes = await fetch(`${API_BASE_URL}/api/status/${jobId}`);
+            const statusRes = await fetch(`${API_BASE_URL}/api/macros100/status/${jobId}`);
             const status = await statusRes.json();
             
             setProgress({
@@ -618,7 +778,7 @@ const DietPlanner = () => {
         }
     });
 
-    const aminoAcids = ['cystine', 'histidine', 'isoleucine', 'leucine', 'lysine', 'methionine', 'phenylalanine', 'threonine', 'tryptophan', 'tyrosine', 'valine'];
+    const aminoAcids = ['cystine', 'histidine', 'isoleucine', 'leucine', 'lysine', 'methionine', 'phenylalanine', 'threonine', 'tryptophan', 'tyrosine', 'valine', 'arginine', 'glutamine', 'glycine', 'proline'];
     Object.keys(newMicros).forEach(k => {
         const config = getDefaultNutrientConfig(k);
         const serverTarget = currentMicros[k]?.target;
@@ -770,19 +930,41 @@ const DietPlanner = () => {
 
   const getConversion = (name: string, amount: number) => {
     const n = name.toLowerCase();
-    if (n.includes('egg') && !n.includes('white')) return `~${(amount / 50).toFixed(1)} units`;
-    if (n.includes('apple')) return `~${(amount / 180).toFixed(1)} medium apples`;
-    if (n.includes('banana')) return `~${(amount / 120).toFixed(1)} units`;
-    if (n.includes('orange')) return `~${(amount / 150).toFixed(1)} units`;
-    if (n.includes('kiwi')) return `~${(amount / 70).toFixed(1)} units`;
     
+    // Exact juices
+    if (n.includes('juice')) {
+        if (n.includes('lemon')) return `~${(amount / 45).toFixed(1)} squeezed lemons`;
+        if (n.includes('lime')) return `~${(amount / 30).toFixed(1)} squeezed limes`;
+        return null; // Don't give "apple" units to "apple juice"
+    }
+
+    // Units
+    if (n.includes('egg') && !n.includes('white')) return `~${(amount / 50).toFixed(1)} units`;
+    if (n.includes('egg white')) return `~${(amount / 30).toFixed(1)} large egg whites`;
+    if (n.includes('apple')) return `~${(amount / 180).toFixed(1)} medium apples`;
+    if (n.includes('banana')) return `~${(amount / 120).toFixed(1)} medium bananas`;
+    if (n.includes('orange')) return `~${(amount / 150).toFixed(1)} medium oranges`;
+    if (n.includes('kiwi')) return `~${(amount / 70).toFixed(1)} medium kiwis`;
+    if (n.includes('avocado')) return `~${(amount / 150).toFixed(1)} medium avocados`;
+    if (n.includes('carrot')) return `~${(amount / 60).toFixed(1)} medium carrots`;
+    if (n.includes('tomato')) return `~${(amount / 120).toFixed(1)} medium tomatoes`;
+    if (n.includes('bell pepper')) return `~${(amount / 120).toFixed(1)} medium peppers`;
+    if (n.includes('cucumber')) return `~${(amount / 300).toFixed(1)} medium cucumbers`;
+    if (n.includes('zucchini')) return `~${(amount / 200).toFixed(1)} medium zucchinis`;
+    if (n.includes('grapefruit')) return `~${(amount / 250).toFixed(1)} medium grapefruits`;
+    if (n.includes('pear')) return `~${(amount / 180).toFixed(1)} medium pears`;
+    if (n.includes('peach')) return `~${(amount / 150).toFixed(1)} medium peaches`;
+    if (n.includes('plum')) return `~${(amount / 66).toFixed(1)} medium plums`;
+    if (n.includes('mango')) return `~${(amount / 200).toFixed(1)} medium mangoes`;
+
+    // Weight conversions
     if (n === 'potato (boiled)') return `~${(amount * 1.15).toFixed(0)}g raw weight`;
     if (n === 'sweet potato (boiled)') return `~${(amount * 1.15).toFixed(0)}g raw weight`;
     if (n === 'broccoli (cooked)') return `~${(amount * 1.1).toFixed(0)}g raw weight`;
     if (n.includes('rice') && n.includes('cooked')) return `~${(amount / 3).toFixed(0)}g dry weight`;
     if (n.includes('pasta') && n.includes('cooked')) return `~${(amount / 2.5).toFixed(0)}g dry weight`;
     if (n.includes('spaghetti') && n.includes('cooked')) return `~${(amount / 2.5).toFixed(0)}g dry weight`;
-    if (n.includes('chicken') || n.includes('beef') || n.includes('steak') || n.includes('pork')) {
+    if (n.includes('chicken') || n.includes('beef') || n.includes('steak') || n.includes('pork') || n.includes('lamb')) {
         return `~${(amount * 1.35).toFixed(0)}g raw weight`;
     }
     return null;
@@ -837,21 +1019,16 @@ const DietPlanner = () => {
         `}
       </style>
 
-      {/* MOBILE TOGGLE BUTTON */}
+      {/* MOBILE VIEW SWITCHER */}
       {diet && (
-        <div className="mobile-top-btn-wrapper">
+        <div className="d-lg-none" style={{ position: 'fixed', top: '15px', right: '15px', zIndex: 1050 }}>
             <Button 
-                variant="primary" 
-                size="sm" 
-                className="rounded-pill px-4 shadow-lg fw-bold border-2 border-white border-opacity-10"
+                variant="dark" 
+                className="rounded-circle shadow-lg border-2 border-primary p-2"
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                style={{ backdropFilter: 'blur(10px)', background: 'rgba(61, 155, 255, 0.8)' }}
+                style={{ width: '45px', height: '45px' }}
             >
-                {isSidebarCollapsed ? (
-                    <span className="d-flex align-items-center"><ChevronLeft size={18} className="me-1" /> go back</span>
-                ) : (
-                    <span className="d-flex align-items-center">view diet <ChevronRight size={18} className="ms-1" /></span>
-                )}
+                {isSidebarCollapsed ? <Settings size={20} /> : <ClipboardList size={20} />}
             </Button>
         </div>
       )}
@@ -956,16 +1133,25 @@ const DietPlanner = () => {
                                             <div className="fw-bold text-capitalize" style={{ fontSize: '0.85rem' }}>
                                                 {key === 'fatMono' ? 'Monounsaturated Fat' : key === 'fatPoly' ? 'Polyunsaturated Fat' : key === 'fatSat' ? 'Saturated Fat' : key === 'fatTrans' ? 'Trans Fat' : key.replace(/([A-Z])/g, ' $1')}
                                             </div>
-                                            {formData.customRDAs[key] && (
-                                                <Button 
-                                                    variant="link" 
-                                                    className="p-0 text-muted hover-text-primary" 
-                                                    onClick={() => revertNutrient(key)}
-                                                    title="Revert to standard"
-                                                >
-                                                    <RotateCcw size={14} />
-                                                </Button>
-                                            )}
+                                            <div className="d-flex align-items-center gap-2">
+                                                <Form.Check 
+                                                    type="switch"
+                                                    id={`essential-${key}`}
+                                                    label={<small className="text-muted fw-bold" style={{ fontSize: '0.65rem' }}>ESSENTIAL</small>}
+                                                    checked={formData.customRDAs[key]?.essential ?? true}
+                                                    onChange={(e) => updateCustomRDA(key, 'essential', e.target.checked)}
+                                                />
+                                                {formData.customRDAs[key] && (
+                                                    <Button 
+                                                        variant="link" 
+                                                        className="p-0 text-muted hover-text-primary" 
+                                                        onClick={() => revertNutrient(key)}
+                                                        title="Revert to standard"
+                                                    >
+                                                        <RotateCcw size={14} />
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </div>
                                         <Row className="g-2">
                                             <Col xs={6}>
@@ -1125,77 +1311,87 @@ const DietPlanner = () => {
                       <Form.Check 
                         type="switch"
                         id="custom-macros-switch"
-                        label={<small className="text-muted" style={{ fontSize: '0.7rem' }}>Custom Settings</small>}
+                        label={<small className="text-muted" style={{ fontSize: '0.7rem' }}>Enable Custom</small>}
                         checked={formData.customMacros}
                         onChange={(e) => setFormData(prev => ({ ...prev, customMacros: e.target.checked }))}
                       />
                     </h3>
+                    
                     <div style={{ opacity: formData.customMacros ? 1 : 0.5, pointerEvents: formData.customMacros ? 'all' : 'none', transition: 'opacity 0.2s' }}>
                       {(() => {
-                        const calc = { protein: 0, fat: 0, carbs: 0 };
-                        const targetCals = formData.targetCalories;
+                        const targetCals = formData.targetCalories || 2000;
                         
-                        ['protein', 'fat', 'carbs'].forEach(m => {
-                          const macro = (formData.macros as any)[m];
-                          if (macro.mode === 'g/kg') calc[m as keyof typeof calc] = macro.value * formData.weight;
-                          else if (macro.mode === '%') calc[m as keyof typeof calc] = (macro.value / 100 * targetCals) / (m === 'fat' ? 9 : 4);
-                          else if (macro.mode === 'g') calc[m as keyof typeof calc] = macro.value;
-                        });
-                        const remainderMacro = Object.keys(formData.macros).find(k => (formData.macros as any)[k].mode === 'remainder');
-                        if (remainderMacro) {
-                          const usedCals = (calc.protein * 4) + (calc.fat * 9) + (calc.carbs * 4);
-                          calc[remainderMacro as keyof typeof calc] = Math.max(0, targetCals - usedCals) / (remainderMacro === 'fat' ? 9 : 4);
-                        }
+                        // Convert current values to percentages for the Pie component
+                        const getPct = (m: 'protein'|'fat'|'carbs') => {
+                          const macro = formData.macros[m];
+                          if (macro.mode === '%') return macro.value / 100;
+                          if (macro.mode === 'g/kg') return (macro.value * formData.weight * (m === 'fat' ? 9 : 4)) / targetCals;
+                          if (macro.mode === 'g') return (macro.value * (m === 'fat' ? 9 : 4)) / targetCals;
+                          return 0.33; // Fallback
+                        };
+
+                        const pPct = getPct('protein');
+                        const fPct = getPct('fat');
 
                         return (
-                          <Row className="g-3">
-                            {['protein', 'fat', 'carbs'].map(macroName => {
-                              const mData = (formData.macros as any)[macroName];
-                              const color = macroName === 'protein' ? 'var(--accent-danger)' : macroName === 'carbs' ? 'var(--accent-primary)' : 'var(--accent-warn)';
-                              return (
-                                <Col key={macroName} xs={4}>
-                                  <div className="text-center p-2 rounded-3 border bg-light bg-opacity-5">
-                                    <div className="text-capitalize fw-bold small mb-2" style={{ color, letterSpacing: '0.05em' }}>{macroName}</div>
-                                    <div className="h4 fw-bold mb-3" style={{ color }}>{Math.round(calc[macroName as keyof typeof calc])}g</div>
-                                    
-                                    <Form.Control 
-                                      size="sm" 
-                                      type="number" 
-                                      step="any" 
-                                      className="mb-2 text-center"
-                                      disabled={mData.mode === 'remainder'} 
-                                      value={mData.value} 
-                                      onChange={(e) => handleMacroChange(macroName as any, 'value', e.target.value)} 
-                                    />
-                                    
-                                    <Form.Select 
-                                      size="sm" 
-                                      className="mb-3 text-center"
-                                      value={mData.mode} 
-                                      onChange={(e) => handleMacroChange(macroName as any, 'mode', e.target.value)}
-                                    >
-                                      <option value="g/kg">g/kg</option>
-                                      <option value="%">%</option>
-                                      <option value="g">g</option>
-                                      <option value="remainder">Rem.</option>
-                                    </Form.Select>
-
-                                    <div className="d-flex justify-content-center">
-                                      <Form.Check 
-                                        type="switch"
-                                        reverse
-                                        id={`strict-${macroName}`}
-                                        className="small-switch centered-switch"
-                                        label={<div style={{ fontSize: '0.6rem', color: '#888', fontWeight: 'bold' }}>STRICT</div>}
-                                        checked={mData.strict}
-                                        onChange={(e) => handleMacroChange(macroName as any, 'strict', e.target.checked)}
-                                      />
+                          <>
+                            <InteractiveMacroPie 
+                              proteinPct={pPct}
+                              fatPct={fPct}
+                              targetCalories={targetCals}
+                              weight={formData.weight}
+                              formData={formData}
+                              onChangeStatus={(id, status) => {
+                                handleMacroChange(id, 'strictness', status);
+                              }}
+                              onChange={(newP, newF) => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  macros: {
+                                    protein: { ...prev.macros.protein, mode: '%', value: Math.round(newP * 100) },
+                                    fat: { ...prev.macros.fat, mode: '%', value: Math.round(newF * 100) },
+                                    carbs: { ...prev.macros.carbs, mode: '%', value: Math.round((1 - newP - newF) * 100) }
+                                  }
+                                }));
+                              }}
+                            />
+                            
+                            <Row className="g-2 mt-4">
+                              {[
+                                { id: 'protein', label: 'Protein', color: '#ff3131', pct: pPct, grams: (pPct * targetCals) / 4, cal: pPct * targetCals },
+                                { id: 'fat', label: 'Fat', color: '#ffea00', pct: fPct, grams: (fPct * targetCals) / 9, cal: fPct * targetCals },
+                                { id: 'carbs', label: 'Carbs', color: '#3d9bff', pct: (1 - pPct - fPct), grams: ((1 - pPct - fPct) * targetCals) / 4, cal: (1 - pPct - fPct) * targetCals }
+                              ].map(m => {
+                                const divisor = m.id === 'fat' ? 9 : 4;
+                                return (
+                                <Col key={m.id} xs={12}>
+                                  <div className="d-flex justify-content-between align-items-center mb-3">
+                                    <div className="d-flex flex-column">
+                                      <div className="d-flex align-items-center gap-2">
+                                        <span className="fw-bold text-uppercase" style={{ color: m.color }}>{m.label}</span>
+                                        <span className="text-white small fw-bold">{Math.round(m.pct * 100)}%</span>
+                                      </div>
+                                      <div className="text-muted small">
+                                        {Math.round(m.grams)}g / {Math.round(m.cal)} kcal / {(m.grams / formData.weight).toFixed(1)} g/kg
+                                      </div>
                                     </div>
+                                    <Form.Select 
+                                      size="sm"
+                                      className="w-auto border-0 shadow-none bg-dark text-white fw-bold"
+                                      style={{ fontSize: '0.8rem', cursor: 'pointer' }}
+                                      value={formData.macros[m.id as 'protein'|'fat'|'carbs'].strictness || 'none'}
+                                      onChange={(e) => handleMacroChange(m.id as any, 'strictness', e.target.value)}
+                                    >
+                                      <option value="none">AUTO</option>
+                                      <option value="relaxed">RELAXED</option>
+                                      <option value="strict">STRICT</option>
+                                    </Form.Select>
                                   </div>
                                 </Col>
-                              );
-                            })}
-                          </Row>
+                                );
+                              })}
+                            </Row>
+                          </>
                         );
                       })()}
                     </div>
@@ -1238,24 +1434,8 @@ const DietPlanner = () => {
 
                     <hr className="my-4" />
 
-                    <h3 className="h5 mb-3 d-flex align-items-center fw-bold">
-                      <Activity className="me-2 text-info" size={20} /> Optimization Model
-                    </h3>
-                    <div className="mb-3">
-                      <Form.Select name="algoModel" value={formData.algoModel} onChange={handleInputChange}>
-                        <option value="beast">Beast Mode (Fast, 1000 trials)</option>
-                        <option value="titan">Titan Mode (Balanced, 5000 trials)</option>
-                        <option value="olympian">Olympian Mode (Deep, 10000 trials)</option>
-                        <option value="god">God Mode (Exhaustive, 20000 trials)</option>
-                      </Form.Select>
-                      <Form.Text className="text-muted small mt-2 d-block">
-                        Higher modes run more simulations to find better nutrient coverage but take longer to complete.
-                      </Form.Text>
-                    </div>
-
-                    <hr className="my-4" />
-
                     <h3 className="h5 mb-3 d-flex align-items-center justify-content-between fw-bold">
+
                       <span className="d-flex align-items-center"><Activity className="me-2 text-info" size={20} /> Advanced Settings</span>
                       <Form.Check 
                         type="switch"
@@ -1321,45 +1501,17 @@ const DietPlanner = () => {
             <div className="text-center py-5 fade-in">
               <Spinner animation="border" variant="primary" className="mb-4" style={{ width: '3.5rem', height: '3.5rem', borderWidth: '0.25rem' }} />
               <h3 className="h2 fw-bold mb-2">Simulating Biological System</h3>
-              <p className="text-muted mb-2">Phase: <span className="text-primary fw-bold">{progress.generation < 500 ? 'Nutrient Saturation' : progress.generation < 20000 ? 'Evolutionary Search' : 'Molecular Refinement'}</span></p>
-              <p className="text-info fw-bold mb-5" style={{ letterSpacing: '0.1em' }}>{progress.telemetry.trialInfo || 'Trial 1/5'}</p>
-              <div className="mx-auto my-4" style={{ maxWidth: '650px' }}>
-                <div className="d-flex justify-content-between text-muted small mb-2 fw-bold"><span>GENETIC OPTIMIZATION</span><span>{Math.round(progress.generation)}% COMPLETE</span></div>
-                <ProgressBar animated now={progress.generation} className="mb-5 shadow-sm" style={{ height: '10px' }} />
-                <Card className="telemetry-card shadow-lg text-start font-monospace mb-4" style={{ background: '#121212', border: '1px solid rgba(255,255,255,0.1)' }}>
-                    <Card.Header className="bg-transparent border-secondary border-opacity-25 small text-uppercase text-info fw-bold py-3 px-4"><div className="d-flex align-items-center"><Activity size={16} className="me-2" />Real-time AI Telemetry</div></Card.Header>
-                    <Card.Body className="p-4">
-                        <Row className="g-4 mb-4">
-                            <Col xs={6} md={3}><div className="text-muted small mb-1">Energy</div><div className={`h3 mb-0 fw-bold ${progress.telemetry.calories > formData.weight * 35 ? 'text-warning' : 'text-success'}`}>{progress.telemetry.calories} <small className="fs-6 fw-normal opacity-75">kcal</small></div></Col>
-                            <Col xs={6} md={3}><div className="text-muted small mb-1">Fat</div><div className={`h3 mb-0 fw-bold ${progress.telemetry.fat > 100 ? 'text-danger' : 'text-success'}`}>{progress.telemetry.fat} <small className="fs-6 fw-normal opacity-75">g</small></div></Col>
-                            <Col xs={6} md={3}><div className="text-muted small mb-1">Fitness Score</div><div className="h3 mb-0 fw-bold text-info">{progress.telemetry.score}</div></Col>
-                            <Col xs={6} md={3}><div className="text-muted small mb-1">Runtime</div><div className="h3 mb-0 fw-bold text-white">{progress.time}s</div></Col>
-                        </Row>
-                        <div className="p-3 rounded-3 mb-4" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                          <div className="d-flex align-items-center mb-2">
-                              <div className="flex-grow-1"><div className="text-muted small mb-1">Critical Bottleneck: <span className="text-danger fw-bold">{progress.telemetry.worstNutrient}</span></div><ProgressBar variant="danger" now={progress.telemetry.worstPct} style={{ height: '6px' }} /></div>
-                              <div className="ms-3 h3 mb-0 text-danger fw-bold">{progress.telemetry.worstPct}%</div>
-                          </div>
-                        </div>
-                        <div className="text-muted small mb-3 text-uppercase fw-bold letter-spacing-1">Distributed Evolution Islands</div>
-                        <Row className="g-2">
-                            {progress.telemetry?.islands?.map((island, idx) => (
-                                <Col xs={6} key={idx}>
-                                    <div className="p-2 rounded-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                        <div className="small text-muted mb-2 d-flex justify-content-between px-1"><span>Node {idx + 1}</span><span className="text-info fw-bold">{Math.round((island?.reduce((a,b)=>a+b,0) || 0) / (island?.length || 1))}%</span></div>
-                                        <div className="d-flex flex-wrap gap-1">
-                                            {island?.map((acc, i) => (
-                                                <div key={i} style={{ width: '20px', height: '16px', fontSize: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '3px', backgroundColor: acc > 95 ? '#10b981' : acc > 80 ? '#3b82f6' : '#334155' }} className="fw-bold text-white">{Math.floor(acc)}</div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </Col>
-                            ))}
-                        </Row>
-                    </Card.Body>
-                </Card>
+              <p className="text-muted mb-5">Optimization runtime: <span className="text-primary fw-bold">{progress.time}s</span></p>
+              <div className="mx-auto" style={{ maxWidth: '650px' }}>
+                <div className="d-flex justify-content-between text-muted small mb-2 fw-bold">
+                    <span>OPTIMIZING</span>
+                    <span>{Math.round(progress.generation)}%</span>
+                </div>
+                <ProgressBar animated now={progress.generation} className="shadow-sm" style={{ height: '12px' }} />
               </div>
-              <Button variant="outline-danger" size="sm" className="px-4 border-0" onClick={cancelGeneration}>Terminate Session</Button>
+              <div className="mt-4">
+                <Button variant="outline-danger" size="sm" className="px-4 border-0" onClick={cancelGeneration}>Terminate Session</Button>
+              </div>
             </div>
           ) : diet ? (
             <div className="fade-in pb-5">
@@ -1639,11 +1791,12 @@ const DietPlanner = () => {
                     
                     {[ 
                       { title: "General", keys: ["energy", "water", "caffeine", "alcohol"] },
-                      { title: "Carbohydrates", keys: ["carbs", "fiber", "sugars"] },
+                      { title: "Carbohydrates", keys: ["carbs", "net_carbs", "fiber", "sugars"] },
                       { title: "Lipids", keys: ["fat", "cholesterol", "fatMono", "fatPoly", "omega3", "omega6", "fatSat", "fatTrans"] },
-                      { title: "Protein (Amino Acids)", keys: ["protein", "cystine", "histidine", "isoleucine", "leucine", "lysine", "methionine", "phenylalanine", "threonine", "tryptophan", "tyrosine", "valine"] },
-                      { title: "Vitamins", keys: ["b1", "b2", "b3", "b5", "b6", "b12", "folate", "a", "c", "d", "e", "k"] },
-                      { title: "Minerals", keys: ["calcium", "copper", "iron", "magnesium", "manganese", "phosphorus", "potassium", "selenium", "sodium", "zinc"] }
+                      { title: "Protein (Amino Acids)", keys: ["protein", "cystine", "histidine", "isoleucine", "leucine", "lysine", "methionine", "phenylalanine", "threonine", "tryptophan", "tyrosine", "valine", "arginine", "glutamine", "glycine", "proline"] },
+                      { title: "Vitamins", keys: ["b1", "b2", "b3", "b5", "b6", "b12", "folate", "a", "c", "d", "e", "k", "biotin", "choline"] },
+                      { title: "Minerals", keys: ["calcium", "copper", "iron", "magnesium", "manganese", "phosphorus", "potassium", "selenium", "sodium", "zinc", "iodine", "fluoride", "boron", "chromium", "molybdenum", "chloride"] },
+                      { title: "Phytonutrients & Other", keys: ["betaine", "lutein_zeaxanthin", "lycopene", "quercetin", "anthocyanins"] }
                     ].map(group => {
                       const visibleKeys = group.keys.filter(k => diet.micronutrients[k]);
                       if (visibleKeys.length === 0) return null;
@@ -1661,9 +1814,14 @@ const DietPlanner = () => {
                               let statusClass = 'text-danger-vibrant';
                               let variant = 'danger';
                               
+                              const isOptimal = data.optimalMin && data.optimalMax && data.amount >= (data.optimalMin * 0.85) && data.amount <= (data.optimalMax * 1.15);
+                              
                               if (isOverMax) {
                                 statusClass = ''; // Clear classes to use inline style
                                 variant = 'warning';
+                              } else if (isOptimal) {
+                                statusClass = 'text-primary-vibrant';
+                                variant = 'primary';
                               } else if (pct >= 95) {
                                 statusClass = 'text-success-vibrant';
                                 variant = 'success';
@@ -1671,6 +1829,21 @@ const DietPlanner = () => {
                                 statusClass = 'text-warning-vibrant';
                                 variant = 'warning';
                               }
+
+                              const topFoods = [...foods]
+                                .map(f => {
+                                  let val = 0;
+                                  if (name === 'energy') val = f.calories;
+                                  else if (name === 'protein') val = f.protein;
+                                  else if (name === 'carbs') val = f.carbs;
+                                  else if (name === 'fat') val = f.fat;
+                                  else if (name === 'net_carbs') val = Math.max(0, f.carbs - (f.nutrients?.fiber || 0));
+                                  else val = f.nutrients?.[name] || 0;
+                                  return { name: f.name, value: val };
+                                })
+                                .filter(f => f.value > 0)
+                                .sort((a, b) => b.value - a.value)
+                                .slice(0, 10);
 
                               return (
                                 <Col md={6} xl={4} key={name}>
@@ -1684,8 +1857,10 @@ const DietPlanner = () => {
                                           <div className="fw-bold border-bottom border-secondary border-opacity-25 pb-2 mb-3 text-uppercase" style={{ fontSize: '0.9rem', letterSpacing: '0.05em', color: '#3d9bff' }}>
                                             {name === 'fatMono' ? 'Monounsaturated Fat' : name === 'fatPoly' ? 'Polyunsaturated Fat' : name === 'fatSat' ? 'Saturated Fat' : name === 'fatTrans' ? 'Trans Fat' : name === 'energy' ? 'Energy' : name.replace(/([A-Z])/g, ' $1')}
                                           </div>
+                                          
+                                          <div className="text-info small fw-bold mb-2 text-uppercase tracking-wider" style={{ fontSize: '0.75rem' }}>Current Diet Contributors</div>
                                           {data.sources && data.sources.length > 0 ? (
-                                            <div className="d-flex flex-column gap-2">
+                                            <div className="d-flex flex-column gap-2 mb-3">
                                               {data.sources.slice(0, 10).map((src, i) => (
                                                 <div key={i} className="d-flex justify-content-between align-items-center gap-4">
                                                   <span className="text-white small fw-medium text-truncate" style={{ maxWidth: '180px', fontSize: '0.85rem' }}>{src.food}</span>
@@ -1697,7 +1872,20 @@ const DietPlanner = () => {
                                               {data.sources.length > 10 && <div className="text-center text-muted small mt-2">+{data.sources.length - 10} more ingredients</div>}
                                             </div>
                                           ) : (
-                                            <div className="text-muted small italic">No specific sources identified.</div>
+                                            <div className="text-muted small italic mb-3">No specific sources identified.</div>
+                                          )}
+
+                                          {topFoods.length > 0 && (
+                                            <div className="pt-3 border-top border-secondary border-opacity-25">
+                                              <div className="text-primary-vibrant small fw-bold mb-2 text-uppercase tracking-wider" style={{ fontSize: '0.75rem' }}>Top 10 Sources (Highest Concentration)</div>
+                                              <div className="small text-white opacity-75" style={{ lineHeight: '1.5', fontSize: '0.8rem' }}>
+                                                {topFoods.map((f, i) => (
+                                                  <span key={i}>
+                                                    {f.name}{i < topFoods.length - 1 ? ', ' : ''}
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            </div>
                                           )}
                                         </div>
                                       </Tooltip>
