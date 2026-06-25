@@ -11,18 +11,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const nutrientNames: Record<string, string> = {
-    energy: 'Calories', water: 'Water', protein: 'Protein', carbs: 'Carbs', fat: 'Fat', fatSat: 'Saturated Fat', fatPoly: 'Polyunsaturated Fat', fatMono: 'Monounsaturated Fat', fatTrans: 'Trans Fat', fiber: 'Fiber', starch: 'Starch', sugars: 'Sugar', omega3: 'Omega-3', omega6: 'Omega-6', cholesterol: 'Cholesterol',
-    b1: 'Vitamin B1', b2: 'Vitamin B2', b3: 'Vitamin B3', b5: 'Vitamin B5', b6: 'Vitamin B6', b12: 'Vitamin B12', folate: 'Folate', a: 'Vitamin A', c: 'Vitamin C', d: 'Vitamin D', e: 'Vitamin E', k: 'Vitamin K',
+    energy: 'Calories', water: 'Water', protein: 'Protein', carbs: 'Carbs', fat: 'Fat', fatSat: 'Saturated Fat', fatPoly: 'Polyunsaturated Fat', fatMono: 'Monounsaturated Fat', fatTrans: 'Trans Fat', fiber: 'Fiber', starch: 'Starch', sugars: 'Sugar', net_carbs: 'Net Carbs', omega3: 'Omega-3', omega6: 'Omega-6', cholesterol: 'Cholesterol',
+    b1: 'Vitamin B1', b2: 'Vitamin B2', b3: 'Vitamin B3', b5: 'Vitamin B5', b6: 'Vitamin B6', b12: 'Vitamin B12', folate: 'Folate', a: 'Vitamin A', c: 'Vitamin C', d: 'Vitamin D', e: 'Vitamin E', k: 'Vitamin K', biotin: 'Biotin',
     calcium: 'Calcium', copper: 'Copper', iron: 'Iron', magnesium: 'Magnesium', manganese: 'Manganese', phosphorus: 'Phosphorus', potassium: 'Potassium', selenium: 'Selenium', sodium: 'Sodium', zinc: 'Zinc',
-    iodine: 'Iodine', fluoride: 'Fluoride', caffeine: 'Caffeine', alcohol: 'Alcohol',
-    cystine: 'Cystine', histidine: 'Histidine', isoleucine: 'Isoleucine', leucine: 'Leucine', lysine: 'Lysine', methionine: 'Methionine', phenylalanine: 'Phenylalanine', threonine: 'Threonine', tryptophan: 'Tryptophan', tyrosine: 'Tyrosine', valine: 'Valine'
+    iodine: 'Iodine', fluoride: 'Fluoride', choline: 'Choline', boron: 'Boron', chromium: 'Chromium', molybdenum: 'Molybdenum', chloride: 'Chloride', betaine: 'Betaine',
+    lutein_zeaxanthin: 'Lutein & Zeaxanthin', lycopene: 'Lycopene', quercetin: 'Quercetin', anthocyanins: 'Anthocyanins',
+    cystine: 'Cystine', histidine: 'Histidine', isoleucine: 'Isoleucine', leucine: 'Leucine', lysine: 'Lysine', methionine: 'Methionine', phenylalanine: 'Phenylalanine', threonine: 'Threonine', tryptophan: 'Tryptophan', tyrosine: 'Tyrosine', valine: 'Valine',
+    arginine: 'Arginine', glutamine: 'Glutamine', glycine: 'Glycine', proline: 'Proline'
 };
 
 const CONSISTENT_FOOD_DATABASE = FOOD_DATABASE;
 
 export function generateDietAsync(details: any, onProgress: (msg: any) => void) {
+  console.log("Nutrition: Generating diet for profile:", JSON.stringify(details));
   let targetCalories: number;
-  if (details.maintenanceCalories !== undefined && details.calorieOffset !== undefined) {
+  if (details.targetCalories !== undefined) {
+    targetCalories = parseFloat(details.targetCalories);
+  } else if (details.maintenanceCalories !== undefined && details.calorieOffset !== undefined) {
     targetCalories = parseFloat(details.maintenanceCalories) + parseFloat(details.calorieOffset);
   } else {
     const lbm = details.weight * (1 - (details.bodyFat / 100));
@@ -42,28 +47,53 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
   };
 
   if (details.macros) {
-    proteinTarget = calcMacro(details.macros.protein, 'p', targetCalories, details.weight);
-    fatTarget = calcMacro(details.macros.fat, 'f', targetCalories, details.weight);
-    carbTarget = calcMacro(details.macros.carbs, 'c', targetCalories, details.weight);
-    const usedCals = (proteinTarget * 4) + (fatTarget * 9) + (carbTarget * 4);
-    const remainingCals = Math.max(0, targetCalories - usedCals);
-    if (details.macros.protein?.mode === 'remainder') proteinTarget = remainingCals / 4;
-    else if (details.macros.fat?.mode === 'remainder') fatTarget = remainingCals / 9;
-    else if (details.macros.carbs?.mode === 'remainder') carbTarget = remainingCals / 4;
-    else if (usedCals < targetCalories) carbTarget += remainingCals / 4;
+    const pStrict = (details.macros.protein.strictness || (details.macros.protein.strict ? 'strict' : 'none')) !== 'none';
+    const fStrict = (details.macros.fat.strictness || (details.macros.fat.strict ? 'strict' : 'none')) !== 'none';
+    const cStrict = (details.macros.carbs.strictness || (details.macros.carbs.strict ? 'strict' : 'none')) !== 'none';
+
+    proteinTarget = pStrict ? calcMacro(details.macros.protein, 'p', targetCalories, details.weight) : (0.8 * details.weight);
+    fatTarget = fStrict ? calcMacro(details.macros.fat, 'f', targetCalories, details.weight) : (targetCalories * 0.25 / 9);
+    carbTarget = cStrict ? calcMacro(details.macros.carbs, 'c', targetCalories, details.weight) : (targetCalories * 0.45 / 4);
+    
+    let usedCals = (proteinTarget * 4) + (fatTarget * 9) + (carbTarget * 4);
+    let remainingCals = targetCalories - usedCals;
+    
+    // Distribute surplus to "none" macros equally
+    if (remainingCals !== 0) {
+      const pNone = !pStrict;
+      const fNone = !fStrict;
+      const cNone = !cStrict;
+      
+      const noneCount = (pNone ? 1 : 0) + (fNone ? 1 : 0) + (cNone ? 1 : 0);
+      
+      if (noneCount > 0) {
+        if (pNone) proteinTarget += (remainingCals / noneCount) / 4;
+        if (fNone) fatTarget += (remainingCals / noneCount) / 9;
+        if (cNone) carbTarget += (remainingCals / noneCount) / 4;
+      } else {
+        // If all are strict, the user might have provided inconsistent values. 
+        // We still need to pass the target macros to the worker, but we allow deviation there.
+        // If total macro calories < targetCalories, we put the rest in carbs by default for the worker targets
+        carbTarget += remainingCals / 4;
+      }
+    }
   }
 
   const isMale = details.gender === 'male';
 
+  console.log("Nutrition: targetCalories passed to worker:", targetCalories);
+  console.log("Nutrition: Targets -> P:", proteinTarget, "F:", fatTarget, "C:", carbTarget);
   const nutrientConfig: Record<string, NutrientConfig> = {
-    energy: { target: targetCalories, max: targetCalories + 50 },
-    water: { target: isMale ? 3700 : 2700, max: 10000 },
-    protein: { target: proteinTarget, essential: true, max: proteinTarget * 2 },
-    carbs: { target: carbTarget, max: carbTarget * 2 },
-    fat: { target: fatTarget, max: fatTarget * 2 },
+    energy: { target: targetCalories, max: targetCalories + 150 },
+    water: { target: isMale ? 3700 : 2700, max: 20000 },
+    protein: { target: proteinTarget, essential: true, max: Math.max(proteinTarget * 2, 4.0 * details.weight) },
+    carbs: { target: carbTarget, max: Math.max(carbTarget * 2, 1000) },
+    net_carbs: { target: carbTarget * 0.9, max: Math.max(carbTarget * 1.5, 1000) },
+    fat: { target: fatTarget, max: Math.max(fatTarget * 2, (targetCalories * 0.8) / 9) },
     fatSat: { target: targetCalories * 0.1 / 9, essential: true, max: targetCalories * 0.15 / 9 },
     fatPoly: { target: targetCalories * 0.08 / 9, essential: true, max: targetCalories * 0.15 / 9 },
     fatMono: { target: targetCalories * 0.12 / 9, essential: true, max: targetCalories * 0.20 / 9 },
+    fatTrans: { target: 0, max: 2, unit: 'g' },
     fiber: { target: isMale ? 38 : 25, essential: true, max: isMale ? 60 : 50 },
     sugars: { target: (targetCalories * 0.05) / 4, max: (targetCalories * 0.20) / 4 },
     omega3: { target: isMale ? 1.6 : 1.1, essential: true, max: 10 },
@@ -81,6 +111,7 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
     d: { target: 800, max: 4000, unit: 'IU' },
     e: { target: 15, essential: true, max: 1000, unit: 'mg' },
     k: { target: isMale ? 120 : 90, essential: true, max: 625 },
+    biotin: { target: 30, essential: true, max: 100, unit: 'mcg' },
     calcium: { target: (details.age > 70 || (!isMale && details.age > 50)) ? 1200 : 1000, essential: true, max: 2500 },
     copper: { target: 0.9, essential: true, max: 3.75 },
     iron: { target: isMale ? 8 : 18, essential: true, max: 45 },
@@ -91,6 +122,18 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
     selenium: { target: 55, essential: true, max: 400 },
     sodium: { target: details.age > 60 ? 1500 : 2300, essential: true, max: details.age > 60 ? 2300 : 3000 },
     zinc: { target: isMale ? 11 : 8, essential: true, max: 40 },
+    iodine: { target: 150, essential: true, max: 1100, unit: 'mcg' },
+    fluoride: { target: isMale ? 4 : 3, essential: true, max: 10, unit: 'mg' },
+    choline: { target: isMale ? 550 : 425, essential: true, max: 3500, unit: 'mg' },
+    boron: { target: 3, essential: true, max: 20, unit: 'mg' },
+    chromium: { target: isMale ? 35 : 25, essential: true, max: 200, unit: 'mcg' },
+    molybdenum: { target: 45, essential: true, max: 2000, unit: 'mcg' },
+    chloride: { target: 2300, essential: true, max: 3600, unit: 'mg' },
+    betaine: { target: 1500, essential: true, max: 5000, unit: 'mg' },
+    lutein_zeaxanthin: { target: 10000, essential: true, max: 20000, unit: 'mcg' },
+    lycopene: { target: 15000, essential: true, max: 30000, unit: 'mcg' },
+    quercetin: { target: 25, essential: true, max: 500, unit: 'mg' },
+    anthocyanins: { target: 50, essential: true, max: 1000, unit: 'mg' },
     cystine: { target: details.weight * 6, essential: true, max: 5000 },
     histidine: { target: details.weight * 14, essential: true, max: 5000 },
     isoleucine: { target: details.weight * 19, essential: true, max: 10000 },
@@ -102,7 +145,37 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
     tryptophan: { target: details.weight * 5, essential: true, max: 2000 },
     tyrosine: { target: details.weight * 19, essential: true, max: 10000 },
     valine: { target: details.weight * 24, essential: true, max: 12000 },
+    arginine: { target: details.weight * 30, essential: true, max: 20000 },
+    glutamine: { target: 5000, max: 30000 },
+    glycine: { target: details.weight * 45, essential: true, max: 20000 },
+    proline: { target: 2000, max: 15000 },
   };
+
+  // Apply Custom RDAs
+  if (details.customRDAs) {
+    Object.entries(details.customRDAs).forEach(([k, config]: [string, any]) => {
+      if (nutrientConfig[k]) {
+        if (config.target !== undefined && !isNaN(config.target)) nutrientConfig[k].target = config.target;
+        if (config.max !== undefined && !isNaN(config.max)) nutrientConfig[k].max = config.max;
+        if (config.optimalMin !== undefined && !isNaN(config.optimalMin)) nutrientConfig[k].optimalMin = config.optimalMin;
+        if (config.optimalMax !== undefined && !isNaN(config.optimalMax)) nutrientConfig[k].optimalMax = config.optimalMax;
+        if (config.essential !== undefined) nutrientConfig[k].essential = config.essential;
+      }
+    });
+  }
+
+  // Calculate default optimal sweet spots if not explicitly defined
+  Object.keys(nutrientConfig).forEach(k => {
+    const c = nutrientConfig[k];
+    if (c.max && c.max > c.target) {
+      if (c.optimalMin === undefined) c.optimalMin = c.target + (c.max - c.target) * 0.25;
+      if (c.optimalMax === undefined) c.optimalMax = c.target + (c.max - c.target) * 0.60;
+    } else {
+      // If no max is defined or max is <= target, the sweet spot is just >= target
+      if (c.optimalMin === undefined) c.optimalMin = c.target;
+      if (c.optimalMax === undefined) c.optimalMax = c.target * 2;
+    }
+  });
 
   const essentialKeys = Object.keys(nutrientConfig).filter(k => {
     if (k === 'sugars' || k === 'water') return false; 
@@ -140,14 +213,22 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
         }
         
         console.log(`[Nutrition] Spawning worker from: ${workerPath} for model: ${details.algoModel}`);
-        const worker = new Worker(workerPath, {
+        const workerOptions: any = {
           workerData: {
             FOOD_DATABASE: CONSISTENT_FOOD_DATABASE,
             details, targetCalories,
             proteinTarget, fatTarget, carbTarget, essentialKeys, nutrientNames, nutrientConfig,
             seedGenome: seed
           }
-        });
+        };
+
+        if (workerPath.endsWith('.ts')) {
+            workerOptions.execArgv = ['--loader', 'ts-node/esm'];
+            // To support tsx if available instead: 
+            // workerOptions.execArgv = ['--import', 'tsx']; 
+        }
+
+        const worker = new Worker(workerPath, workerOptions);
         phaseWorkers.push(worker);
         activeWorkers.push(worker);
 
@@ -184,7 +265,7 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
           }
         });
         worker.on('error', (err: any) => {
-            console.error(`[Nutrition] Worker error: ${err.message || String(err)}`);
+            console.error(`[Nutrition] Worker error:`, err);
             completedWorkers++;
             if (completedWorkers === workerCount) resolve(currentPhaseBest);
         });
@@ -224,7 +305,7 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
         }
 
         const breakdown: any = {};
-        const aminoAcids = ['cystine', 'histidine', 'isoleucine', 'leucine', 'lysine', 'methionine', 'phenylalanine', 'threonine', 'tryptophan', 'tyrosine', 'valine'];
+        const aminoAcids = ['cystine', 'histidine', 'isoleucine', 'leucine', 'lysine', 'methionine', 'phenylalanine', 'threonine', 'tryptophan', 'tyrosine', 'valine', 'arginine', 'glutamine', 'glycine', 'proline'];
         
         Object.keys(nutrientConfig).forEach(n => {
             const config = nutrientConfig[n];
@@ -235,14 +316,22 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
                 sources: [],
                 max: config.max,
                 essential: essentialKeys.includes(n),
-                target: config.target
+                target: config.target,
+                optimalMin: config.optimalMin,
+                optimalMax: config.optimalMax
             };
 
             Object.entries(roundedPlan).forEach(([name, amount]: [string, any]) => {
                 const food = CONSISTENT_FOOD_DATABASE.find((f: Food) => f.name === name);
                 const r = amount / 100;
                 if (food) {
-                    const val = (n === 'energy' ? food.calories : (n === 'protein' ? food.protein : (n === 'carbs' ? food.carbs : (n === 'fat' ? food.fat : (food.nutrients[n] || 0)))));
+                    let val = (n === 'energy' ? food.calories : (n === 'protein' ? food.protein : (n === 'carbs' ? food.carbs : (n === 'fat' ? food.fat : (food.nutrients[n] || 0)))));
+                    
+                    // Fallback for net_carbs calculation
+                    if (n === 'net_carbs' && food.nutrients['net_carbs'] === undefined) {
+                        val = Math.max(0, food.carbs - (food.nutrients['fiber'] || 0));
+                    }
+
                     const contrib = r * val;
                     if (contrib > 0.0001) {
                         breakdown[n].amount += contrib;
@@ -286,6 +375,7 @@ export function generateDietAsync(details: any, onProgress: (msg: any) => void) 
             done: true, 
             error: errorMessage,
             result: { 
+                genome: roundedPlan, // Include the final portions
                 targetCalories: Math.round(targetCalories), 
                 actualCalories: Math.round(breakdown.energy.amount), 
                 accuracy: finalAccuracy, 

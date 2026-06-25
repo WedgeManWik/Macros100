@@ -30,7 +30,7 @@ export interface DietDetails {
   likedFoods?: string[];
   mustHaveFoods?: Array<{ name: string; min?: number; max?: number }>;
   algoModel?: 'beast' | 'titan' | 'olympian' | 'god';
-  customRDAs?: Record<string, { target?: number, max?: number }>;
+  customRDAs?: Record<string, { target?: number, max?: number, optimalMin?: number, optimalMax?: number }>;
   advancedSettings?: boolean;
   strictCalories?: boolean;
 }
@@ -38,6 +38,8 @@ export interface DietDetails {
 export interface NutrientConfig {
   target: number;
   max: number;
+  optimalMin?: number;
+  optimalMax?: number;
   essential?: boolean;
   unit?: string;
 }
