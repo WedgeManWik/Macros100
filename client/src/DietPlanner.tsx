@@ -284,9 +284,6 @@ const formSteps = [
       spotlightClicks: true,
       disableBeacon: true,
       styles: {
-        buttonNext: {
-          display: 'none'
-        },
         buttonBack: {
           display: 'none'
         }
@@ -383,6 +380,18 @@ const DietPlanner = () => {
     const { action, index, status, type } = data;
     addLog('Form Callback: status=' + status + ', type=' + type + ', action=' + action + ', index=' + index);
     console.log('Joyride event:', data);
+    
+    // Intercept target:notFound for the liked foods modal step (Step 14)
+    // If the modal isn't fully rendered in the DOM yet, open it and retry Step 14
+    if (type === 'target:notFound' && index === 14) {
+      setShowFoodModal(true);
+      setTimeout(() => {
+        if (joyrideHelpers.current) {
+          joyrideHelpers.current.goTo(14);
+        }
+      }, 150);
+      return;
+    }
     
     // Manual scroll engine to guarantee offset
     if (type === 'tooltip:update' && data.step?.target && data.step.target !== 'body') {
