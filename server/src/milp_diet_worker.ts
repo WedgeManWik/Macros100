@@ -295,6 +295,16 @@ async function run() {
             candidates.push({ genome, totals, mScore: calculateMacroScore(totals), nScore: calculateNutrientScore(totals) });
         }
 
+        // Post baseline progress
+        parentPort?.postMessage({
+            type: 'progress',
+            gen: 6,
+            accuracy: candidates.length > 0 ? Math.round((candidates[0].nScore / (essentialKeys.length || 1)) * 100) : 0,
+            telemetry: {
+                trialInfo: `Completed full-pool baseline trial`
+            }
+        });
+
         // Subsequent trials: Randomized subsets (Variety)
         for (let i = 1; i < 15; i++) {
             const subsetSize = Math.min(likedPool.length, 60);
@@ -314,6 +324,17 @@ async function run() {
                     nScore: calculateNutrientScore(totals) 
                 });
             }
+
+            // Post incremental progress
+            const progressPct = Math.round(((i + 1) / 16) * 100);
+            parentPort?.postMessage({
+                type: 'progress',
+                gen: progressPct,
+                accuracy: candidates.length > 0 ? Math.round((candidates[0].nScore / (essentialKeys.length || 1)) * 100) : 0,
+                telemetry: {
+                    trialInfo: `Completed trial ${i}/15 (${candidates.length} candidates found)`
+                }
+            });
         }
 
         if (candidates.length > 0) {

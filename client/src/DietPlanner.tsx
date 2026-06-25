@@ -981,25 +981,13 @@ const DietPlanner = () => {
       const jobId = data.jobId;
 
       const startTime = Date.now();
-      let simulatedProgress = 0;
       const interval = setInterval(async () => {
         try {
             const statusRes = await fetch(`${API_BASE_URL}/api/status/${jobId}`);
             const status = await statusRes.json();
-            
-            if (status.status === 'completed') {
-                simulatedProgress = 100;
-            } else if (status.status === 'failed' || status.status === 'cancelled') {
-                simulatedProgress = 0;
-            } else {
-                if (simulatedProgress < 95) {
-                    simulatedProgress += Math.random() * 15 + 5;
-                    if (simulatedProgress > 95) simulatedProgress = 95;
-                }
-            }
 
             setProgress(prev => ({
-                generation: simulatedProgress,
+                generation: status.status === 'completed' ? 100 : (status.status === 'failed' || status.status === 'cancelled' ? 0 : status.generation),
                 accuracy: status.currentAccuracy,
                 time: Math.round((Date.now() - startTime) / 1000),
                 telemetry: status.telemetry || prev.telemetry
@@ -1368,7 +1356,7 @@ const DietPlanner = () => {
           disableBeacon={true}
           disableOverlayClose={true}
           scrollOffset={150}
-          debug={true}
+          debug={false}
           run={true}
           getHelpers={handleJoyrideHelpers}
           addLog={addLog}
@@ -1376,6 +1364,7 @@ const DietPlanner = () => {
         continuous={true}
         onEvent={handleJoyrideCallback}
         locale={{ last: 'Generate' }}
+        disableScrolling={true}
         styles={( {
           options: {
             arrowColor: 'rgba(15, 15, 15, 0.95)',
@@ -1398,12 +1387,13 @@ const DietPlanner = () => {
           disableBeacon={true}
           disableOverlayClose={true}
           scrollOffset={150}
-          debug={true}
+          debug={false}
           run={true}
           addLog={addLog}
           steps={resultsSteps}
         continuous={true}
         onEvent={handleResultsJoyrideCallback}
+        disableScrolling={true}
         styles={( {
           options: {
             arrowColor: 'rgba(15, 15, 15, 0.95)',
@@ -1421,15 +1411,8 @@ const DietPlanner = () => {
       />
       )}
 
-      
-      {/* DEBUG BOX */}
-      <div className="position-fixed bottom-0 start-0 m-3 p-2 bg-dark border border-warning text-warning overflow-hidden" style={{ zIndex: 10000, fontSize: '0.7rem', width: '300px', opacity: 0.9 }}>
-        <strong>Joyride Debug:</strong><br/>
-        {joyrideLogs.map((l, i) => <div key={i}>{l}</div>)}
-      </div>
-
       {/* START TUTORIAL BUTTON */}
-      {!runTour && !runResultsTour && !localStorage.getItem('macros100_tutorial_done') && (
+      {!runTour && !runResultsTour && (
         <Button 
           variant="outline-secondary" 
           size="sm" 
