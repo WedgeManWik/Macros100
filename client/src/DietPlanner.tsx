@@ -373,6 +373,20 @@ const DietPlanner = () => {
     const { action, index, status, type } = data;
     addLog('Form Callback: status=' + status + ', type=' + type + ', action=' + action + ', index=' + index);
     
+    // Manual scroll engine to guarantee offset
+    if (type === 'tooltip:update' && data.step?.target && data.step.target !== 'body') {
+      setTimeout(() => {
+        const targetEl = document.querySelector(data.step.target);
+        const scrollParent = document.querySelector('.panel-left');
+        if (targetEl && scrollParent) {
+          const targetRect = targetEl.getBoundingClientRect();
+          const parentRect = scrollParent.getBoundingClientRect();
+          const offsetTop = targetRect.top - parentRect.top + scrollParent.scrollTop;
+          scrollParent.scrollTo({ top: Math.max(0, offsetTop - 150), behavior: 'smooth' });
+        }
+      }, 50);
+    }
+
     // Always track the current step index so we know where the uncontrolled tour is
     if (type === 'step:after' || type === 'target:notFound') {
       const nextIndex = index + (action === 'prev' ? -1 : 1);
@@ -1273,6 +1287,7 @@ const DietPlanner = () => {
           key={runTour ? "form-on" : "form-off"}
           disableBeacon={true}
           disableOverlayClose={true}
+          disableScrolling={true}
           scrollOffset={150}
           debug={true}
           run={true}
@@ -1302,6 +1317,7 @@ const DietPlanner = () => {
       <TourWrapper
           disableBeacon={true}
           disableOverlayClose={true}
+          disableScrolling={true}
           scrollOffset={150}
           debug={true}
           run={true}
