@@ -204,7 +204,35 @@ const DietPlanner = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [joyrideLogs, setJoyrideLogs] = useState<string[]>(['Init']);
-  const addLog = (msg: string) => setJoyrideLogs(prev => [...prev, new Date().toISOString().split('T')[1].substring(0, 8) + ' ' + msg].slice(-10));
+  const addLog = (msg: string) => setJoyrideLogs(prev => [...prev, new Date().toISOString().split('T')[1].substring(0, 8) + ' ' + msg].slice(-20));
+  
+  useEffect(() => {
+    const originalWarn = console.warn;
+    const originalError = console.error;
+    const originalLog = console.log;
+    
+    console.warn = (...args) => {
+      addLog('WARN: ' + args.join(' '));
+      originalWarn(...args);
+    };
+    console.error = (...args) => {
+      addLog('ERROR: ' + args.join(' '));
+      originalError(...args);
+    };
+    console.log = (...args) => {
+      if (args[0] && typeof args[0] === 'string' && args[0].includes('joyride')) {
+        addLog('LOG: ' + args.join(' '));
+      }
+      originalLog(...args);
+    };
+
+    return () => {
+      console.warn = originalWarn;
+      console.error = originalError;
+      console.log = originalLog;
+    };
+  }, []);
+  
   const [runTour, setRunTour] = useState(false);
   const [runResultsTour, setRunResultsTour] = useState(false);
 
@@ -1171,6 +1199,7 @@ const DietPlanner = () => {
       
       {runTour && (
       <TourWrapper
+          debug={true}
           run={true}
           addLog={addLog}
           steps={formSteps}
@@ -1195,6 +1224,7 @@ const DietPlanner = () => {
       
       {runResultsTour && (
       <TourWrapper
+          debug={true}
           run={true}
           addLog={addLog}
           steps={resultsSteps}
