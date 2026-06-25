@@ -210,6 +210,112 @@ const InteractiveMacroPie = ({
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
+const formSteps = [
+  {
+    target: 'body',
+    placement: 'center',
+    content: 'Welcome to Macros100! Let\'s walk through the app to get your perfect diet set up.',
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-biometrics',
+    content: 'First, enter your basic biometric details (Weight, Height, Age, and Gender) so we can accurately estimate your metabolic rate.',
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-bodyfat',
+    content: 'Next, enter your Body Fat percentage. If you don\'t know exactly what it is, don\'t worry! We will use a standard estimated amount based on your BMI.',
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-activity',
+    content: 'Select your daily Activity Level. Be honest—this heavily impacts your calorie needs.',
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-maintenance',
+    content: 'These are your calculated Maintenance Calories (the amount you need to stay exactly the same weight). You can manually adjust them here if you feel this amount is wrong based on your experience.',
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-goal',
+    content: 'Select your Daily Goal (Lose, Maintain, or Gain weight).',
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-offset',
+    content: 'This is the recommended Calorie Offset for your chosen goal (e.g. -500 calories for weight loss). You can change it if you wish.',
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-target',
+    content: 'Your final Target Calories are displayed here. You can manually type in a specific target here, and we will recalculate your offset automatically.',
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-macros',
+    content: 'By default, we use a recommended macro split. You can toggle the switch here to enable Custom Macros.',
+    spotlightClicks: true,
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-macros-pie',
+    content: 'With Custom Macros enabled, you can click and manually drag the pie chart to perfectly adjust your Protein, Fat, and Carb ratios!',
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-macros-strictness',
+    content: 'The Strictness setting tells the AI how hard to try to hit these macros. "Strict" forces the math engine to hit that exact amount, while "Relaxed" gives it some wiggle room to make a tastier meal plan.',
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-musthave',
+    content: 'If there are foods you absolutely MUST eat every day (like 50g of whey protein), add them here and we will lock them into your diet.',
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-advanced',
+    content: 'Advanced users can open this panel to override micronutrient targets (like specific Vitamin C or Cholesterol limits).',
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-liked',
+    content: 'Now, click this button to open the Liked Foods menu! The algorithm will only pick foods from your liked list.',
+    spotlightClicks: true,
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-liked-modal',
+    content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.',
+    spotlightClicks: true,
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-generate',
+    content: 'Finally, click Generate Daily Plan to instantly create a scientifically perfect diet!',
+    disableBeacon: true,
+  }
+];
+
+const resultsSteps = [
+  {
+    target: 'body',
+    placement: 'center',
+    content: 'Your diet is ready! Here is your Ingredient List. You can edit the exact gram amounts, or click the Export button to copy the list to your clipboard.',
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-result-2',
+    content: 'Want this turned into a meal plan? Click Generate AI Meal Plan! You can enter Custom Instructions (like "I only want 3 meals" or "carb backloading") and our AI will organize your exact ingredients into perfect meals.',
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-result-3',
+    content: 'We also generate a complete Shopping List for all the ingredients you need!',
+    disableBeacon: true,
+  }
+];
+
 const DietPlanner = () => {
   const [foods, setFoods] = useState<Food[]>([]);
   const [diet, setDiet] = useState<DietPlan | null>(null);
@@ -260,7 +366,7 @@ const DietPlanner = () => {
     if (type === 'step:after' || type === 'target:notFound') {
       const nextIndex = index + (action === 'prev' ? -1 : 1);
       setCurrentStepIndex(nextIndex);
-      if (index === 12 && action !== 'prev') {
+      if (index === 14 && action !== 'prev') {
         setShowFoodModal(false);
       }
     }
@@ -280,101 +386,6 @@ const DietPlanner = () => {
       localStorage.setItem('macros100_results_tutorial_done', 'true');
     }
   };
-
-  const formSteps = [
-    {
-      target: 'body',
-      placement: 'center',
-      content: 'Welcome to Macros100! First, enter your basic biometric details (Weight, Height, Age, and Gender) so we can accurately estimate your metabolic rate.',
-      disableBeacon: true,
-    },
-    {
-      target: '.tour-biometrics',
-      content: 'First, enter your basic biometric details (Weight, Height, Age, and Gender) so we can accurately estimate your metabolic rate.',
-      disableBeacon: true,
-    },
-    {
-      target: '.tour-bodyfat',
-      content: 'Next, enter your Body Fat percentage. If you don\'t know exactly what it is, don\'t worry! We will use a standard estimated amount based on your BMI.',
-        disableBeacon: true,
-    },
-    {
-      target: '.tour-activity',
-      content: 'Select your daily Activity Level. Be honest—this heavily impacts your calorie needs.',
-        disableBeacon: true,
-    },
-    {
-      target: '.tour-maintenance',
-      content: 'These are your calculated Maintenance Calories (the amount you need to stay exactly the same weight). You can manually adjust them here if you feel this amount is wrong based on your experience.',
-        disableBeacon: true,
-    },
-    {
-      target: '.tour-goal',
-      content: 'Select your Daily Goal (Lose, Maintain, or Gain weight).',
-        disableBeacon: true,
-    },
-    {
-      target: '.tour-offset',
-      content: 'This is the recommended Calorie Offset for your chosen goal (e.g. -500 calories for weight loss). You can change it if you wish.',
-        disableBeacon: true,
-    },
-    {
-      target: '.tour-target',
-      content: 'Your final Target Calories are displayed here. You can manually type in a specific target here, and we will recalculate your offset automatically.',
-        disableBeacon: true,
-    },
-    {
-      target: '.tour-macros',
-      content: 'By default, we use a recommended macro split. You can enable Custom Macros to manually drag the pie chart and adjust your Protein/Fat/Carb ratios. The "Strict" setting forces the math engine to hit that exact amount, while "Relaxed" gives it some wiggle room.',
-        disableBeacon: true,
-    },
-    {
-      target: '.tour-musthave',
-      content: 'If there are foods you absolutely MUST eat every day (like 50g of whey protein), add them here and we will lock them into your diet.',
-        disableBeacon: true,
-    },
-    {
-      target: '.tour-advanced',
-      content: 'Advanced users can open this panel to override micronutrient targets (like specific Vitamin C or Cholesterol limits).',
-        disableBeacon: true,
-    },
-    {
-      target: '.tour-liked',
-      content: 'Now, click this button to open the Liked Foods menu! The algorithm will only pick foods from your liked list.',
-      spotlightClicks: true,
-      disableBeacon: true,
-    },
-    {
-      target: '.tour-liked-modal',
-      content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.',
-      spotlightClicks: true,
-      disableBeacon: true,
-    },
-    {
-      target: '.tour-generate',
-      content: 'Finally, click Generate Daily Plan to instantly create a scientifically perfect diet!',
-      disableBeacon: true,
-    }
-  ];
-
-  const resultsSteps = [
-    {
-      target: 'body',
-      placement: 'center',
-      content: 'Your diet is ready! Here is your Ingredient List. You can edit the exact gram amounts, or click the Export button to copy the list to your clipboard.',
-      disableBeacon: true,
-    },
-    {
-      target: '.tour-result-2',
-      content: 'Want this turned into a meal plan? Click Generate AI Meal Plan! You can enter Custom Instructions (like "I only want 3 meals" or "carb backloading") and our AI will organize your exact ingredients into perfect meals.',
-        disableBeacon: true,
-    },
-    {
-      target: '.tour-result-3',
-      content: 'This is the Nutritional Breakdown. It proves your diet hit 100% of your targets! Pro Tip: Hover your mouse (or hold your finger on mobile) over any nutrient bar to see exactly which foods provided that nutrient!',
-        disableBeacon: true,
-    }
-  ];
 
   const [isEditing, setIsEditing] = useState(false);
   
@@ -1205,6 +1216,7 @@ const DietPlanner = () => {
           .custom-main-container {
             overflow-x: hidden;
             overflow-y: auto;
+            scroll-padding-top: 120px;
           }
           @media (min-width: 992px) {
             .custom-main-container {
@@ -1625,28 +1637,30 @@ const DietPlanner = () => {
 
                         return (
                           <>
-                            <InteractiveMacroPie 
-                              proteinPct={pPct}
-                              fatPct={fPct}
-                              targetCalories={targetCals}
-                              weight={formData.weight}
-                              formData={formData}
-                              onChangeStatus={(id, status) => {
-                                handleMacroChange(id, 'strictness', status);
-                              }}
-                              onChange={(newP, newF) => {
-                                setFormData(prev => ({
-                                  ...prev,
-                                  macros: {
-                                    protein: { ...prev.macros.protein, mode: '%', value: Math.round(newP * 100) },
-                                    fat: { ...prev.macros.fat, mode: '%', value: Math.round(newF * 100) },
-                                    carbs: { ...prev.macros.carbs, mode: '%', value: Math.round((1 - newP - newF) * 100) }
-                                  }
-                                }));
-                              }}
-                            />
+                            <div className="tour-macros-pie">
+                              <InteractiveMacroPie 
+                                proteinPct={pPct}
+                                fatPct={fPct}
+                                targetCalories={targetCals}
+                                weight={formData.weight}
+                                formData={formData}
+                                onChangeStatus={(id, status) => {
+                                  handleMacroChange(id, 'strictness', status);
+                                }}
+                                onChange={(newP, newF) => {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    macros: {
+                                      protein: { ...prev.macros.protein, mode: '%', value: Math.round(newP * 100) },
+                                      fat: { ...prev.macros.fat, mode: '%', value: Math.round(newF * 100) },
+                                      carbs: { ...prev.macros.carbs, mode: '%', value: Math.round((1 - newP - newF) * 100) }
+                                    }
+                                  }));
+                                }}
+                              />
+                            </div>
                             
-                            <Row className="g-2 mt-4">
+                            <Row className="g-2 mt-4 tour-macros-strictness">
                               {[
                                 { id: 'protein', label: 'Protein', color: '#ff3131', pct: pPct, grams: (pPct * targetCals) / 4, cal: pPct * targetCals },
                                 { id: 'fat', label: 'Fat', color: '#ffea00', pct: fPct, grams: (fPct * targetCals) / 9, cal: fPct * targetCals },
@@ -1756,7 +1770,7 @@ const DietPlanner = () => {
             <div className={`bottom-left-actions glass-panel ${isSidebarCollapsed ? 'collapsed' : ''}`}>
               <Button variant="outline-primary" className={`w-100 py-2 d-flex align-items-center justify-content-center fw-bold tour-liked ${shouldWiggle ? 'wiggle' : ''}`} onClick={() => {
                 setShowFoodModal(true);
-                if (runTour && currentStepIndex === 11 && joyrideHelpers.current) {
+                if (runTour && currentStepIndex === 13 && joyrideHelpers.current) {
                   joyrideHelpers.current.next();
                 }
               }}>
