@@ -1335,7 +1335,7 @@ const DietPlanner = () => {
           addLog={addLog}
           steps={formSteps}
         continuous={true}
-        callback={handleJoyrideCallback}
+        onEvent={handleJoyrideCallback}
         styles={( {
           options: {
             arrowColor: 'rgba(15, 15, 15, 0.95)',
@@ -1363,7 +1363,7 @@ const DietPlanner = () => {
           addLog={addLog}
           steps={resultsSteps}
         continuous={true}
-        callback={handleResultsJoyrideCallback}
+        onEvent={handleResultsJoyrideCallback}
         styles={( {
           options: {
             arrowColor: 'rgba(15, 15, 15, 0.95)',
