@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Joyride } from 'react-joyride';
-import { Joyride } from 'react-joyride';
 const TourWrapper = (props: any) => {
   const J = Joyride as any;
   if (!J) {
