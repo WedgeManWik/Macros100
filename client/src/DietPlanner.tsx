@@ -215,6 +215,8 @@ const DietPlanner = () => {
     const { status } = data;
     if (status === 'finished' || status === 'skipped') {
       setRunResultsTour(false);
+        localStorage.setItem('macros100_results_tutorial_done', 'true');
+        localStorage.removeItem('macros100_force_results_tour');
     }
   };
 
@@ -227,42 +229,52 @@ const DietPlanner = () => {
     {
       target: '.tour-bodyfat',
       content: 'Next, enter your Body Fat percentage. If you don\'t know exactly what it is, don\'t worry! We will use a standard estimated amount based on your BMI.',
+        disableBeacon: true,
     },
     {
       target: '.tour-activity',
       content: 'Select your daily Activity Level. Be honest—this heavily impacts your calorie needs.',
+        disableBeacon: true,
     },
     {
       target: '.tour-maintenance',
       content: 'These are your calculated Maintenance Calories (the amount you need to stay exactly the same weight). You can manually adjust them here if you feel this amount is wrong based on your experience.',
+        disableBeacon: true,
     },
     {
       target: '.tour-goal',
       content: 'Select your Daily Goal (Lose, Maintain, or Gain weight).',
+        disableBeacon: true,
     },
     {
       target: '.tour-offset',
       content: 'This is the recommended Calorie Offset for your chosen goal (e.g. -500 calories for weight loss). You can change it if you wish.',
+        disableBeacon: true,
     },
     {
       target: '.tour-target',
       content: 'Your final Target Calories are displayed here. You can manually type in a specific target here, and we will recalculate your offset automatically.',
+        disableBeacon: true,
     },
     {
       target: '.tour-macros',
       content: 'By default, we use a recommended macro split. You can enable Custom Macros to manually drag the pie chart and adjust your Protein/Fat/Carb ratios. The "Strict" setting forces the math engine to hit that exact amount, while "Relaxed" gives it some wiggle room.',
+        disableBeacon: true,
     },
     {
       target: '.tour-musthave',
       content: 'If there are foods you absolutely MUST eat every day (like 50g of whey protein), add them here and we will lock them into your diet.',
+        disableBeacon: true,
     },
     {
       target: '.tour-liked',
       content: 'Click here to select all the foods you enjoy eating! The algorithm will only pick foods from your liked list.',
+        disableBeacon: true,
     },
     {
       target: '.tour-advanced',
       content: 'Advanced users can open this panel to override micronutrient targets (like specific Vitamin C or Cholesterol limits).',
+        disableBeacon: true,
     }
   ];
 
@@ -275,10 +287,12 @@ const DietPlanner = () => {
     {
       target: '.tour-result-2',
       content: 'Want this turned into a meal plan? Click Generate AI Meal Plan! You can enter Custom Instructions (like "I only want 3 meals" or "carb backloading") and our AI will organize your exact ingredients into perfect meals.',
+        disableBeacon: true,
     },
     {
       target: '.tour-result-3',
       content: 'This is the Nutritional Breakdown. It proves your diet hit 100% of your targets! Pro Tip: Hover your mouse (or hold your finger on mobile) over any nutrient bar to see exactly which foods provided that nutrient!',
+        disableBeacon: true,
     }
   ];
 
@@ -1400,6 +1414,7 @@ const DietPlanner = () => {
                   </h3>
                   
                   <Form>
+                    <div className="tour-biometrics">
                     <Row>
                       <Col md={6} className="mb-3">
                         <Form.Label>Weight (kg)</Form.Label>
@@ -1424,8 +1439,9 @@ const DietPlanner = () => {
                         </Form.Select>
                       </Col>
                     </Row>
+                    </div>
 
-                    <div className="mb-3">
+                    <div className="mb-3 tour-bodyfat">
                       <div className="d-flex justify-content-between align-items-center mb-2">
                         <Form.Label className="mb-0">Body Fat %</Form.Label>
                         <Button 
@@ -1443,7 +1459,7 @@ const DietPlanner = () => {
                       </Form.Text>
                     </div>
 
-                    <div className="mb-3">
+                    <div className="mb-3 tour-activity">
                       <Form.Label>Activity Level</Form.Label>
                       <Form.Select name="activityLevel" value={formData.activityLevel} onChange={handleInputChange}>
                         <option value="1.2">Sedentary (office job, little exercise)</option>
@@ -1454,12 +1470,12 @@ const DietPlanner = () => {
                       </Form.Select>
                     </div>
 
-                    <div className="mb-3">
+                    <div className="mb-3 tour-maintenance">
                       <Form.Label>Maintenance Calories</Form.Label>
                       <Form.Control type="number" name="maintenanceCalories" value={formData.maintenanceCalories} onChange={handleInputChange} />
                     </div>
 
-                    <div className="mb-4">
+                    <div className="mb-4 tour-goal">
                       <Form.Label>Goal</Form.Label>
                       <Form.Select name="goal" value={formData.goal} onChange={handleInputChange}>
                         <option value="fast-lose">Fast Lose Weight</option>
@@ -1574,7 +1590,7 @@ const DietPlanner = () => {
 
                     <hr className="my-4" />
 
-                    <h3 className="h5 mb-3 d-flex align-items-center fw-bold">
+                    <h3 className="h5 mb-3 d-flex align-items-center fw-bold tour-musthave">
                       <Utensils className="me-2 text-musthave" size={20} /> Must Have Foods
                     </h3>
                     <div className="mb-3">
@@ -1612,7 +1628,7 @@ const DietPlanner = () => {
 
                     <h3 className="h5 mb-3 d-flex align-items-center justify-content-between fw-bold">
 
-                      <span className="d-flex align-items-center"><Activity className="me-2 text-info" size={20} /> Advanced Settings</span>
+                      <span className="d-flex align-items-center tour-advanced"><Activity className="me-2 text-info" size={20} /> Advanced Settings</span>
                       <Form.Check 
                         type="switch"
                         id="advanced-settings-switch"
