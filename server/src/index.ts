@@ -3,7 +3,7 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 // @ts-ignore
 import { FOOD_DATABASE } from './foods.cjs';
 import { generateDietAsync } from './nutrition.js';
@@ -81,13 +81,12 @@ app.post('/api/generate-meal-plan', async (req, res) => {
       return res.status(400).json({ error: 'Ingredients array is required' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on the server' });
+      return res.status(500).json({ error: 'GROQ_API_KEY is not configured on the server' });
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const groq = new Groq({ apiKey });
 
     const prompt = `You are an expert, world-class nutritionist and chef. 
 I have a list of ingredients and their EXACT portions that perfectly match my daily macro and calorie goals. 
@@ -106,9 +105,13 @@ ${ingredients.map((i: any) => `- ${i.grams}g of ${i.name}`).join('\n')}
 
 Generate the meal plan now:`;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [{ role: 'user', content: prompt }],
+      model: 'llama3-70b-8192',
+      temperature: 0.3,
+    });
+
+    const text = chatCompletion.choices[0]?.message?.content || 'Failed to generate meal plan.';
 
     res.json({ mealPlan: text });
   } catch (err: any) {
