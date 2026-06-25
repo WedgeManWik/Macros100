@@ -1168,8 +1168,9 @@ const DietPlanner = () => {
       
       
       <TourWrapper
-        steps={formSteps}
-        run={runTour}
+          key={runTour ? "form-on" : "form-off"}
+          steps={formSteps}
+          run={runTour}
         continuous={true}
         
         
@@ -1191,8 +1192,9 @@ const DietPlanner = () => {
       />
       
       <TourWrapper
-        steps={resultsSteps}
-        run={runResultsTour}
+          key={runResultsTour ? "results-on" : "results-off"}
+          steps={resultsSteps}
+          run={runResultsTour}
         continuous={true}
         
         
