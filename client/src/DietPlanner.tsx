@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Joyride } from 'react-joyride';
 const TourWrapper = (props: any) => {
   const J = Joyride as any;
@@ -248,22 +248,27 @@ const DietPlanner = () => {
   }, []);
   
   const [runTour, setRunTour] = useState(false);
-  const [stepIndex, setStepIndex] = useState(0);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const joyrideHelpers = useRef<any>(null);
   const [runResultsTour, setRunResultsTour] = useState(false);
 
   const handleJoyrideCallback = (data: any) => {
     const { action, index, status, type } = data;
     addLog('Form Callback: status=' + status + ', type=' + type + ', action=' + action + ', index=' + index);
-    if (status === 'finished' || status === 'skipped' || action === 'close') {
-      setRunTour(false);
-      setStepIndex(0);
-      localStorage.setItem('macros100_tutorial_done', 'true');
-    } else if (type === 'step:after' || type === 'target:notFound') {
+    
+    // Always track the current step index so we know where the uncontrolled tour is
+    if (type === 'step:after' || type === 'target:notFound') {
       const nextIndex = index + (action === 'prev' ? -1 : 1);
-      setStepIndex(nextIndex);
-      if (index === 12) {
+      setCurrentStepIndex(nextIndex);
+      if (index === 12 && action !== 'prev') {
         setShowFoodModal(false);
       }
+    }
+
+    if (status === 'finished' || status === 'skipped' || action === 'close') {
+      setRunTour(false);
+      setCurrentStepIndex(0);
+      localStorage.setItem('macros100_tutorial_done', 'true');
     }
   };
 
@@ -1244,7 +1249,7 @@ const DietPlanner = () => {
           disableScrolling={true}
           debug={true}
           run={true}
-          stepIndex={stepIndex}
+          getHelpers={(helpers: any) => { joyrideHelpers.current = helpers; }}
           addLog={addLog}
           steps={formSteps}
         continuous={true}
@@ -1748,8 +1753,8 @@ const DietPlanner = () => {
             <div className={`bottom-left-actions glass-panel ${isSidebarCollapsed ? 'collapsed' : ''}`}>
               <Button variant="outline-primary" className={`w-100 py-2 d-flex align-items-center justify-content-center fw-bold tour-liked ${shouldWiggle ? 'wiggle' : ''}`} onClick={() => {
                 setShowFoodModal(true);
-                if (runTour && stepIndex === 11) {
-                  setStepIndex(12);
+                if (runTour && currentStepIndex === 11 && joyrideHelpers.current) {
+                  joyrideHelpers.current.next();
                 }
               }}>
                   <Heart className="me-2 text-liked" size={18} /> Select Liked Foods ({formData.likedFoods.length})
