@@ -1244,8 +1244,6 @@ const DietPlanner = () => {
             overflow-y: auto;
           }
           .panel-left {
-            scroll-padding-top: 250px;
-            scroll-behavior: smooth;
           }
           @media (min-width: 992px) {
             .custom-main-container {
@@ -1289,7 +1287,6 @@ const DietPlanner = () => {
           key={runTour ? "form-on" : "form-off"}
           disableBeacon={true}
           disableOverlayClose={true}
-          disableScrolling={true}
           scrollOffset={150}
           debug={true}
           run={true}
@@ -1319,7 +1316,6 @@ const DietPlanner = () => {
       <TourWrapper
           disableBeacon={true}
           disableOverlayClose={true}
-          disableScrolling={true}
           scrollOffset={150}
           debug={true}
           run={true}
