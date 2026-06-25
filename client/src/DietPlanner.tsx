@@ -2,8 +2,13 @@ import { useState, useEffect } from 'react';
 import { Joyride } from 'react-joyride';
 const TourWrapper = (props: any) => {
   const J = Joyride as any;
+  
+  useEffect(() => {
+    if (props.addLog) props.addLog('TourWrapper mounted. run: ' + props.run + ', J exists: ' + !!J);
+  }, [props.run]);
+
   if (!J) {
-    console.error("Joyride is completely undefined!");
+    if (props.addLog) props.addLog('ERROR: Joyride is completely undefined!');
     return null;
   }
   return <J {...props} />;
@@ -198,6 +203,8 @@ const DietPlanner = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+    const [joyrideLogs, setJoyrideLogs] = useState<string[]>(['Init']);
+  const addLog = (msg: string) => setJoyrideLogs(prev => [...prev, new Date().toISOString().split('T')[1].substring(0, 8) + ' ' + msg].slice(-10));
   const [runTour, setRunTour] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [runResultsTour, setRunResultsTour] = useState(false);
@@ -205,6 +212,7 @@ const DietPlanner = () => {
 
   const handleJoyrideCallback = (data: any) => {
     const { action, index, status, type } = data;
+    addLog('Form Callback: status=' + status + ', type=' + type + ', action=' + action + ', index=' + index);
     if (status === 'finished' || status === 'skipped') {
       setRunTour(false);
       setStepIndex(0);
@@ -1170,6 +1178,7 @@ const DietPlanner = () => {
       
       <TourWrapper
           key={runTour ? "form-on" : "form-off"}
+          addLog={addLog}
           steps={formSteps}
           run={runTour}
           stepIndex={stepIndex}
@@ -1195,6 +1204,7 @@ const DietPlanner = () => {
       
       <TourWrapper
           key={runResultsTour ? "results-on" : "results-off"}
+          addLog={addLog}
           steps={resultsSteps}
           run={runResultsTour}
           stepIndex={resultsStepIndex}
@@ -1223,7 +1233,7 @@ const DietPlanner = () => {
           variant="outline-secondary" 
           size="sm" 
           className="position-fixed top-0 start-0 m-3 glass-panel d-flex align-items-center" style={{ zIndex: 1050 }}
-          onClick={() => { setRunTour(true); setStepIndex(0); setIsSidebarCollapsed(false);  }}
+          onClick={() => { addLog("Button clicked"); setRunTour(true); setStepIndex(0); setIsSidebarCollapsed(false); }}
         >
           <Sparkles size={14} className="me-2 text-warning" /> Start Tutorial
         </Button>
