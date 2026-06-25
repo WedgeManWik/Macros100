@@ -199,28 +199,29 @@ const DietPlanner = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [runTour, setRunTour] = useState(false);
+  const [stepIndex, setStepIndex] = useState(0);
   const [runResultsTour, setRunResultsTour] = useState(false);
-
-  useEffect(() => {
-    if (!localStorage.getItem('macros100_tutorial_done')) {
-      setRunTour(true);
-    }
-  }, []);
+  const [resultsStepIndex, setResultsStepIndex] = useState(0);
 
   const handleJoyrideCallback = (data: any) => {
-    const { status, action } = data;
+    const { action, index, status, type } = data;
     if (status === 'finished' || status === 'skipped') {
       setRunTour(false);
+      setStepIndex(0);
       localStorage.setItem('macros100_tutorial_done', 'true');
+    } else if (type === 'step:after' || type === 'target:notFound') {
+      setStepIndex(index + (action === 'prev' ? -1 : 1));
     }
   };
 
   const handleResultsJoyrideCallback = (data: any) => {
-    const { status } = data;
+    const { action, index, status, type } = data;
     if (status === 'finished' || status === 'skipped') {
       setRunResultsTour(false);
-        localStorage.setItem('macros100_results_tutorial_done', 'true');
-        localStorage.removeItem('macros100_force_results_tour');
+      setResultsStepIndex(0);
+      localStorage.setItem('macros100_results_tutorial_done', 'true');
+    } else if (type === 'step:after' || type === 'target:notFound') {
+      setResultsStepIndex(index + (action === 'prev' ? -1 : 1));
     }
   };
 
@@ -1171,6 +1172,7 @@ const DietPlanner = () => {
           key={runTour ? "form-on" : "form-off"}
           steps={formSteps}
           run={runTour}
+          stepIndex={stepIndex}
         continuous={true}
         
         
@@ -1195,6 +1197,7 @@ const DietPlanner = () => {
           key={runResultsTour ? "results-on" : "results-off"}
           steps={resultsSteps}
           run={runResultsTour}
+          stepIndex={resultsStepIndex}
         continuous={true}
         
         
