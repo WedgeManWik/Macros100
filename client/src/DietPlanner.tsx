@@ -1171,6 +1171,7 @@ const DietPlanner = () => {
       
       {runTour && (
       <TourWrapper
+          run={true}
           addLog={addLog}
           steps={formSteps}
         continuous={true}
@@ -1194,6 +1195,7 @@ const DietPlanner = () => {
       
       {runResultsTour && (
       <TourWrapper
+          run={true}
           addLog={addLog}
           steps={resultsSteps}
         continuous={true}
