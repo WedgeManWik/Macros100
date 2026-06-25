@@ -5,6 +5,20 @@ const TourWrapper = (props: any) => {
   
   useEffect(() => {
     if (props.addLog) props.addLog('TourWrapper mounted. run: ' + props.run + ', J exists: ' + !!J);
+    
+    // Auto-click the beacon if it stubbornly appears despite disableBeacon flags
+    if (props.run) {
+      const clickBeacon = () => {
+        const beacon = document.querySelector('button[title="Open the tour"], .__floater__open, [aria-label="Open the tour"], [type="button"][data-test-id="button-beacon"]') as HTMLElement;
+        // fallback generic selector since Joyride changes classes
+        const alternateBeacon = document.querySelector('div[style*="border-radius: 50%"]') as HTMLElement;
+        
+        if (beacon) beacon.click();
+        else if (alternateBeacon) alternateBeacon.click();
+      };
+      const intervalId = setInterval(clickBeacon, 50);
+      return () => clearInterval(intervalId);
+    }
   }, [props.run]);
 
   if (!J) {
