@@ -22,7 +22,9 @@ const profiles = [
     maintenanceCalories: 2500,
     calorieOffset: p.goal === 'fast-lose' ? -500 : p.goal === 'moderate-lose' ? -250 : p.goal === 'moderate-gain' ? 250 : 500,
     algoModel: 'beast',
-    advancedSettings: true
+    advancedSettings: true,
+    minFoods: 20,
+    maxFoods: 30
 }));
 
 async function runTests() {

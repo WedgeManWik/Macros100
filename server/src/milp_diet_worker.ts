@@ -192,6 +192,22 @@ async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number, head
             addElasticTarget(m, mCoeffs, target, penalty); 
         });
 
+        // --- 2b. DIET VARIETY LIMITS (Unique Foods Count) ---
+        if (isMILP && (details.minFoods !== undefined || details.maxFoods !== undefined)) {
+            const countMustHave = details.mustHaveFoods?.length || 0;
+            const minNonMustHave = Math.max(0, (details.minFoods || 20) - countMustHave);
+            const maxNonMustHave = Math.max(0, (details.maxFoods || 30) - countMustHave);
+            
+            const uniqueFoodsVars = binaries.map(name => ({ name, coef: 1 }));
+            if (uniqueFoodsVars.length > 0) {
+                constraints.push({
+                    name: 'unique_foods_count_limit',
+                    vars: uniqueFoodsVars,
+                    bnds: { type: glp.GLP_DB, lb: minNonMustHave, ub: maxNonMustHave }
+                });
+            }
+        }
+
         // --- 3. MICRONUTRIENTS (Priority 2: Penalize Uncovered) ---
         essentialKeys.forEach((k: string) => {
             const config = nutrientConfig[k];

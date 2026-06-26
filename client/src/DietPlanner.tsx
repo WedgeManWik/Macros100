@@ -99,6 +99,8 @@ interface FormData {
   strictCalories: boolean;
   isBfCustom: boolean;
   customRDAs: Record<string, { target?: number, max?: number, essential?: boolean }>;
+  minFoods?: number;
+  maxFoods?: number;
 }
 
 const InteractiveMacroPie = ({ 
@@ -319,6 +321,11 @@ const DietPlanner = () => {
       disableBeacon: true,
     },
     {
+      target: '.tour-variety',
+      content: 'Use this double slider to control your diet variety. You can adjust the minimum and maximum number of unique foods that will appear in your plan (at least 20 unique foods must be selected).',
+      disableBeacon: true,
+    },
+    {
       target: '.tour-advanced',
       content: 'Advanced users can open this panel to override micronutrient targets (like specific Vitamin C or Cholesterol limits).',
       disableBeacon: true,
@@ -519,7 +526,9 @@ const DietPlanner = () => {
         advancedSettings: false,
         strictCalories: true,
         isBfCustom: false,
-        customRDAs: {}
+        customRDAs: {},
+        minFoods: 20,
+        maxFoods: 30
     };
     try {
         const saved = localStorage.getItem('macros100_profile');
@@ -964,12 +973,12 @@ const DietPlanner = () => {
       localStorage.setItem('macros100_tutorial_done', 'true');
     }
 
-    // VALIDATION: Check for at least 5 unique foods
+    // VALIDATION: Check for at least 20 unique foods
     const mustHaveNames = (formData.mustHaveFoods || []).map((m: any) => m.name);
     const uniqueFoodNames = new Set([...formData.likedFoods, ...mustHaveNames]);
     
-    if (uniqueFoodNames.size < 5) {
-        setError("You need to select more foods! Please pick at least 5 different foods to allow the algorithm to find a balanced combination.");
+    if (uniqueFoodNames.size < 20) {
+        setError("You need to select more foods! Please pick at least 20 different foods to allow the algorithm to find a balanced combination.");
         setShouldWiggle(true);
         setTimeout(() => setShouldWiggle(false), 500);
         return;
@@ -1100,6 +1109,95 @@ const DietPlanner = () => {
       }
       currentJobIdRef.current = null;
     }
+  };
+
+  const [activeRange, setActiveRange] = useState<'min' | 'max'>('min');
+
+  // Calculate total unique foods selected
+  const totalUniqueSelectedFoods = useMemo(() => {
+    const mustHaveNames = (formData.mustHaveFoods || []).map((m: any) => m.name);
+    const uniqueFoodNames = new Set([...formData.likedFoods, ...mustHaveNames]);
+    return uniqueFoodNames.size;
+  }, [formData.likedFoods, formData.mustHaveFoods]);
+
+  // Sync minFoods and maxFoods when the number of selected foods changes
+  useEffect(() => {
+    const maxLimit = Math.max(20, Math.min(60, totalUniqueSelectedFoods));
+    let updated = false;
+    let newMin = formData.minFoods ?? 20;
+    let newMax = formData.maxFoods ?? 30;
+
+    // If N < 25, the slider is effectively locked to [20, N]
+    if (totalUniqueSelectedFoods < 25) {
+      newMin = 20;
+      newMax = Math.max(20, totalUniqueSelectedFoods);
+      if (newMin !== formData.minFoods || newMax !== formData.maxFoods) {
+        updated = true;
+      }
+    } else {
+      // N >= 25, enforce constraints
+      if (newMax > maxLimit) {
+        newMax = maxLimit;
+        updated = true;
+      }
+      if (newMin > maxLimit - 5) {
+        newMin = Math.max(20, maxLimit - 5);
+        updated = true;
+      }
+      if (newMax - newMin < 5) {
+        newMax = Math.min(maxLimit, newMin + 5);
+        if (newMax - newMin < 5) {
+          newMin = Math.max(20, newMax - 5);
+        }
+        updated = true;
+      }
+    }
+
+    if (updated) {
+      setFormData(prev => ({
+        ...prev,
+        minFoods: newMin,
+        maxFoods: newMax
+      }));
+    }
+  }, [totalUniqueSelectedFoods]);
+
+  const handleMinChange = (newMin: number) => {
+    if (totalUniqueSelectedFoods < 25) return; // Slider locked if selected foods < 25
+    let minVal = Math.max(20, newMin);
+    let maxVal = formData.maxFoods ?? 30;
+    const maxLimit = Math.max(20, Math.min(60, totalUniqueSelectedFoods));
+
+    // Ensure min does not exceed maxLimit - 5
+    if (minVal > maxLimit - 5) {
+      minVal = Math.max(20, maxLimit - 5);
+    }
+
+    // Maintain min difference of 5
+    if (maxVal - minVal < 5) {
+      maxVal = minVal + 5;
+    }
+
+    setFormData(prev => ({ ...prev, minFoods: minVal, maxFoods: maxVal }));
+  };
+
+  const handleMaxChange = (newMax: number) => {
+    if (totalUniqueSelectedFoods < 25) return; // Slider locked if selected foods < 25
+    const maxLimit = Math.max(20, Math.min(60, totalUniqueSelectedFoods));
+    let maxVal = Math.min(maxLimit, newMax);
+    let minVal = formData.minFoods ?? 20;
+
+    // Ensure max does not go below 25 (since min is at least 20 and diff >= 5)
+    if (maxVal < 25) {
+      maxVal = 25;
+    }
+
+    // Maintain min difference of 5
+    if (maxVal - minVal < 5) {
+      minVal = maxVal - 5;
+    }
+
+    setFormData(prev => ({ ...prev, minFoods: minVal, maxFoods: maxVal }));
   };
 
   const calculateNutrientsFromIngredients = (sectionedIngredients: DietPlan['sectionedIngredients'], currentMicros: DietPlan['micronutrients']): Pick<DietPlan, 'actualCalories' | 'macros' | 'micronutrients' | 'accuracy'> => {
@@ -1911,6 +2009,62 @@ const DietPlanner = () => {
                         );
                       })}
                     </div>
+
+                    {(() => {
+                      const maxLimit = Math.max(20, Math.min(60, totalUniqueSelectedFoods));
+                      const sliderDenom = Math.max(1, maxLimit - 20);
+                      const minVal = formData.minFoods ?? 20;
+                      const maxVal = formData.maxFoods ?? 30;
+                      const minPct = ((minVal - 20) / sliderDenom) * 100;
+                      const maxPct = ((maxVal - 20) / sliderDenom) * 100;
+
+                      return (
+                        <div className="variety-slider-container mb-4 tour-variety" style={{ position: 'relative' }}>
+                          <label className="form-label d-flex justify-content-between small fw-bold text-muted mb-2">
+                            <span className="d-flex align-items-center"><Target className="me-1 text-danger" size={16} /> Diet Variety (Unique Foods)</span>
+                            <span className="text-primary fw-bold">{minVal} - {maxVal} foods</span>
+                          </label>
+                          
+                          {totalUniqueSelectedFoods < 25 ? (
+                            <div className="text-center p-2 rounded bg-light border border-warning text-warning small fade-in" style={{ fontSize: '0.75rem', lineHeight: '1.2' }}>
+                              Select at least 25 unique foods to customize variety. Currently locked to 20 - {Math.max(20, totalUniqueSelectedFoods)} foods.
+                            </div>
+                          ) : (
+                            <div className="double-range-slider-wrapper">
+                              <div 
+                                className="slider-track" 
+                                style={{ 
+                                  left: `${minPct}%`, 
+                                  right: `${100 - maxPct}%` 
+                                }} 
+                              />
+                              <input 
+                                type="range" 
+                                min="20" 
+                                max={maxLimit} 
+                                value={minVal} 
+                                onChange={(e) => handleMinChange(parseInt(e.target.value))} 
+                                className="range-input min-range"
+                                style={{ zIndex: activeRange === 'min' ? 20 : 10 }}
+                                onMouseDown={() => setActiveRange('min')}
+                                onTouchStart={() => setActiveRange('min')}
+                              />
+                              <input 
+                                type="range" 
+                                min="20" 
+                                max={maxLimit} 
+                                value={maxVal} 
+                                onChange={(e) => handleMaxChange(parseInt(e.target.value))} 
+                                className="range-input max-range"
+                                style={{ zIndex: activeRange === 'max' ? 20 : 10 }}
+                                onMouseDown={() => setActiveRange('max')}
+                                onTouchStart={() => setActiveRange('max')}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     <hr className="my-4" />
 
