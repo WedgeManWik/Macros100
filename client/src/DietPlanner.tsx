@@ -435,27 +435,27 @@ const DietPlanner = () => {
       const isNext = action === 'next';
       const isPrev = action === 'prev';
       
-      if (index === 13 && isNext) {
-        addLog('Step 13 Next triggered. Opening modal.');
+      if (index === 14 && isNext) {
+        addLog('Step 14 Next triggered. Opening modal.');
         setShowFoodModal(true);
         setTimeout(() => {
-          addLog('Timeout finished. Advancing to step 14.');
-          setCurrentStepIndex(14);
+          addLog('Timeout finished. Advancing to step 15.');
+          setCurrentStepIndex(15);
         }, 150);
-      } else if (index === 15 && isPrev) {
-        addLog('Step 15 Back triggered. Opening modal.');
+      } else if (index === 16 && isPrev) {
+        addLog('Step 16 Back triggered. Opening modal.');
         setShowFoodModal(true);
         setTimeout(() => {
-          addLog('Timeout finished. Returning to step 14.');
-          setCurrentStepIndex(14);
+          addLog('Timeout finished. Returning to step 15.');
+          setCurrentStepIndex(15);
         }, 150);
-      } else if (index === 14) {
-        addLog('Step 14 action: ' + action);
+      } else if (index === 15) {
+        addLog('Step 15 action: ' + action);
         setShowFoodModal(false);
         if (isNext) {
-          setCurrentStepIndex(15);
+          setCurrentStepIndex(16);
         } else if (isPrev) {
-          setCurrentStepIndex(13);
+          setCurrentStepIndex(14);
         }
       } else {
         const nextStep = index + (isPrev ? -1 : 1);
@@ -477,7 +477,7 @@ const DietPlanner = () => {
       setShowFoodModal(false);
       localStorage.setItem('macros100_tutorial_done', 'true');
       
-      if (status === 'finished' && index === 15) {
+      if (status === 'finished' && index === 16) {
         addLog('Last step completed. Triggering handleSubmit.');
         handleSubmitRef.current?.();
       }
@@ -931,7 +931,7 @@ const DietPlanner = () => {
   const closeFoodModal = useCallback(() => {
     setShowFoodModal(false);
     if (runTour) {
-      setCurrentStepIndex(15);
+      setCurrentStepIndex(16);
     }
   }, [runTour]);
   const [shouldWiggle, setShouldWiggle] = useState(false);
@@ -2102,7 +2102,7 @@ const DietPlanner = () => {
                 setShowFoodModal(true);
                 if (runTour) {
                   setTimeout(() => {
-                    setCurrentStepIndex(14);
+                    setCurrentStepIndex(15);
                   }, 150);
                 }
               }}>
