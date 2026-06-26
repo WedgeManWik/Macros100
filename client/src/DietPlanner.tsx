@@ -27,6 +27,74 @@ const TourWrapper = (props: any) => {
   }
   return <J {...props} />;
 };
+
+const CustomTooltip = ({
+  continuous,
+  index,
+  step,
+  backProps,
+  closeProps,
+  primaryProps,
+  skipProps,
+  tooltipProps,
+  isLast,
+  size,
+}: any) => {
+  return (
+    <div 
+      {...tooltipProps} 
+      className="joyride-tooltip-custom glass-panel p-4" 
+      style={{ 
+        maxWidth: '420px', 
+        color: '#fff', 
+        background: 'rgba(15, 15, 15, 0.95)', 
+        border: '1px solid rgba(255, 255, 255, 0.1)', 
+        borderRadius: '16px', 
+        backdropFilter: 'blur(8px)', 
+        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.5)'
+      }}
+    >
+      <div className="d-flex justify-content-between align-items-center mb-3 gap-3">
+        <h5 className="m-0 fw-bold text-primary-vibrant" style={{ fontSize: '1.05rem', letterSpacing: '0.5px' }}>
+          {step.title || 'Tutorial Step'}
+        </h5>
+        <button 
+          {...skipProps} 
+          className="btn btn-sm btn-outline-danger border-0 d-flex align-items-center fw-bold gap-1 py-1 px-2 text-nowrap" 
+          style={{ fontSize: '0.75rem', borderRadius: '8px', letterSpacing: '0.5px' }}
+        >
+          EXIT TUTORIAL <X size={14} className="ms-1" />
+        </button>
+      </div>
+      <div className="mb-4 text-light opacity-90" style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
+        {step.content}
+      </div>
+      <div className="d-flex justify-content-between align-items-center">
+        <div className="text-muted small fw-bold">
+          {index + 1} / {size}
+        </div>
+        <div className="d-flex gap-2">
+          {index > 0 && (
+            <button 
+              {...backProps} 
+              className="btn btn-sm btn-outline-light px-3 fw-bold" 
+              style={{ borderRadius: '8px', fontSize: '0.8rem' }}
+            >
+              Back
+            </button>
+          )}
+          <button 
+            {...primaryProps} 
+            className="btn btn-sm btn-primary px-3 fw-bold" 
+            style={{ borderRadius: '8px', fontSize: '0.8rem', backgroundColor: '#ff3131', borderColor: '#ff3131' }}
+          >
+            {isLast ? 'Generate' : 'Next'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 import { Container, Row, Col, Form, Button, Card, Alert, ProgressBar, Spinner, OverlayTrigger, Tooltip, Accordion } from 'react-bootstrap';
 import { Calculator, Utensils, Target, Activity, Heart, Info, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Settings, ClipboardList, X, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -344,7 +412,14 @@ const DietPlanner = () => {
     {
       target: '.tour-liked-foods-modal-header',
       placement: 'top',
-      content: 'This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.',
+      content: (
+        <div>
+          <p className="mb-2">This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.</p>
+          <p className="text-danger fw-bold m-0" style={{ fontSize: '0.8rem', borderTop: '1px solid rgba(255, 49, 49, 0.2)', paddingTop: '8px' }}>
+            Note: Any food you select could be used in your meal plan, so you should only select foods you like, want in your meal plan, and have access to purchase.
+          </p>
+        </div>
+      ),
       disableBeacon: true,
       hideOverlay: true,
     },
@@ -1532,6 +1607,9 @@ const DietPlanner = () => {
           stepIndex={currentStepIndex}
           disableBeacon={true}
           disableOverlayClose={true}
+          overlayClickAction={false}
+          showSkipButton={true}
+          tooltipComponent={CustomTooltip}
           scrollOffset={150}
           debug={false}
           run={true}
@@ -1563,6 +1641,9 @@ const DietPlanner = () => {
       <TourWrapper
           disableBeacon={true}
           disableOverlayClose={true}
+          overlayClickAction={false}
+          showSkipButton={true}
+          tooltipComponent={CustomTooltip}
           scrollOffset={150}
           debug={false}
           run={true}
