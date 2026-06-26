@@ -576,6 +576,17 @@ const DietPlanner = () => {
           setCurrentStepIndex(14);
         }
       } else {
+        if (index === 16 && isNext) {
+          setRunTour(false);
+          setCurrentStepIndex(0);
+          setShowFoodModal(false);
+          localStorage.setItem('macros100_tutorial_done', 'true');
+          setFormData(prev => ({ ...prev, customMacros: false }));
+          onboardingJustFinishedRef.current = true;
+          handleSubmitRef.current?.();
+          return;
+        }
+
         const nextStep = index + (isPrev ? -1 : 1);
         addLog('Default transition: from ' + index + ' to ' + nextStep);
         if (nextStep === 4 || nextStep === 5) {
