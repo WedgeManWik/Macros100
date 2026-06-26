@@ -476,6 +476,7 @@ const DietPlanner = () => {
       setCurrentStepIndex(0);
       setShowFoodModal(false);
       localStorage.setItem('macros100_tutorial_done', 'true');
+      setFormData(prev => ({ ...prev, customMacros: false }));
       
       if (status === 'finished' && index === 16) {
         addLog('Last step completed. Triggering handleSubmit.');
@@ -1161,6 +1162,17 @@ const DietPlanner = () => {
       }));
     }
   }, [totalUniqueSelectedFoods]);
+
+  // Toggle customMacros based on current step index during onboarding tutorial
+  useEffect(() => {
+    if (runTour) {
+      if (currentStepIndex >= 8 && currentStepIndex <= 10) {
+        setFormData(prev => prev.customMacros ? prev : { ...prev, customMacros: true });
+      } else if (currentStepIndex >= 11) {
+        setFormData(prev => !prev.customMacros ? prev : { ...prev, customMacros: false });
+      }
+    }
+  }, [currentStepIndex, runTour]);
 
   const handleMinChange = (newMin: number) => {
     if (totalUniqueSelectedFoods < 25) return; // Slider locked if selected foods < 25
@@ -2142,7 +2154,19 @@ const DietPlanner = () => {
             <div className="text-center py-5 fade-in">
               <Spinner animation="border" variant="primary" className="mb-4" style={{ width: '3.5rem', height: '3.5rem', borderWidth: '0.25rem' }} />
               <h3 className="h2 fw-bold mb-2">Simulating Biological System</h3>
-              <p className="text-muted mb-5">Optimization runtime: <span className="text-primary fw-bold">{progress.time}s</span></p>
+              <p className="text-muted mb-5">
+                Optimization runtime: <span className="text-primary fw-bold">{progress.time}s</span>
+                <br />
+                <span className="small opacity-75">Estimated completion time: <span className="text-info fw-bold">{(() => {
+                  const elapsed = progress.time;
+                  const pct = Math.round(progress.generation);
+                  if (pct <= 0) return 'Calculating...';
+                  if (pct >= 100) return '0s';
+                  const estTotal = elapsed / (pct / 100);
+                  const remaining = Math.max(1, Math.round(estTotal - elapsed));
+                  return `${remaining}s`;
+                })()}</span></span>
+              </p>
               <div className="mx-auto" style={{ maxWidth: '650px' }}>
                 <div className="d-flex justify-content-between text-muted small mb-2 fw-bold">
                     <span>OPTIMIZING</span>
