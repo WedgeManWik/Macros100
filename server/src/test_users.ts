@@ -15,7 +15,7 @@ const profiles = [
     { weight: 70, height: 165, age: 45, gender: 'female', bodyFat: 25, activityLevel: 1.375, goal: 'moderate-lose', mealsPerDay: 3 }
 ].map(p => ({
     ...p,
-    likedFoods: FOOD_DATABASE.slice(0, 30).map((f: any) => f.name),
+    likedFoods: FOOD_DATABASE.map((f: any) => f.name),
     mustHaveFoods: [],
     macros: { protein: { mode: "g/kg", value: 2.0 }, fat: { mode: "%", value: 30 }, carbs: { mode: "remainder", value: 0 } },
     customMacros: true,

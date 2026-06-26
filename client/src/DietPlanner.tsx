@@ -1007,14 +1007,37 @@ const DietPlanner = () => {
       const interval = setInterval(async () => {
         try {
             const statusRes = await fetch(`${API_BASE_URL}/api/status/${jobId}`);
+            if (!statusRes.ok) {
+                const errData = await statusRes.json().catch(() => ({}));
+                clearInterval(interval);
+                generationIntervalRef.current = null;
+                currentJobIdRef.current = null;
+                setError(errData.error || `Server returned status ${statusRes.status}`);
+                setLoading(false);
+                return;
+            }
             const status = await statusRes.json();
 
-            setProgress(prev => ({
-                generation: status.status === 'completed' ? 100 : (status.status === 'failed' || status.status === 'cancelled' ? 0 : status.generation),
-                accuracy: status.currentAccuracy,
-                time: Math.round((Date.now() - startTime) / 1000),
-                telemetry: status.telemetry || prev.telemetry
-            }));
+            if (status.error) {
+                clearInterval(interval);
+                generationIntervalRef.current = null;
+                currentJobIdRef.current = null;
+                setError(status.error);
+                setLoading(false);
+                return;
+            }
+
+            setProgress(prev => {
+                const genVal = status.status === 'completed' ? 100 : (status.status === 'failed' || status.status === 'cancelled' ? 0 : status.generation);
+                const accVal = status.currentAccuracy;
+                const timeVal = Math.round((Date.now() - startTime) / 1000);
+                return {
+                    generation: typeof genVal === 'number' && !isNaN(genVal) ? genVal : (prev.generation || 0),
+                    accuracy: typeof accVal === 'number' && !isNaN(accVal) ? accVal : (prev.accuracy || 0),
+                    time: typeof timeVal === 'number' && !isNaN(timeVal) ? timeVal : (prev.time || 0),
+                    telemetry: status.telemetry || prev.telemetry
+                };
+            });
 
             if (status.status === 'completed') {
                 clearInterval(interval);

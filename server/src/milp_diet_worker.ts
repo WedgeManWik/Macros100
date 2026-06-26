@@ -263,6 +263,7 @@ async function solveGLPK(foods: Food[], isMILP: boolean, timeLimit: number, head
 
 async function run() {
     try {
+        const startTime = Date.now();
         const uniqueFoodNames = new Set([...details.likedFoods, ...(details.mustHaveFoods || []).map((m:any)=>m.name)]);
         const likedPool = FOOD_DATABASE.filter((f: Food) => uniqueFoodNames.has(f.name)).sort((a,b)=>b.protein - a.protein);
 
@@ -270,7 +271,7 @@ async function run() {
         let candidates: any[] = [];
         
         // Trial 1: Full pool (Essential for strict personas)
-        let fullRes = await solveGLPK(likedPool, true, 20, 1.0);
+        let fullRes = await solveGLPK(likedPool, true, 50, 1.0);
         
         // If Trial 1 failed or has high macro error, try a "Deep Deficit / High Protein" feasibility fallback
         const checkError = (res: any) => {
@@ -283,7 +284,7 @@ async function run() {
             log("Initial attempt missed macro targets. Retrying with feasibility headroom...");
             // Use 100.0x headroom for Trial 1 fallback to guarantee protein hits for restrictive personas
             // This headroom is ONLY used if the standard trial fails to hit macro targets.
-            fullRes = await solveGLPK(likedPool, true, 30, 100.0); 
+            fullRes = await solveGLPK(likedPool, true, 60, 100.0); 
         }
 
         if (fullRes.result && (fullRes.result.status === 5 || fullRes.result.status === 2)) {
@@ -308,9 +309,16 @@ async function run() {
 
         // Subsequent trials: Randomized subsets (Variety)
         for (let i = 1; i < 15; i++) {
+            // Check if elapsed time has exceeded our time budget of 80 seconds
+            const elapsed = (Date.now() - startTime) / 1000;
+            if (elapsed > 80) {
+                log(`Stopping subsequent trials early (elapsed: ${elapsed.toFixed(1)}s) to respect time budget.`);
+                break;
+            }
+
             const subsetSize = Math.min(likedPool.length, 60);
             const subset = [...likedPool].sort(() => 0.5 - Math.random()).slice(0, subsetSize);
-            const res = await solveGLPK(subset, true, 4);
+            const res = await solveGLPK(subset, true, 3);
             if (res.result && (res.result.status === 5 || res.result.status === 2)) {
                 const totals = getTotalsFromVars(res.result.vars, subset);
                 const genome: any = {};
