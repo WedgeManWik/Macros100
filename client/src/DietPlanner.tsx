@@ -28,7 +28,7 @@ const TourWrapper = (props: any) => {
   return <J {...props} />;
 };
 import { Container, Row, Col, Form, Button, Card, Alert, ProgressBar, Spinner, OverlayTrigger, Tooltip, Accordion } from 'react-bootstrap';
-import { Calculator, Utensils, Target, Activity, Heart, Info, RotateCcw, ChevronLeft, ChevronRight, Settings, ClipboardList, X, Sparkles } from 'lucide-react';
+import { Calculator, Utensils, Target, Activity, Heart, Info, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Settings, ClipboardList, X, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface Food {
@@ -234,8 +234,25 @@ const resultsSteps = [
 const DietPlanner = () => {
   const [showFoodModal, setShowFoodModal] = useState(false);
   const showFoodModalRef = useRef(false);
+  const [showFoodScrollIndicator, setShowFoodScrollIndicator] = useState(true);
+
   useEffect(() => {
     showFoodModalRef.current = showFoodModal;
+  }, [showFoodModal]);
+
+  useEffect(() => {
+    if (showFoodModal) {
+      setShowFoodScrollIndicator(true);
+      setTimeout(() => {
+        const scrollContainer = document.querySelector('.tour-liked-foods-scroll-container');
+        if (scrollContainer) {
+          scrollContainer.scrollTo({ top: 120, behavior: 'smooth' });
+          setTimeout(() => {
+            scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+          }, 800);
+        }
+      }, 600);
+    }
   }, [showFoodModal]);
 
   const formSteps = useMemo(() => [
@@ -378,6 +395,8 @@ const DietPlanner = () => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const joyrideHelpers = useRef<any>(null);
   const handleSubmitRef = useRef<any>(null);
+  const generationIntervalRef = useRef<any>(null);
+  const currentJobIdRef = useRef<string | null>(null);
 
   const [runResultsTour, setRunResultsTour] = useState(false);
 
@@ -979,8 +998,12 @@ const DietPlanner = () => {
       });
       const data = await startRes.json();
       const jobId = data.jobId;
+      currentJobIdRef.current = jobId;
 
       const startTime = Date.now();
+      if (generationIntervalRef.current) {
+        clearInterval(generationIntervalRef.current);
+      }
       const interval = setInterval(async () => {
         try {
             const statusRes = await fetch(`${API_BASE_URL}/api/status/${jobId}`);
@@ -995,6 +1018,8 @@ const DietPlanner = () => {
 
             if (status.status === 'completed') {
                 clearInterval(interval);
+                generationIntervalRef.current = null;
+                currentJobIdRef.current = null;
                 if (status.result) {
                     setDiet(status.result);
                     setOriginalDiet(JSON.parse(JSON.stringify(status.result)));
@@ -1019,6 +1044,8 @@ const DietPlanner = () => {
             }
             else if (status.status === 'failed' || status.status === 'cancelled') {
                 clearInterval(interval);
+                generationIntervalRef.current = null;
+                currentJobIdRef.current = null;
                 // This is a total failure (no diet generated at all)
                 const finalError = status.error || 'The optimization algorithm could not find a valid diet passing all quality checks. Please adjust your constraints or select more foods.';
                 setError(finalError);
@@ -1026,6 +1053,7 @@ const DietPlanner = () => {
             }
         } catch (err) { console.error(err); }
       }, 500);
+      generationIntervalRef.current = interval;
     } catch (err: any) {
       setError('Failed: ' + err.message);
       setLoading(false);
@@ -1033,7 +1061,23 @@ const DietPlanner = () => {
   };
   handleSubmitRef.current = handleSubmit;
 
-  const cancelGeneration = () => { setLoading(false); };
+  const cancelGeneration = async () => {
+    setLoading(false);
+    if (generationIntervalRef.current) {
+      clearInterval(generationIntervalRef.current);
+      generationIntervalRef.current = null;
+    }
+    if (currentJobIdRef.current) {
+      try {
+        await fetch(`${API_BASE_URL}/api/cancel-generation/${currentJobIdRef.current}`, {
+          method: 'POST'
+        });
+      } catch (err) {
+        console.error("Failed to cancel generation on server:", err);
+      }
+      currentJobIdRef.current = null;
+    }
+  };
 
   const calculateNutrientsFromIngredients = (sectionedIngredients: DietPlan['sectionedIngredients'], currentMicros: DietPlan['micronutrients']): Pick<DietPlan, 'actualCalories' | 'macros' | 'micronutrients' | 'accuracy'> => {
     const flatIngredients: Record<string, number> = {};
@@ -1458,7 +1502,14 @@ const DietPlanner = () => {
                 </div>
             </div>
 
-            <div className="flex-grow-1 overflow-y-auto pr-3 custom-scrollbar">
+            <div className="flex-grow-1 overflow-y-auto pr-3 custom-scrollbar tour-liked-foods-scroll-container" onScroll={(e) => {
+                const target = e.currentTarget;
+                if (target.scrollTop > 20) {
+                    setShowFoodScrollIndicator(false);
+                } else {
+                    setShowFoodScrollIndicator(true);
+                }
+            }}>
                 {foodSections.map(section => {
                     const sectionFoods = foods.filter(f => f.section === section && f.name.toLowerCase().includes(foodSearch));
                     if (sectionFoods.length === 0) return null;
@@ -1487,6 +1538,14 @@ const DietPlanner = () => {
                     );
                 })}
             </div>
+
+            {showFoodScrollIndicator && (
+              <div className="food-scroll-indicator-arrow">
+                <ChevronDown size={16} className="bounce-arrow me-2" />
+                <span>Scroll for more foods</span>
+              </div>
+            )}
+
             <div className="mt-4 text-center">
                 <Button variant="primary" size="lg" className="px-5" onClick={closeFoodModal}>Save & Close</Button>
             </div>

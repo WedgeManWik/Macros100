@@ -74,6 +74,25 @@ app.get('/api/status/:id', (req, res) => {
   res.json(job);
 });
 
+app.post('/api/cancel-generation/:id', (req, res) => {
+  const jobId = req.params.id;
+  const job = jobs[jobId];
+  if (job) {
+    console.log(`[Server][Job ${jobId}] Received cancel request. Terminating worker...`);
+    if (typeof job.stop === 'function') {
+      try {
+        job.stop();
+      } catch (err: any) {
+        console.error(`[Server][Job ${jobId}] Error calling stop(): ${err.message}`);
+      }
+    }
+    job.status = 'cancelled';
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'Job not found' });
+  }
+});
+
 app.post('/api/generate-meal-plan', async (req, res) => {
   try {
     const { ingredients, customInstructions } = req.body;
