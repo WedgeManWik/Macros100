@@ -83,11 +83,12 @@ const CustomTooltip = ({
             </button>
           )}
           <button 
-            {...primaryProps} 
+            {...(step.isGenerateStep ? {} : primaryProps)} 
+            onClick={step.isGenerateStep ? step.onGenerateClick : primaryProps.onClick}
             className="btn btn-sm btn-primary px-3 fw-bold" 
             style={{ borderRadius: '8px', fontSize: '0.8rem', backgroundColor: '#ff3131', borderColor: '#ff3131' }}
           >
-            {isLast ? 'Generate' : 'Next'}
+            {step.isGenerateStep ? 'Generate' : (isLast ? 'Generate' : 'Next')}
           </button>
         </div>
       </div>
@@ -283,19 +284,27 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 const resultsSteps = [
   {
-    target: 'body',
-    placement: 'center',
+    target: '.tour-result-1',
+    placement: 'top',
     content: 'Your diet is ready! Here is your Ingredient List. You can edit the exact gram amounts, or click the Export button to copy the list to your clipboard.',
     disableBeacon: true,
   },
   {
-    target: '.tour-result-2',
-    content: 'Want this turned into a meal plan? Click Generate AI Meal Plan! You can enter Custom Instructions (like "I only want 3 meals" or "carb backloading") and our AI will organize your exact ingredients into perfect meals.',
+    target: '.tour-meal-container',
+    placement: 'top',
+    content: 'Want this turned into a meal plan? You can add custom instructions like only 3 meals, carb backloading etc. and click generate.',
     disableBeacon: true,
   },
   {
     target: '.tour-result-3',
-    content: 'We also generate a complete Shopping List for all the ingredients you need!',
+    placement: 'top',
+    content: 'We also generate a complete Nutritional Breakdown of your diet plan!',
+    disableBeacon: true,
+  },
+  {
+    target: '.tour-nutrient-hover',
+    placement: 'top',
+    content: 'Hover over any nutrient to show the specific food sources of them from the diet.',
     disableBeacon: true,
   }
 ];
@@ -438,15 +447,6 @@ const DietPlanner = () => {
     }));
   }, [formSteps]);
 
-  const processedResultsSteps = useMemo(() => {
-    return resultsSteps.map((step: any) => ({
-      ...step,
-      disableOverlayClose: true,
-      overlayClickAction: false,
-      hideEscButton: true,
-    }));
-  }, [resultsSteps]);
-
   const [foods, setFoods] = useState<Food[]>([]);
   const [diet, setDiet] = useState<DietPlan | null>(null);
   const [originalDiet, setOriginalDiet] = useState<DietPlan | null>(null);
@@ -499,6 +499,8 @@ const DietPlanner = () => {
   const onboardingJustFinishedRef = useRef(false);
 
   const [runResultsTour, setRunResultsTour] = useState(false);
+  const [resultsStepIndex, setResultsStepIndex] = useState(0);
+  const [activeAccordionKey, setActiveAccordionKey] = useState<string | null>("0");
 
   const handleJoyrideHelpers = useCallback((helpers: any) => {
     joyrideHelpers.current = helpers;
@@ -580,10 +582,41 @@ const DietPlanner = () => {
   }, [addLog]);
 
   const handleResultsJoyrideCallback = useCallback((data: any) => {
-    const { action, status, type } = data;
-    addLog('Results Callback: status=' + status + ', type=' + type + ', action=' + action);
+    const { action, index, status, type } = data;
+    addLog('Results Callback: status=' + status + ', type=' + type + ', action=' + action + ', index=' + index);
+    
+    if (type === 'step:after') {
+      const isNext = action === 'next';
+      const isPrev = action === 'prev';
+      
+      if (index === 0) {
+        if (isNext) {
+          setActiveAccordionKey("1");
+          setResultsStepIndex(1);
+        }
+      } else if (index === 1) {
+        if (isPrev) {
+          setActiveAccordionKey("0");
+          setResultsStepIndex(0);
+        }
+      } else if (index === 2) {
+        if (isNext) {
+          setResultsStepIndex(3);
+        } else if (isPrev) {
+          setActiveAccordionKey("1");
+          setResultsStepIndex(1);
+        }
+      } else if (index === 3) {
+        if (isPrev) {
+          setActiveAccordionKey("2");
+          setResultsStepIndex(2);
+        }
+      }
+    }
+
     if (status === 'finished' || (status === 'skipped' && action === 'skip')) {
       setRunResultsTour(false);
+      setResultsStepIndex(0);
       localStorage.setItem('macros100_results_tutorial_done', 'true');
     }
   }, [addLog]);
@@ -594,6 +627,14 @@ const DietPlanner = () => {
   const [mealPlanLoading, setMealPlanLoading] = useState(false);
   const [mealPlanError, setMealPlanError] = useState<string | null>(null);
   const [customInstructions, setCustomInstructions] = useState('');
+
+  // Auto-advance results tutorial when meal plan finishes generating
+  useEffect(() => {
+    if (runResultsTour && resultsStepIndex === 1 && mealPlan && !mealPlanLoading) {
+      setActiveAccordionKey("2");
+      setResultsStepIndex(2);
+    }
+  }, [mealPlan, mealPlanLoading, runResultsTour, resultsStepIndex]);
 
   const [formData, setFormData] = useState<FormData>(() => {
     const defaults: FormData = {
@@ -1155,6 +1196,9 @@ const DietPlanner = () => {
                     if (onboardingJustFinishedRef.current) {
                         onboardingJustFinishedRef.current = false;
                         setTimeout(() => {
+                            setMealPlan(null);
+                            setResultsStepIndex(0);
+                            setActiveAccordionKey("0");
                             setRunResultsTour(true);
                         }, 800);
                     }
@@ -1433,6 +1477,22 @@ const DietPlanner = () => {
     }
   };
 
+  const processedResultsSteps = useMemo(() => {
+    return resultsSteps.map((step: any, idx: number) => {
+      const newStep = {
+        ...step,
+        disableOverlayClose: true,
+        overlayClickAction: false,
+        hideEscButton: true,
+      };
+      if (idx === 1) {
+        newStep.isGenerateStep = true;
+        newStep.onGenerateClick = handleGenerateMealPlan;
+      }
+      return newStep;
+    });
+  }, [handleGenerateMealPlan]);
+
   const handleAmountChange = (section: string, index: number, newAmount: string) => {
     if (!diet) return;
     const amt = parseFloat(newAmount) || 0;
@@ -1681,6 +1741,7 @@ const DietPlanner = () => {
           debug={false}
           run={true}
           addLog={addLog}
+          stepIndex={resultsStepIndex}
           steps={processedResultsSteps}
         continuous={true}
         onEvent={handleResultsJoyrideCallback}
@@ -2397,7 +2458,7 @@ const DietPlanner = () => {
                 </Col>
               </Row>
 
-              <Accordion defaultActiveKey="0" className="mt-4 mb-4 custom-accordion" data-bs-theme="dark">
+              <Accordion activeKey={activeAccordionKey} onSelect={(k: any) => setActiveAccordionKey(k)} className="mt-4 mb-4 custom-accordion" data-bs-theme="dark">
                 <Accordion.Item eventKey="0" className="tour-result-1 glass-panel border-0 mb-3 overflow-hidden">
                   <Accordion.Header>
                     <h3 className="h5 fw-bold mb-0 d-flex align-items-center m-0"><Utensils className="me-2 text-primary-vibrant" size={20} /> Daily Ingredient List</h3>
@@ -2573,7 +2634,7 @@ const DietPlanner = () => {
                       <Sparkles className="me-2 text-warning-vibrant" size={20} /> Full Day Meal Plan
                     </h3>
                   </Accordion.Header>
-                  <Accordion.Body className="p-4 pt-3">
+                  <Accordion.Body className="p-4 pt-3 tour-meal-container">
                     {!mealPlan && !mealPlanLoading && (
                       <div className="text-center py-5">
                         <Sparkles size={48} className="text-warning-vibrant mb-3 opacity-50" />
@@ -2648,23 +2709,29 @@ const DietPlanner = () => {
                   </Accordion.Header>
                   <Accordion.Body className="p-4 pt-3">
                     
-                    {[ 
-                      { title: "General", keys: ["energy", "water", "caffeine", "alcohol"] },
-                      { title: "Carbohydrates", keys: ["carbs", "net_carbs", "fiber", "sugars"] },
-                      { title: "Lipids", keys: ["fat", "cholesterol", "fatMono", "fatPoly", "omega3", "omega6", "fatSat", "fatTrans"] },
-                      { title: "Protein (Amino Acids)", keys: ["protein", "cystine", "histidine", "isoleucine", "leucine", "lysine", "methionine", "phenylalanine", "threonine", "tryptophan", "tyrosine", "valine", "arginine", "glutamine", "glycine", "proline"] },
-                      { title: "Vitamins", keys: ["b1", "b2", "b3", "b5", "b6", "b12", "folate", "a", "c", "d", "e", "k", "biotin", "choline"] },
-                      { title: "Minerals", keys: ["calcium", "copper", "iron", "magnesium", "manganese", "phosphorus", "potassium", "selenium", "sodium", "zinc", "iodine", "fluoride", "boron", "chromium", "molybdenum", "chloride"] },
-                      { title: "Phytonutrients & Other", keys: ["betaine", "lutein_zeaxanthin", "lycopene", "quercetin", "anthocyanins"] }
-                    ].map(group => {
-                      const visibleKeys = group.keys.filter(k => diet.micronutrients[k]);
-                      if (visibleKeys.length === 0) return null;
-                      
-                      return (
-                        <div key={group.title} className="mb-5">
-                          <h5 className="text-primary-vibrant border-bottom border-secondary border-opacity-25 pb-2 mb-4 fw-bold small text-uppercase tracking-wider">{group.title}</h5>
-                          <Row className="g-4">
-                            {visibleKeys.map(name => {
+                    {(() => {
+                      let firstRendered = true;
+                      return [ 
+                        { title: "General", keys: ["energy", "water", "caffeine", "alcohol"] },
+                        { title: "Carbohydrates", keys: ["carbs", "net_carbs", "fiber", "sugars"] },
+                        { title: "Lipids", keys: ["fat", "cholesterol", "fatMono", "fatPoly", "omega3", "omega6", "fatSat", "fatTrans"] },
+                        { title: "Protein (Amino Acids)", keys: ["protein", "cystine", "histidine", "isoleucine", "leucine", "lysine", "methionine", "phenylalanine", "threonine", "tryptophan", "tyrosine", "valine", "arginine", "glutamine", "glycine", "proline"] },
+                        { title: "Vitamins", keys: ["b1", "b2", "b3", "b5", "b6", "b12", "folate", "a", "c", "d", "e", "k", "biotin", "choline"] },
+                        { title: "Minerals", keys: ["calcium", "copper", "iron", "magnesium", "manganese", "phosphorus", "potassium", "selenium", "sodium", "zinc", "iodine", "fluoride", "boron", "chromium", "molybdenum", "chloride"] },
+                        { title: "Phytonutrients & Other", keys: ["betaine", "lutein_zeaxanthin", "lycopene", "quercetin", "anthocyanins"] }
+                      ].map(group => {
+                        const visibleKeys = group.keys.filter(k => diet.micronutrients[k]);
+                        if (visibleKeys.length === 0) return null;
+                        
+                        return (
+                          <div key={group.title} className="mb-5">
+                            <h5 className="text-primary-vibrant border-bottom border-secondary border-opacity-25 pb-2 mb-4 fw-bold small text-uppercase tracking-wider">{group.title}</h5>
+                            <Row className="g-4">
+                              {visibleKeys.map(name => {
+                                const isFirstNutrient = firstRendered;
+                                if (firstRendered) {
+                                  firstRendered = false;
+                                }
                               const data = diet.micronutrients[name];
                               if (!data) return null;
                               const pct = Math.round(data.total || 0);
@@ -2705,7 +2772,7 @@ const DietPlanner = () => {
                                 .slice(0, 10);
 
                               return (
-                                <Col md={6} xl={4} key={name}>
+                                <Col md={6} xl={4} key={name} className={isFirstNutrient ? "tour-nutrient-hover" : ""}>
                                   <OverlayTrigger
                                     placement="top"
                                     trigger={['hover', 'focus']}
@@ -2790,7 +2857,8 @@ const DietPlanner = () => {
                           </Row>
                         </div>
                       );
-                    })}
+                    })
+                  })()}
                     <Alert variant="info" className="mt-4 py-3 border-0 glass-panel shadow-sm">
                       <div className="d-flex">
                         <Info size={20} className="me-3 text-info flex-shrink-0" />
