@@ -432,7 +432,8 @@ const DietPlanner = () => {
   const processedFormSteps = useMemo(() => {
     return formSteps.map((step: any) => ({
       ...step,
-      disableOverlayClose: step.disableOverlayClose !== undefined ? step.disableOverlayClose : true,
+      disableOverlayClose: true,
+      overlayClickAction: false,
       hideEscButton: true,
     }));
   }, [formSteps]);
@@ -440,7 +441,8 @@ const DietPlanner = () => {
   const processedResultsSteps = useMemo(() => {
     return resultsSteps.map((step: any) => ({
       ...step,
-      disableOverlayClose: step.disableOverlayClose !== undefined ? step.disableOverlayClose : true,
+      disableOverlayClose: true,
+      overlayClickAction: false,
       hideEscButton: true,
     }));
   }, [resultsSteps]);
@@ -1636,6 +1638,7 @@ const DietPlanner = () => {
           showSkipButton={true}
           hideEscButton={true}
           tooltipComponent={CustomTooltip}
+          options={{ overlayClickAction: false }}
           scrollOffset={150}
           debug={false}
           run={true}
@@ -1673,6 +1676,7 @@ const DietPlanner = () => {
           showSkipButton={true}
           hideEscButton={true}
           tooltipComponent={CustomTooltip}
+          options={{ overlayClickAction: false }}
           scrollOffset={150}
           debug={false}
           run={true}

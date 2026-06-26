@@ -564,3 +564,7 @@ option { background-color: #1a1a1a !important; color: #fff !important; }
   background-color: #ffcccc;
 }
 
+/* JOYRIDE OVERLAY CURSOR AND CLICK BLOCK */
+.react-joyride__overlay {
+  cursor: default !important;
+}
