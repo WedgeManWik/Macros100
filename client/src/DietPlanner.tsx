@@ -429,6 +429,22 @@ const DietPlanner = () => {
     }
   ], []);
 
+  const processedFormSteps = useMemo(() => {
+    return formSteps.map((step: any) => ({
+      ...step,
+      disableOverlayClose: step.disableOverlayClose !== undefined ? step.disableOverlayClose : true,
+      hideEscButton: true,
+    }));
+  }, [formSteps]);
+
+  const processedResultsSteps = useMemo(() => {
+    return resultsSteps.map((step: any) => ({
+      ...step,
+      disableOverlayClose: step.disableOverlayClose !== undefined ? step.disableOverlayClose : true,
+      hideEscButton: true,
+    }));
+  }, [resultsSteps]);
+
   const [foods, setFoods] = useState<Food[]>([]);
   const [diet, setDiet] = useState<DietPlan | null>(null);
   const [originalDiet, setOriginalDiet] = useState<DietPlan | null>(null);
@@ -478,6 +494,7 @@ const DietPlanner = () => {
   const handleSubmitRef = useRef<any>(null);
   const generationIntervalRef = useRef<any>(null);
   const currentJobIdRef = useRef<string | null>(null);
+  const onboardingJustFinishedRef = useRef(false);
 
   const [runResultsTour, setRunResultsTour] = useState(false);
 
@@ -554,6 +571,7 @@ const DietPlanner = () => {
       
       if (status === 'finished' && index === 16) {
         addLog('Last step completed. Triggering handleSubmit.');
+        onboardingJustFinishedRef.current = true;
         handleSubmitRef.current?.();
       }
     }
@@ -1046,6 +1064,7 @@ const DietPlanner = () => {
       setCurrentStepIndex(0);
       setShowFoodModal(false);
       localStorage.setItem('macros100_tutorial_done', 'true');
+      onboardingJustFinishedRef.current = true;
     }
 
     // VALIDATION: Check for at least 20 unique foods
@@ -1130,6 +1149,13 @@ const DietPlanner = () => {
                 if (status.result) {
                     setDiet(status.result);
                     setOriginalDiet(JSON.parse(JSON.stringify(status.result)));
+
+                    if (onboardingJustFinishedRef.current) {
+                        onboardingJustFinishedRef.current = false;
+                        setTimeout(() => {
+                            setRunResultsTour(true);
+                        }, 800);
+                    }
                     
                     // MOBILE AUTO-SWITCH: Switch to Results tab on small screens
                     if (window.innerWidth < 992) {
@@ -1615,7 +1641,7 @@ const DietPlanner = () => {
           run={true}
           getHelpers={handleJoyrideHelpers}
           addLog={addLog}
-          steps={formSteps}
+          steps={processedFormSteps}
         continuous={true}
         onEvent={handleJoyrideCallback}
         locale={{ last: 'Generate' }}
@@ -1648,7 +1674,7 @@ const DietPlanner = () => {
           debug={false}
           run={true}
           addLog={addLog}
-          steps={resultsSteps}
+          steps={processedResultsSteps}
         continuous={true}
         onEvent={handleResultsJoyrideCallback}
         disableScrolling={true}
