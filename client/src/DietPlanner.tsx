@@ -1759,6 +1759,7 @@ const DietPlanner = () => {
       
       {runResultsTour && (
       <TourWrapper
+          key={runResultsTour ? "results-on" : "results-off"}
           disableBeacon={true}
           disableOverlayClose={true}
           overlayClickAction={false}
