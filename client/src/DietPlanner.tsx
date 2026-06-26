@@ -43,14 +43,13 @@ const CustomTooltip = ({
   return (
     <div 
       {...tooltipProps} 
-      className="joyride-tooltip-custom glass-panel p-4" 
+      className="joyride-tooltip-custom p-4 text-light" 
       style={{ 
         maxWidth: '420px', 
         color: '#fff', 
-        background: 'rgba(15, 15, 15, 0.95)', 
+        background: '#1a1a1a', 
         border: '1px solid rgba(255, 255, 255, 0.1)', 
         borderRadius: '16px', 
-        backdropFilter: 'blur(8px)', 
         boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.5)'
       }}
     >
@@ -545,7 +544,7 @@ const DietPlanner = () => {
       }
     }
 
-    if (status === 'finished' || status === 'skipped' || action === 'close') {
+    if (status === 'finished' || status === 'skipped') {
       addLog('Tour ended. status=' + status);
       setRunTour(false);
       setCurrentStepIndex(0);
@@ -563,7 +562,7 @@ const DietPlanner = () => {
   const handleResultsJoyrideCallback = useCallback((data: any) => {
     const { action, status, type } = data;
     addLog('Results Callback: status=' + status + ', type=' + type + ', action=' + action);
-    if (status === 'finished' || status === 'skipped' || action === 'close') {
+    if (status === 'finished' || status === 'skipped') {
       setRunResultsTour(false);
       localStorage.setItem('macros100_results_tutorial_done', 'true');
     }
@@ -1609,6 +1608,7 @@ const DietPlanner = () => {
           disableOverlayClose={true}
           overlayClickAction={false}
           showSkipButton={true}
+          hideEscButton={true}
           tooltipComponent={CustomTooltip}
           scrollOffset={150}
           debug={false}
@@ -1622,8 +1622,8 @@ const DietPlanner = () => {
         disableScrolling={true}
         styles={( {
           options: {
-            arrowColor: 'rgba(15, 15, 15, 0.95)',
-            backgroundColor: 'rgba(15, 15, 15, 0.95)',
+            arrowColor: '#1a1a1a',
+            backgroundColor: '#1a1a1a',
             primaryColor: '#ff3131',
             textColor: '#fff',
             zIndex: 100000,
@@ -1631,7 +1631,6 @@ const DietPlanner = () => {
           tooltip: {
             border: '1px solid rgba(255, 255, 255, 0.1)',
             borderRadius: '16px',
-            backdropFilter: 'blur(8px)',
           }
         } as any )}
       />
@@ -1643,6 +1642,7 @@ const DietPlanner = () => {
           disableOverlayClose={true}
           overlayClickAction={false}
           showSkipButton={true}
+          hideEscButton={true}
           tooltipComponent={CustomTooltip}
           scrollOffset={150}
           debug={false}
@@ -1654,8 +1654,8 @@ const DietPlanner = () => {
         disableScrolling={true}
         styles={( {
           options: {
-            arrowColor: 'rgba(15, 15, 15, 0.95)',
-            backgroundColor: 'rgba(15, 15, 15, 0.95)',
+            arrowColor: '#1a1a1a',
+            backgroundColor: '#1a1a1a',
             primaryColor: '#ff3131',
             textColor: '#fff',
             zIndex: 100000,
@@ -1663,7 +1663,6 @@ const DietPlanner = () => {
           tooltip: {
             border: '1px solid rgba(255, 255, 255, 0.1)',
             borderRadius: '16px',
-            backdropFilter: 'blur(8px)',
           }
         } as any )}
       />
