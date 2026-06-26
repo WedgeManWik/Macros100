@@ -84,7 +84,7 @@ const CustomTooltip = ({
           )}
           <button 
             {...(step.isGenerateStep ? {} : primaryProps)} 
-            onClick={step.isGenerateStep ? step.onGenerateClick : primaryProps.onClick}
+            onClick={step.isGenerateStep ? () => globalGenerateMealPlan?.() : primaryProps.onClick}
             className="btn btn-sm btn-primary px-3 fw-bold" 
             style={{ borderRadius: '8px', fontSize: '0.8rem', backgroundColor: '#ff3131', borderColor: '#ff3131' }}
           >
@@ -280,30 +280,36 @@ const InteractiveMacroPie = ({
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
+let globalGenerateMealPlan: (() => Promise<void>) | null = null;
+
 
 
 const resultsSteps = [
   {
     target: '.tour-result-1',
     placement: 'top',
+    title: 'Daily Ingredient List',
     content: 'Your diet is ready! Here is your Ingredient List. You can edit the exact gram amounts, or click the Export button to copy the list to your clipboard.',
     disableBeacon: true,
   },
   {
     target: '.tour-meal-container',
     placement: 'top',
+    title: 'Full Day Meal Plan',
     content: 'Want this turned into a meal plan? You can add custom instructions like only 3 meals, carb backloading etc. and click generate.',
     disableBeacon: true,
   },
   {
     target: '.tour-result-3',
     placement: 'top',
+    title: 'Nutritional Breakdown',
     content: 'We also generate a complete Nutritional Breakdown of your diet plan!',
     disableBeacon: true,
   },
   {
     target: '.tour-nutrient-hover',
     placement: 'top',
+    title: 'Nutrient Sources',
     content: 'Hover over any nutrient to show the specific food sources of them from the diet.',
     disableBeacon: true,
   }
@@ -337,77 +343,92 @@ const DietPlanner = () => {
     {
       target: 'body',
       placement: 'center',
+      title: 'Welcome to Macros100',
       content: 'Welcome to Macros100! Let\'s walk through the app to get your perfect diet set up.',
       disableBeacon: true,
     },
     {
       target: '.tour-biometrics',
+      title: 'Biometric Profile',
       content: 'First, enter your basic biometric details (Weight, Height, Age, and Gender) so we can accurately estimate your metabolic rate.',
       disableBeacon: true,
     },
     {
       target: '.tour-bodyfat',
+      title: 'Body Fat Percentage',
       content: 'Next, enter your Body Fat percentage. If you don\'t know exactly what it is, don\'t worry! We will use a standard estimated amount based on your BMI.',
       disableBeacon: true,
     },
     {
       target: '.tour-activity',
+      title: 'Activity Level',
       content: 'Select your daily Activity Level. Be honest—this heavily impacts your calorie needs.',
       disableBeacon: true,
     },
     {
       target: '.tour-maintenance',
+      title: 'Maintenance Calories',
       content: 'These are your calculated Maintenance Calories (the amount you need to stay exactly the same weight). You can manually adjust them here if you feel this amount is wrong based on your experience.',
       disableBeacon: true,
     },
     {
       target: '.tour-goal',
+      title: 'Your Goal',
       content: 'Select your Daily Goal (Lose, Maintain, or Gain weight).',
       disableBeacon: true,
     },
     {
       target: '.tour-offset',
+      title: 'Calorie Offset',
       content: 'This is the recommended Calorie Offset for your chosen goal (e.g. -500 calories for weight loss). You can change it if you wish.',
       disableBeacon: true,
     },
     {
       target: '.tour-target',
+      title: 'Target Calories',
       content: 'Your final Target Calories are displayed here. You can manually type in a specific target here, and we will recalculate your offset automatically.',
       disableBeacon: true,
     },
     {
       target: '.tour-macros',
+      title: 'Macro Split',
       content: 'By default, we use a recommended macro split. You can toggle the switch here to enable Custom Macros.',
       spotlightClicks: true,
       disableBeacon: true,
     },
     {
       target: '.tour-macros-pie',
+      title: 'Custom Macros Pie',
       content: 'With Custom Macros enabled, you can click and manually drag the pie chart to perfectly adjust your Protein, Fat, and Carb ratios!',
       disableBeacon: true,
     },
     {
       target: '.tour-macros-strictness',
+      title: 'Macro Strictness',
       content: 'The Strictness setting tells the AI how hard to try to hit these macros. "Strict" forces the math engine to hit that exact amount, while "Relaxed" gives it some wiggle room to make a tastier meal plan.',
       disableBeacon: true,
     },
     {
       target: '.tour-musthave',
+      title: 'Locked-In Foods',
       content: 'If there are foods you absolutely MUST eat every day (like 50g of whey protein), add them here and we will lock them into your diet.',
       disableBeacon: true,
     },
     {
       target: '.tour-variety',
+      title: 'Diet Variety Slider',
       content: 'Use this double slider to control your diet variety. You can adjust the minimum and maximum number of unique foods that will appear in your plan (at least 20 unique foods must be selected).',
       disableBeacon: true,
     },
     {
       target: '.tour-advanced',
+      title: 'Advanced Settings',
       content: 'Advanced users can open this panel to override micronutrient targets (like specific Vitamin C or Cholesterol limits).',
       disableBeacon: true,
     },
     {
       target: '.tour-liked',
+      title: 'Food Preference',
       content: 'Now, click this button to open the Liked Foods menu! The algorithm will only pick foods from your liked list.',
       spotlightClicks: true,
       disableBeacon: true,
@@ -420,6 +441,7 @@ const DietPlanner = () => {
     {
       target: '.tour-liked-foods-modal-header',
       placement: 'top',
+      title: 'Liked Foods Menu',
       content: (
         <div>
           <p className="mb-2">This is the Liked Foods Menu! Here you can search, filter, and toggle foods you like or dislike. When you are done, close the menu to continue the tour.</p>
@@ -433,6 +455,7 @@ const DietPlanner = () => {
     },
     {
       target: '.tour-generate',
+      title: 'Generate Diet',
       content: 'Finally, click Generate Daily Plan to instantly create a scientifically perfect diet!',
       disableBeacon: true,
     }
@@ -1477,6 +1500,13 @@ const DietPlanner = () => {
     }
   };
 
+  useEffect(() => {
+    globalGenerateMealPlan = handleGenerateMealPlan;
+    return () => {
+      globalGenerateMealPlan = null;
+    };
+  }, [handleGenerateMealPlan]);
+
   const processedResultsSteps = useMemo(() => {
     return resultsSteps.map((step: any, idx: number) => {
       const newStep = {
@@ -1487,11 +1517,10 @@ const DietPlanner = () => {
       };
       if (idx === 1) {
         newStep.isGenerateStep = true;
-        newStep.onGenerateClick = handleGenerateMealPlan;
       }
       return newStep;
     });
-  }, [handleGenerateMealPlan]);
+  }, []);
 
   const handleAmountChange = (section: string, index: number, newAmount: string) => {
     if (!diet) return;
