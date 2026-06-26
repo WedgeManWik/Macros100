@@ -561,8 +561,8 @@ const DietPlanner = () => {
       }
     }
 
-    if (status === 'finished' || status === 'skipped') {
-      addLog('Tour ended. status=' + status);
+    if (status === 'finished' || (status === 'skipped' && action === 'skip')) {
+      addLog('Tour ended. status=' + status + ', action=' + action);
       setRunTour(false);
       setCurrentStepIndex(0);
       setShowFoodModal(false);
@@ -580,7 +580,7 @@ const DietPlanner = () => {
   const handleResultsJoyrideCallback = useCallback((data: any) => {
     const { action, status, type } = data;
     addLog('Results Callback: status=' + status + ', type=' + type + ', action=' + action);
-    if (status === 'finished' || status === 'skipped') {
+    if (status === 'finished' || (status === 'skipped' && action === 'skip')) {
       setRunResultsTour(false);
       localStorage.setItem('macros100_results_tutorial_done', 'true');
     }
@@ -1654,6 +1654,9 @@ const DietPlanner = () => {
             textColor: '#fff',
             zIndex: 100000,
           },
+          overlay: {
+            cursor: 'default',
+          },
           tooltip: {
             border: '1px solid rgba(255, 255, 255, 0.1)',
             borderRadius: '16px',
@@ -1685,6 +1688,9 @@ const DietPlanner = () => {
             primaryColor: '#ff3131',
             textColor: '#fff',
             zIndex: 100000,
+          },
+          overlay: {
+            cursor: 'default',
           },
           tooltip: {
             border: '1px solid rgba(255, 255, 255, 0.1)',
