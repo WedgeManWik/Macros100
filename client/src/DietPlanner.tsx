@@ -284,37 +284,6 @@ let globalGenerateMealPlan: (() => Promise<void>) | null = null;
 
 
 
-const resultsSteps = [
-  {
-    target: '.tour-result-1',
-    placement: 'top',
-    title: 'Daily Ingredient List',
-    content: 'Your diet is ready! Here is your Ingredient List. You can edit the exact gram amounts, or click the Export button to copy the list to your clipboard.',
-    disableBeacon: true,
-  },
-  {
-    target: '.tour-meal-container',
-    placement: 'top',
-    title: 'Full Day Meal Plan',
-    content: 'Want this turned into a meal plan? You can add custom instructions like only 3 meals, carb backloading etc. and click generate.',
-    disableBeacon: true,
-  },
-  {
-    target: '.tour-result-3',
-    placement: 'top',
-    title: 'Nutritional Breakdown',
-    content: 'We also generate a complete Nutritional Breakdown of your diet plan!',
-    disableBeacon: true,
-  },
-  {
-    target: '.tour-nutrient-hover',
-    placement: 'top',
-    title: 'Nutrient Sources',
-    content: 'Hover over any nutrient to show the specific food sources of them from the diet.',
-    disableBeacon: true,
-  }
-];
-
 const DietPlanner = () => {
   const [showFoodModal, setShowFoodModal] = useState(false);
   const showFoodModalRef = useRef(false);
@@ -458,16 +427,51 @@ const DietPlanner = () => {
       title: 'Generate Diet',
       content: 'Finally, click Generate Daily Plan to instantly create a scientifically perfect diet!',
       disableBeacon: true,
+      locale: { next: 'Generate Daily Plan' }
+    },
+    {
+      target: '.tour-result-1',
+      placement: 'top',
+      title: 'Daily Ingredient List',
+      content: 'Your diet is ready! Here is your Ingredient List. You can edit the exact gram amounts, or click the Export button to copy the list to your clipboard.',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-meal-container',
+      placement: 'top',
+      title: 'Full Day Meal Plan',
+      content: 'Want this turned into a meal plan? You can add custom instructions like only 3 meals, carb backloading etc. and click generate.',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-result-3',
+      placement: 'top',
+      title: 'Nutritional Breakdown',
+      content: 'We also generate a complete Nutritional Breakdown of your diet plan!',
+      disableBeacon: true,
+    },
+    {
+      target: '.tour-nutrient-hover',
+      placement: 'top',
+      title: 'Nutrient Sources',
+      content: 'Hover over any nutrient to show the specific food sources of them from the diet.',
+      disableBeacon: true,
     }
   ], []);
 
   const processedFormSteps = useMemo(() => {
-    return formSteps.map((step: any) => ({
-      ...step,
-      disableOverlayClose: true,
-      overlayClickAction: false,
-      hideEscButton: true,
-    }));
+    return formSteps.map((step: any, idx: number) => {
+      const newStep = {
+        ...step,
+        disableOverlayClose: true,
+        overlayClickAction: false,
+        hideEscButton: true,
+      };
+      if (idx === 18) {
+        newStep.isGenerateStep = true;
+      }
+      return newStep;
+    });
   }, [formSteps]);
 
   const [foods, setFoods] = useState<Food[]>([]);
@@ -519,10 +523,8 @@ const DietPlanner = () => {
   const handleSubmitRef = useRef<any>(null);
   const generationIntervalRef = useRef<any>(null);
   const currentJobIdRef = useRef<string | null>(null);
-  const onboardingJustFinishedRef = useRef(false);
 
-  const [runResultsTour, setRunResultsTour] = useState(false);
-  const [resultsStepIndex, setResultsStepIndex] = useState(0);
+
   const [activeAccordionKey, setActiveAccordionKey] = useState<string | null>("0");
 
   const handleJoyrideHelpers = useCallback((helpers: any) => {
@@ -575,18 +577,41 @@ const DietPlanner = () => {
         } else if (isPrev) {
           setCurrentStepIndex(14);
         }
-      } else {
-        if (index === 16 && isNext) {
-          setRunTour(false);
-          setCurrentStepIndex(0);
-          setShowFoodModal(false);
-          localStorage.setItem('macros100_tutorial_done', 'true');
-          setFormData(prev => ({ ...prev, customMacros: false }));
-          onboardingJustFinishedRef.current = true;
-          handleSubmitRef.current?.();
-          return;
+      } else if (index === 16 && isNext) {
+        addLog('Step 16 Next triggered. Calling handleSubmit.');
+        handleSubmitRef.current?.();
+        return;
+      } else if (index === 17) {
+        if (isNext) {
+          addLog('Step 17 Next triggered. Opening Meal Plan panel.');
+          setActiveAccordionKey("1");
+          setCurrentStepIndex(18);
+        } else if (isPrev) {
+          addLog('Step 17 Back triggered. Returning to step 16.');
+          setCurrentStepIndex(16);
         }
-
+      } else if (index === 18) {
+        if (isPrev) {
+          addLog('Step 18 Back triggered. Opening Daily Ingredient List panel.');
+          setActiveAccordionKey("0");
+          setCurrentStepIndex(17);
+        }
+      } else if (index === 19) {
+        if (isNext) {
+          addLog('Step 19 Next triggered. Advancing to step 20.');
+          setCurrentStepIndex(20);
+        } else if (isPrev) {
+          addLog('Step 19 Back triggered. Opening Meal Plan panel.');
+          setActiveAccordionKey("1");
+          setCurrentStepIndex(18);
+        }
+      } else if (index === 20) {
+        if (isPrev) {
+          addLog('Step 20 Back triggered. Opening Nutritional Breakdown panel.');
+          setActiveAccordionKey("2");
+          setCurrentStepIndex(19);
+        }
+      } else {
         const nextStep = index + (isPrev ? -1 : 1);
         addLog('Default transition: from ' + index + ' to ' + nextStep);
         if (nextStep === 4 || nextStep === 5) {
@@ -606,52 +631,6 @@ const DietPlanner = () => {
       setShowFoodModal(false);
       localStorage.setItem('macros100_tutorial_done', 'true');
       setFormData(prev => ({ ...prev, customMacros: false }));
-      
-      if (status === 'finished' && index === 16) {
-        addLog('Last step completed. Triggering handleSubmit.');
-        onboardingJustFinishedRef.current = true;
-        handleSubmitRef.current?.();
-      }
-    }
-  }, [addLog]);
-
-  const handleResultsJoyrideCallback = useCallback((data: any) => {
-    const { action, index, status, type } = data;
-    addLog('Results Callback: status=' + status + ', type=' + type + ', action=' + action + ', index=' + index);
-    
-    if (type === 'step:after') {
-      const isNext = action === 'next';
-      const isPrev = action === 'prev';
-      
-      if (index === 0) {
-        if (isNext) {
-          setActiveAccordionKey("1");
-          setResultsStepIndex(1);
-        }
-      } else if (index === 1) {
-        if (isPrev) {
-          setActiveAccordionKey("0");
-          setResultsStepIndex(0);
-        }
-      } else if (index === 2) {
-        if (isNext) {
-          setResultsStepIndex(3);
-        } else if (isPrev) {
-          setActiveAccordionKey("1");
-          setResultsStepIndex(1);
-        }
-      } else if (index === 3) {
-        if (isPrev) {
-          setActiveAccordionKey("2");
-          setResultsStepIndex(2);
-        }
-      }
-    }
-
-    if (status === 'finished' || (status === 'skipped' && action === 'skip')) {
-      setRunResultsTour(false);
-      setResultsStepIndex(0);
-      localStorage.setItem('macros100_results_tutorial_done', 'true');
     }
   }, [addLog]);
 
@@ -664,11 +643,11 @@ const DietPlanner = () => {
 
   // Auto-advance results tutorial when meal plan finishes generating
   useEffect(() => {
-    if (runResultsTour && resultsStepIndex === 1 && mealPlan && !mealPlanLoading) {
+    if (runTour && currentStepIndex === 18 && mealPlan && !mealPlanLoading) {
       setActiveAccordionKey("2");
-      setResultsStepIndex(2);
+      setCurrentStepIndex(19);
     }
-  }, [mealPlan, mealPlanLoading, runResultsTour, resultsStepIndex]);
+  }, [mealPlan, mealPlanLoading, runTour, currentStepIndex]);
 
   const [formData, setFormData] = useState<FormData>(() => {
     const defaults: FormData = {
@@ -1138,15 +1117,6 @@ const DietPlanner = () => {
     
     addLog('handleSubmit triggered: runTour=' + runTour);
 
-    if (runTour) {
-      addLog('handleSubmit: runTour was true. Setting onboardingJustFinishedRef = true.');
-      setRunTour(false);
-      setCurrentStepIndex(0);
-      setShowFoodModal(false);
-      localStorage.setItem('macros100_tutorial_done', 'true');
-      onboardingJustFinishedRef.current = true;
-    }
-
     // VALIDATION: Check for at least 20 unique foods
     const mustHaveNames = (formData.mustHaveFoods || []).map((m: any) => m.name);
     const uniqueFoodNames = new Set([...formData.likedFoods, ...mustHaveNames]);
@@ -1230,16 +1200,12 @@ const DietPlanner = () => {
                     setDiet(status.result);
                     setOriginalDiet(JSON.parse(JSON.stringify(status.result)));
 
-                    addLog('Generation completed. onboardingJustFinishedRef=' + onboardingJustFinishedRef.current);
-                    if (onboardingJustFinishedRef.current) {
-                        onboardingJustFinishedRef.current = false;
-                        addLog('onboardingJustFinishedRef was true. Launching results tour in 800ms.');
-                        setTimeout(() => {
-                            setMealPlan(null);
-                            setResultsStepIndex(0);
-                            setActiveAccordionKey("0");
-                            setRunResultsTour(true);
-                        }, 800);
+                    addLog('Generation completed. runTour=' + runTour);
+                    if (runTour) {
+                        addLog('runTour was true. Advancing to step 17.');
+                        setMealPlan(null);
+                        setActiveAccordionKey("0");
+                        setCurrentStepIndex(17);
                     }
                     
                     // MOBILE AUTO-SWITCH: Switch to Results tab on small screens
@@ -1523,21 +1489,6 @@ const DietPlanner = () => {
     };
   }, [handleGenerateMealPlan]);
 
-  const processedResultsSteps = useMemo(() => {
-    return resultsSteps.map((step: any, idx: number) => {
-      const newStep = {
-        ...step,
-        disableOverlayClose: true,
-        overlayClickAction: false,
-        hideEscButton: true,
-      };
-      if (idx === 1) {
-        newStep.isGenerateStep = true;
-      }
-      return newStep;
-    });
-  }, []);
-
   const handleAmountChange = (section: string, index: number, newAmount: string) => {
     if (!diet) return;
     const amt = parseFloat(newAmount) || 0;
@@ -1746,13 +1697,12 @@ const DietPlanner = () => {
           options={{ overlayClickAction: false }}
           scrollOffset={150}
           debug={false}
-          run={true}
+          run={!loading && !mealPlanLoading}
           getHelpers={handleJoyrideHelpers}
           addLog={addLog}
           steps={processedFormSteps}
         continuous={true}
         onEvent={handleJoyrideCallback}
-        locale={{ last: 'Generate' }}
         disableScrolling={true}
         styles={( {
           options: {
@@ -1773,46 +1723,8 @@ const DietPlanner = () => {
       />
       )}
       
-      {runResultsTour && (
-      <TourWrapper
-          key={runResultsTour ? "results-on" : "results-off"}
-          disableBeacon={true}
-          disableOverlayClose={true}
-          overlayClickAction={false}
-          showSkipButton={true}
-          hideEscButton={true}
-          tooltipComponent={CustomTooltip}
-          options={{ overlayClickAction: false }}
-          scrollOffset={150}
-          debug={false}
-          run={true}
-          addLog={addLog}
-          stepIndex={resultsStepIndex}
-          steps={processedResultsSteps}
-        continuous={true}
-        onEvent={handleResultsJoyrideCallback}
-        disableScrolling={true}
-        styles={( {
-          options: {
-            arrowColor: '#1a1a1a',
-            backgroundColor: '#1a1a1a',
-            primaryColor: '#ff3131',
-            textColor: '#fff',
-            zIndex: 100000,
-          },
-          overlay: {
-            cursor: 'default',
-          },
-          tooltip: {
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '16px',
-          }
-        } as any )}
-      />
-      )}
-
       {/* START TUTORIAL BUTTON */}
-      {!runTour && !runResultsTour && (
+      {!runTour && (
         <Button 
           variant="outline-secondary" 
           size="sm" 
