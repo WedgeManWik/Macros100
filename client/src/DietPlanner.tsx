@@ -626,8 +626,13 @@ const DietPlanner = () => {
           addLog('Step 21 Back triggered. Opening Nutritional Breakdown panel.');
           setActiveAccordionKey("2");
           setCurrentStepIndex(20);
-        } else {
-          addLog('Step 21 Finish clicked. No transition.');
+        } else if (isNext) {
+          addLog('Step 21 Finish clicked. Ending tour.');
+          setRunTour(false);
+          setCurrentStepIndex(0);
+          setShowFoodModal(false);
+          localStorage.setItem('macros100_tutorial_done', 'true');
+          setFormData(prev => ({ ...prev, customMacros: false }));
         }
       } else {
         const nextStep = index + (isPrev ? -1 : 1);
