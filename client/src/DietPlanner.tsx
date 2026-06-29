@@ -444,6 +444,13 @@ const DietPlanner = () => {
       disableBeacon: true,
     },
     {
+      target: '.tour-meal-plan-result',
+      placement: 'top',
+      title: 'Generated AI Meal Plan',
+      content: 'This is the meal plan that\'s been generated! You can always click the button at the bottom of the plan to go back and reprompt the AI.',
+      disableBeacon: true,
+    },
+    {
       target: '.tour-result-3',
       placement: 'top',
       title: 'Nutritional Breakdown',
@@ -598,18 +605,29 @@ const DietPlanner = () => {
         }
       } else if (index === 19) {
         if (isNext) {
-          addLog('Step 19 Next triggered. Advancing to step 20.');
+          addLog('Step 19 Next triggered. Opening Nutritional Breakdown panel.');
+          setActiveAccordionKey("2");
           setCurrentStepIndex(20);
         } else if (isPrev) {
-          addLog('Step 19 Back triggered. Opening Meal Plan panel.');
-          setActiveAccordionKey("1");
+          addLog('Step 19 Back triggered. Returning to step 18.');
           setCurrentStepIndex(18);
         }
       } else if (index === 20) {
-        if (isPrev) {
-          addLog('Step 20 Back triggered. Opening Nutritional Breakdown panel.');
-          setActiveAccordionKey("2");
+        if (isNext) {
+          addLog('Step 20 Next triggered. Advancing to step 21.');
+          setCurrentStepIndex(21);
+        } else if (isPrev) {
+          addLog('Step 20 Back triggered. Opening Meal Plan panel (results).');
+          setActiveAccordionKey("1");
           setCurrentStepIndex(19);
+        }
+      } else if (index === 21) {
+        if (isPrev) {
+          addLog('Step 21 Back triggered. Opening Nutritional Breakdown panel.');
+          setActiveAccordionKey("2");
+          setCurrentStepIndex(20);
+        } else {
+          addLog('Step 21 Finish clicked. No transition.');
         }
       } else {
         const nextStep = index + (isPrev ? -1 : 1);
@@ -644,7 +662,7 @@ const DietPlanner = () => {
   // Auto-advance results tutorial when meal plan finishes generating
   useEffect(() => {
     if (runTour && currentStepIndex === 18 && mealPlan && !mealPlanLoading) {
-      setActiveAccordionKey("2");
+      setActiveAccordionKey("1");
       setCurrentStepIndex(19);
     }
   }, [mealPlan, mealPlanLoading, runTour, currentStepIndex]);
@@ -2639,7 +2657,7 @@ const DietPlanner = () => {
                     )}
 
                     {mealPlan && (
-                      <div>
+                      <div className="tour-meal-plan-result">
                         <div className="d-flex justify-content-between align-items-center mb-4 border-bottom border-secondary border-opacity-25 pb-3">
                           <h4 className="fw-bold m-0 text-warning-vibrant">Your Custom Meal Plan</h4>
                           <Button variant="outline-light" size="sm" onClick={() => { navigator.clipboard.writeText(mealPlan); alert('Meal plan copied!'); }}>
