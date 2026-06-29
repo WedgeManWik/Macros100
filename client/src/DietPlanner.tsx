@@ -9,7 +9,7 @@ const TourWrapper = (props: any) => {
     // Auto-click the beacon if it stubbornly appears despite disableBeacon flags
     if (props.run) {
       const clickBeacon = () => {
-        const beacon = document.querySelector('button[title="Open the tour"], .__floater__open, [aria-label="Open the tour"], [type="button"][data-test-id="button-beacon"]') as HTMLElement;
+        const beacon = document.querySelector('button[title="Open the tour"], .__floater__open, [aria-label="Open the tour"], [type="button"][data-test-id="button-beacon"], .joyride-beacon, .__beacon, button[class*="beacon"], div[class*="beacon"]') as HTMLElement;
         // fallback generic selector since Joyride changes classes
         const alternateBeacon = document.querySelector('div[style*="border-radius: 50%"]') as HTMLElement;
         
@@ -1202,10 +1202,12 @@ const DietPlanner = () => {
 
                     addLog('Generation completed. runTour=' + runTour);
                     if (runTour) {
-                        addLog('runTour was true. Advancing to step 17.');
+                        addLog('runTour was true. Advancing to step 17 in 150ms.');
                         setMealPlan(null);
                         setActiveAccordionKey("0");
-                        setCurrentStepIndex(17);
+                        setTimeout(() => {
+                            setCurrentStepIndex(17);
+                        }, 150);
                     }
                     
                     // MOBILE AUTO-SWITCH: Switch to Results tab on small screens
