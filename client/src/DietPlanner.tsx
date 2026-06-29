@@ -1135,8 +1135,11 @@ const DietPlanner = () => {
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    
+    addLog('handleSubmit triggered: runTour=' + runTour);
 
     if (runTour) {
+      addLog('handleSubmit: runTour was true. Setting onboardingJustFinishedRef = true.');
       setRunTour(false);
       setCurrentStepIndex(0);
       setShowFoodModal(false);
@@ -1227,8 +1230,10 @@ const DietPlanner = () => {
                     setDiet(status.result);
                     setOriginalDiet(JSON.parse(JSON.stringify(status.result)));
 
+                    addLog('Generation completed. onboardingJustFinishedRef=' + onboardingJustFinishedRef.current);
                     if (onboardingJustFinishedRef.current) {
                         onboardingJustFinishedRef.current = false;
+                        addLog('onboardingJustFinishedRef was true. Launching results tour in 800ms.');
                         setTimeout(() => {
                             setMealPlan(null);
                             setResultsStepIndex(0);
@@ -2919,6 +2924,20 @@ const DietPlanner = () => {
           )}
         </Col>
       </Row>
+
+      {/* Dev logs for debugging tour */}
+      <div 
+        className="position-fixed bottom-0 end-0 m-3 p-3 text-light bg-dark border border-secondary rounded" 
+        style={{ zIndex: 999999, maxWidth: '400px', maxHeight: '200px', overflowY: 'auto', fontSize: '0.75rem', opacity: 0.8 }}
+      >
+        <div className="fw-bold mb-2 border-bottom border-secondary pb-1 d-flex justify-content-between">
+          <span>Tour Debug Logs</span>
+          <button className="btn btn-sm btn-link text-light p-0" onClick={() => setJoyrideLogs(['Cleared'])}>Clear</button>
+        </div>
+        {joyrideLogs.map((log, i) => (
+          <div key={i} className="font-monospace text-nowrap" style={{ fontSize: '0.7rem' }}>{log}</div>
+        ))}
+      </div>
 
     </Container>
   );
