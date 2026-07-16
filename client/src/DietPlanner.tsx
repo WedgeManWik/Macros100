@@ -96,8 +96,9 @@ const CustomTooltip = ({
   );
 };
 import { Container, Row, Col, Form, Button, Card, Alert, ProgressBar, Spinner, OverlayTrigger, Tooltip, Accordion } from 'react-bootstrap';
-import { Calculator, Utensils, Target, Activity, Heart, Info, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Settings, ClipboardList, X, Sparkles } from 'lucide-react';
+import { Calculator, Utensils, Target, Activity, Heart, Info, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, Settings, ClipboardList, X, Sparkles, GripVertical } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
 interface Food {
   name: string;
@@ -139,6 +140,68 @@ interface DietPlan {
     essential?: boolean;
   }>;
   error?: string;
+}
+
+
+function parseMealPlan(markdown: string) {
+  const meals: any[] = [];
+  const lines = markdown.split('\n');
+  let currentMeal: any = null;
+
+  for (let line of lines) {
+    line = line.trim();
+    if (line.startsWith('### ')) {
+      if (currentMeal) meals.push(currentMeal);
+      currentMeal = {
+        id: Math.random().toString(36).substr(2, 9),
+        name: line.replace('### ', '').trim(),
+        foods: [],
+        description: ''
+      };
+    } else if (line.startsWith('- ')) {
+      if (currentMeal) {
+        const match = line.match(/-\s+(.+?)\s+of\s+(.+)/i);
+        if (match) {
+          currentMeal.foods.push({
+            id: Math.random().toString(36).substr(2, 9),
+            amount: match[1],
+            name: match[2]
+          });
+        } else {
+          currentMeal.foods.push({
+            id: Math.random().toString(36).substr(2, 9),
+            amount: '',
+            name: line.replace('- ', '').trim()
+          });
+        }
+      }
+    } else if (line.length > 0) {
+      if (currentMeal) {
+        currentMeal.description += (currentMeal.description ? '\n' : '') + line;
+      }
+    }
+  }
+  if (currentMeal) meals.push(currentMeal);
+  return meals;
+}
+
+function serializeMealPlan(meals: any[]) {
+  let markdown = '';
+  for (const meal of meals) {
+    markdown += `### ${meal.name}\n`;
+    for (const food of meal.foods) {
+      if (food.amount) {
+        markdown += `- ${food.amount} of ${food.name}\n`;
+      } else {
+        markdown += `- ${food.name}\n`;
+      }
+    }
+    if (meal.description) {
+      markdown += `\n${meal.description}\n`;
+    }
+    markdown += '\n';
+  }
+  return markdown.trim();
 }
 
 interface FormData {
@@ -658,6 +721,9 @@ const DietPlanner = () => {
   }, [addLog]);
 
   const [isEditing, setIsEditing] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [structuredMeals, setStructuredMeals] = useState<any[]>([]);
+  const [refinementInstructions, setRefinementInstructions] = useState('');
   
   const [mealPlan, setMealPlan] = useState<string | null>(null);
   const [mealPlanLoading, setMealPlanLoading] = useState(false);
@@ -1285,6 +1351,73 @@ const DietPlanner = () => {
         console.error("Failed to cancel generation on server:", err);
       }
       currentJobIdRef.current = null;
+    }
+  };
+
+  
+  const handleDragEnd = (result: any) => {
+    if (!result.destination) return;
+
+    const { source, destination, type } = result;
+
+    if (type === 'meal') {
+      const newMeals = Array.from(structuredMeals);
+      const [reorderedItem] = newMeals.splice(source.index, 1);
+      newMeals.splice(destination.index, 0, reorderedItem);
+      setStructuredMeals(newMeals);
+    } else if (type === 'food') {
+      const sourceMealIndex = structuredMeals.findIndex((m: any) => m.id === source.droppableId);
+      const destMealIndex = structuredMeals.findIndex((m: any) => m.id === destination.droppableId);
+
+      if (sourceMealIndex !== -1 && destMealIndex !== -1) {
+        const newMeals = [...structuredMeals];
+        const [movedFood] = newMeals[sourceMealIndex].foods.splice(source.index, 1);
+        newMeals[destMealIndex].foods.splice(destination.index, 0, movedFood);
+        setStructuredMeals(newMeals);
+      }
+    }
+  };
+
+  const handleRefineMealPlan = async () => {
+    if (!diet || !diet.sectionedIngredients) return;
+
+    setMealPlanLoading(true);
+    setMealPlanError(null);
+    setIsEditMode(false); // Switch out of edit mode to show loading/results
+
+    try {
+      const allIngredients = Object.values(diet.sectionedIngredients).flat();
+      const previousPlanText = serializeMealPlan(structuredMeals);
+
+      const res = await fetch(`${API_BASE_URL}/api/generate-meal-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ingredients: allIngredients.map((f: any) => ({
+            name: f.name,
+            grams: f.amount
+          })),
+          customInstructions: refinementInstructions || 'Please revise the meal plan as edited, ensuring it reads beautifully and naturally.',
+          previousPlan: previousPlanText
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to refine meal plan');
+      }
+
+      const data = await res.json();
+      setMealPlan(data.mealPlan);
+      setRefinementInstructions(''); // Clear instructions
+      // Re-parse into edit mode structure in case they want to edit again
+      setStructuredMeals(parseMealPlan(data.mealPlan));
+
+    } catch (err: any) {
+      setMealPlanError(err.message);
+      setIsEditMode(true); // Bring them back to their edits if it failed
+    } finally {
+      setMealPlanLoading(false);
     }
   };
 
@@ -2670,14 +2803,114 @@ const DietPlanner = () => {
                           </Button>
                         </div>
                         <div className="p-4 rounded text-light" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                          <ReactMarkdown>
-                            {mealPlan}
-                          </ReactMarkdown>
-                          <div className="mt-4 text-center">
-                            <Button variant="outline-secondary" size="sm" onClick={() => setMealPlan(null)}>
-                              <RotateCcw size={14} className="me-2" /> Start Over / Edit Prompt
-                            </Button>
-                          </div>
+                                                    {!isEditMode ? (
+                            <>
+                              <ReactMarkdown>
+                                {mealPlan}
+                              </ReactMarkdown>
+                              <div className="mt-4 text-center d-flex justify-content-center gap-3">
+                                <Button variant="outline-primary" size="sm" onClick={() => {
+                                  setStructuredMeals(parseMealPlan(mealPlan));
+                                  setIsEditMode(true);
+                                }}>
+                                  <Settings size={14} className="me-2" /> Edit
+                                </Button>
+                                <Button variant="outline-secondary" size="sm" onClick={() => setMealPlan(null)}>
+                                  <RotateCcw size={14} className="me-2" /> Go Back
+                                </Button>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="edit-mode-container">
+                              <DragDropContext onDragEnd={handleDragEnd}>
+                                <Droppable droppableId="meals" type="meal">
+                                  {(provided: any) => (
+                                    <div {...provided.droppableProps} ref={provided.innerRef}>
+                                      {structuredMeals.map((meal: any, mealIndex: number) => (
+                                        <Draggable key={meal.id} draggableId={meal.id} index={mealIndex}>
+                                          {(provided: any) => (
+                                            <div 
+                                              ref={provided.innerRef} 
+                                              {...provided.draggableProps} 
+                                              className="meal-container mb-4 p-3 rounded bg-dark border border-secondary border-opacity-50"
+                                            >
+                                              <div className="d-flex align-items-center mb-3 border-bottom border-secondary border-opacity-25 pb-2">
+                                                <div {...provided.dragHandleProps} className="me-2 cursor-grab text-muted">
+                                                  <GripVertical size={20} />
+                                                </div>
+                                                <Form.Control 
+                                                  type="text" 
+                                                  value={meal.name}
+                                                  onChange={(e) => {
+                                                    const newMeals = [...structuredMeals];
+                                                    newMeals[mealIndex].name = e.target.value;
+                                                    setStructuredMeals(newMeals);
+                                                  }}
+                                                  className="fw-bold bg-transparent text-light border-0 fs-5 p-0 shadow-none focus-ring-0"
+                                                />
+                                              </div>
+                                              
+                                              <Droppable droppableId={meal.id} type="food">
+                                                {(provided: any) => (
+                                                  <div {...provided.droppableProps} ref={provided.innerRef} className="food-list ps-4">
+                                                    {meal.foods.map((food: any, foodIndex: number) => (
+                                                      <Draggable key={food.id} draggableId={food.id} index={foodIndex}>
+                                                        {(provided: any) => (
+                                                          <div 
+                                                            ref={provided.innerRef} 
+                                                            {...provided.draggableProps} 
+                                                            className="d-flex align-items-center mb-2"
+                                                          >
+                                                            <div {...provided.dragHandleProps} className="me-2 cursor-grab text-muted" style={{ opacity: 0.5 }}>
+                                                              <GripVertical size={16} />
+                                                            </div>
+                                                            <div className="text-light">
+                                                              {food.amount ? `- ${food.amount} of ${food.name}` : `- ${food.name}`}
+                                                            </div>
+                                                          </div>
+                                                        )}
+                                                      </Draggable>
+                                                    ))}
+                                                    {provided.placeholder}
+                                                  </div>
+                                                )}
+                                              </Droppable>
+                                              {meal.description && (
+                                                <div className="mt-3 ps-4 text-muted small fst-italic">
+                                                  {meal.description}
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </Draggable>
+                                      ))}
+                                      {provided.placeholder}
+                                    </div>
+                                  )}
+                                </Droppable>
+                              </DragDropContext>
+
+                              <div className="mt-4 pt-3 border-top border-secondary border-opacity-25">
+                                <Form.Group>
+                                  <Form.Label className="small fw-bold text-primary-vibrant">Refine with AI</Form.Label>
+                                  <Form.Control 
+                                    as="textarea" 
+                                    rows={2} 
+                                    value={refinementInstructions}
+                                    onChange={(e) => setRefinementInstructions(e.target.value)}
+                                    placeholder="e.g. Move the salmon to lunch instead..."
+                                    className="bg-dark text-light border-secondary border-opacity-50"
+                                  />
+                                </Form.Group>
+                                <div className="d-flex justify-content-between mt-3">
+                                  <Button variant="outline-secondary" size="sm" onClick={() => setIsEditMode(false)}>Cancel Edit</Button>
+                                  <Button variant="primary" size="sm" onClick={handleRefineMealPlan} disabled={mealPlanLoading}>
+                                    <Sparkles size={14} className="me-2" /> Refine Plan
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

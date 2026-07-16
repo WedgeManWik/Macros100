@@ -95,7 +95,7 @@ app.post('/api/cancel-generation/:id', (req, res) => {
 
 app.post('/api/generate-meal-plan', async (req, res) => {
   try {
-    const { ingredients, customInstructions } = req.body;
+    const { ingredients, customInstructions, previousPlan } = req.body;
     if (!ingredients || !Array.isArray(ingredients)) {
       return res.status(400).json({ error: 'Ingredients array is required' });
     }
@@ -128,6 +128,11 @@ CRITICAL RULES:
 Here is the daily ingredient list:
 ${ingredients.map((i: any) => `- ${i.grams}g of ${i.name}`).join('\n')}
 `;
+
+    if (previousPlan) {
+      prompt += `\nHere is the CURRENT MEAL PLAN:\n${previousPlan}\n`;
+      prompt += `\nThe user has manually edited this plan or requested changes. Please generate a NEW meal plan that incorporates their instructions while preserving their edits as much as possible, and STRICTLY adhering to the exact format and ingredient rules above.\n`;
+    }
 
     if (customInstructions && customInstructions.trim().length > 0) {
       prompt += `\nUSER CUSTOM INSTRUCTIONS:\n${customInstructions}\n`;
