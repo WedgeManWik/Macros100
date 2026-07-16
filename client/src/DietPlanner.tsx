@@ -154,7 +154,7 @@ function parseMealPlan(markdown: string) {
       if (currentMeal) meals.push(currentMeal);
       currentMeal = {
         id: Math.random().toString(36).substr(2, 9),
-        name: line.replace('### ', '').trim(),
+        name: line.replace('### ', '').replace(/\*\*/g, '').trim(),
         foods: [],
         description: ''
       };
@@ -2828,11 +2828,14 @@ const DietPlanner = () => {
                                     <div {...provided.droppableProps} ref={provided.innerRef}>
                                       {structuredMeals.map((meal: any, mealIndex: number) => (
                                         <Draggable key={meal.id} draggableId={meal.id} index={mealIndex}>
-                                          {(provided: any) => (
+                                          {(provided: any, snapshot: any) => (
                                             <div 
                                               ref={provided.innerRef} 
                                               {...provided.draggableProps} 
-                                              className="meal-container mb-4 p-3 rounded bg-dark border border-secondary border-opacity-50"
+                                              className={`meal-container mb-4 p-3 rounded bg-dark border border-secondary ${snapshot.isDragging ? 'border-opacity-100 shadow-lg' : 'border-opacity-50'}`}
+                                              style={{
+                                                ...provided.draggableProps.style
+                                              }}
                                             >
                                               <div className="d-flex align-items-center mb-3 border-bottom border-secondary border-opacity-25 pb-2">
                                                 <div {...provided.dragHandleProps} className="me-2 cursor-grab text-muted">
@@ -2855,16 +2858,21 @@ const DietPlanner = () => {
                                                   <div {...provided.droppableProps} ref={provided.innerRef} className="food-list ps-4">
                                                     {meal.foods.map((food: any, foodIndex: number) => (
                                                       <Draggable key={food.id} draggableId={food.id} index={foodIndex}>
-                                                        {(provided: any) => (
+                                                        {(provided: any, snapshot: any) => (
                                                           <div 
                                                             ref={provided.innerRef} 
                                                             {...provided.draggableProps} 
-                                                            className="d-flex align-items-center mb-2"
+                                                            {...provided.dragHandleProps}
+                                                            className={`d-flex align-items-center mb-2 p-2 rounded ${snapshot.isDragging ? 'bg-secondary bg-opacity-50 border border-secondary shadow-lg' : 'hover-bg-dark'}`}
+                                                            style={{
+                                                              ...provided.draggableProps.style,
+                                                              cursor: 'grab'
+                                                            }}
                                                           >
-                                                            <div {...provided.dragHandleProps} className="me-2 cursor-grab text-muted" style={{ opacity: 0.5 }}>
+                                                            <div className="me-2 text-muted" style={{ opacity: 0.5 }}>
                                                               <GripVertical size={16} />
                                                             </div>
-                                                            <div className="text-light">
+                                                            <div className="text-light user-select-none">
                                                               {food.amount ? `- ${food.amount} of ${food.name}` : `- ${food.name}`}
                                                             </div>
                                                           </div>
@@ -2903,7 +2911,13 @@ const DietPlanner = () => {
                                   />
                                 </Form.Group>
                                 <div className="d-flex justify-content-between mt-3">
-                                  <Button variant="outline-secondary" size="sm" onClick={() => setIsEditMode(false)}>Cancel Edit</Button>
+                                  <div className="d-flex gap-2">
+                                    <Button variant="outline-secondary" size="sm" onClick={() => setIsEditMode(false)}>Cancel Edit</Button>
+                                    <Button variant="success" size="sm" onClick={() => {
+                                      setMealPlan(serializeMealPlan(structuredMeals));
+                                      setIsEditMode(false);
+                                    }}>Done</Button>
+                                  </div>
                                   <Button variant="primary" size="sm" onClick={handleRefineMealPlan} disabled={mealPlanLoading}>
                                     <Sparkles size={14} className="me-2" /> Refine Plan
                                   </Button>
